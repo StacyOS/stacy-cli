@@ -7,7 +7,8 @@ import { addAllowedHostname } from "./commands/allowed-hostname.js";
 import { heartbeatRun } from "./commands/heartbeat-run.js";
 import { runCommand } from "./commands/run.js";
 import { bootstrapCeoInvite } from "./commands/auth-bootstrap-ceo.js";
-import { dbBackupCommand } from "./commands/db-backup.js";
+import { dbBackupCommand, dbRestoreCommand } from "./commands/db-backup.js";
+import { upgradeCheckCommand } from "./commands/upgrade-check.js";
 import { registerEnvLabCommands } from "./commands/env-lab.js";
 import { registerContextCommands } from "./commands/client/context.js";
 import { registerCompanyCommands } from "./commands/client/company.js";
@@ -25,14 +26,16 @@ import { registerWorktreeCommands } from "./commands/worktree.js";
 import { registerPluginCommands } from "./commands/client/plugin.js";
 import { registerClientAuthCommands } from "./commands/client/auth.js";
 import { cliVersion } from "./version.js";
+import { applyStacyEnvAliases } from "./config/env-aliases.js";
 
 const program = new Command();
+applyStacyEnvAliases();
 const DATA_DIR_OPTION_HELP =
-  "Paperclip data directory root (isolates state from ~/.paperclip)";
+  "Stacy data directory root (isolates state from ~/.paperclip)";
 
 program
-  .name("paperclipai")
-  .description("Paperclip CLI — setup, diagnose, and configure your instance")
+  .name("stacy")
+  .description("Stacy CLI — setup, diagnose, and configure your AI control plane")
   .version(cliVersion);
 
 program.hook("preAction", (_thisCommand, actionCommand) => {
@@ -53,12 +56,12 @@ program
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("--bind <mode>", "Quickstart reachability preset (loopback, lan, tailnet)")
   .option("-y, --yes", "Accept quickstart defaults (trusted local loopback unless --bind is set) and start immediately", false)
-  .option("--run", "Start Paperclip immediately after saving config", false)
+  .option("--run", "Start Stacy immediately after saving config", false)
   .action(onboard);
 
 program
   .command("doctor")
-  .description("Run diagnostic checks on your Paperclip setup")
+  .description("Run diagnostic checks on your Stacy setup")
   .option("-c, --config <path>", "Path to config file")
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("--repair", "Attempt to repair issues automatically")
@@ -90,10 +93,37 @@ program
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("--dir <path>", "Backup output directory (overrides config)")
   .option("--retention-days <days>", "Retention window used for pruning", (value) => Number(value))
-  .option("--filename-prefix <prefix>", "Backup filename prefix", "paperclip")
+  .option("--filename-prefix <prefix>", "Backup filename prefix", "stacy")
   .option("--json", "Print backup metadata as JSON")
   .action(async (opts) => {
     await dbBackupCommand(opts);
+  });
+
+program
+  .command("db:restore")
+  .description("Restore a database backup into the current configured database")
+  .argument("[backupFile]", "Backup .sql or .sql.gz file to restore")
+  .option("-c, --config <path>", "Path to config file")
+  .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
+  .option("--file <path>", "Backup .sql or .sql.gz file to restore")
+  .option("--latest", "Restore the newest backup from the configured backup directory")
+  .option("--dry-run", "Resolve the restore target without applying SQL")
+  .option("-y, --yes", "Skip the destructive restore confirmation prompt")
+  .option("--json", "Print restore metadata as JSON")
+  .action(async (backupFile, opts) => {
+    await dbRestoreCommand(backupFile, opts);
+  });
+
+program
+  .command("upgrade:check")
+  .description("Run read-only upgrade readiness checks")
+  .option("-c, --config <path>", "Path to config file")
+  .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
+  .option("--max-backup-age-hours <hours>", "Warn when newest backup is older than this", (value) => Number(value))
+  .option("--json", "Print upgrade readiness metadata as JSON")
+  .option("--strict", "Exit non-zero when warnings are found")
+  .action(async (opts) => {
+    await upgradeCheckCommand(opts);
   });
 
 program
@@ -106,7 +136,7 @@ program
 
 program
   .command("run")
-  .description("Bootstrap local setup (onboard + doctor) and run Paperclip")
+  .description("Bootstrap local setup (onboard + doctor) and run Stacy")
   .option("-c, --config <path>", "Path to config file")
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("-i, --instance <id>", "Local instance id (default: default)")
@@ -125,7 +155,7 @@ heartbeat
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("--context <path>", "Path to CLI context file")
   .option("--profile <name>", "CLI context profile name")
-  .option("--api-base <url>", "Base URL for the Paperclip server API")
+  .option("--api-base <url>", "Base URL for the Stacy server API")
   .option("--api-key <token>", "Bearer token for agent-authenticated calls")
   .option(
     "--source <source>",

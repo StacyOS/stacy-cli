@@ -1,5 +1,5 @@
 {
-  "name": "paperclip",
+  "name": "stacy",
   "private": true,
   "type": "module",
   "scripts": {
@@ -23,9 +23,20 @@
     "issue-references:backfill": "pnpm run preflight:workspace-links && tsx scripts/backfill-issue-reference-mentions.ts",
     "secrets:migrate-inline-env": "tsx scripts/migrate-inline-env-secrets.ts",
     "db:backup": "./scripts/backup-db.sh",
+    "db:restore": "node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts db:restore",
+    "upgrade:check": "node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts upgrade:check",
     "paperclipai": "node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts",
+    "stacy": "node cli/node_modules/tsx/dist/cli.mjs cli/src/index.ts",
     "build:npm": "./scripts/build-npm.sh",
     "release": "./scripts/release.sh",
+    "release:notes": "node scripts/create-release-notes.mjs",
+    "release:package-name": "node scripts/check-npm-package-name.mjs stacy-cli --expected-owner arpanstacy",
+    "release:phase5-gate": "node scripts/phase5-release-gate.mjs",
+    "release:stacy-cli": "node scripts/publish-stacy-cli.mjs",
+    "release:stacy-cli:status": "node scripts/publish-stacy-cli.mjs --status",
+    "release:stacy-cli:publish": "node scripts/publish-stacy-cli.mjs --publish",
+    "release:stacy-cli:deprecate-old": "node scripts/publish-stacy-cli.mjs --deprecate-only --deprecate-old 0.3.1",
+    "release:vanity-package-name": "node scripts/check-npm-package-name.mjs stacy",
     "release:canary": "./scripts/release.sh canary",
     "release:stable": "./scripts/release.sh stable",
     "release:github": "./scripts/create-github-release.sh",
@@ -33,8 +44,17 @@
     "check:tokens": "node scripts/check-forbidden-tokens.mjs",
     "docs:dev": "cd docs && npx mintlify dev",
     "smoke:openclaw-join": "./scripts/smoke/openclaw-join.sh",
+    "smoke:docker-quickstart": "./scripts/docker-quickstart-smoke.sh",
+    "smoke:stacy-cli-npm": "node scripts/smoke/stacy-cli-npm-smoke.mjs",
     "smoke:openclaw-docker-ui": "./scripts/smoke/openclaw-docker-ui.sh",
     "smoke:openclaw-sse-standalone": "./scripts/smoke/openclaw-sse-standalone.sh",
+    "smoke:heartbeat-worker-owned": "node scripts/smoke/heartbeat-worker-owned-phase2.mjs",
+    "smoke:codex-local-real": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts codex",
+    "smoke:claude-local-real": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts claude",
+    "smoke:phase4-local-adapters": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts codex claude",
+    "smoke:codex-local-preflight": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts --preflight codex",
+    "smoke:claude-local-preflight": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts --preflight claude",
+    "smoke:phase4-local-adapters-preflight": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts --preflight codex claude",
     "test:e2e": "npx playwright test --config tests/e2e/playwright.config.ts",
     "test:e2e:headed": "npx playwright test --config tests/e2e/playwright.config.ts --headed",
     "test:e2e:multiuser-authenticated": "npx playwright test --config tests/e2e/playwright-multiuser-authenticated.config.ts",
@@ -46,7 +66,7 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "cross-env": "^10.1.0",
-    "esbuild": "^0.27.3",
+    "esbuild": "^0.27.7",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   },
@@ -59,7 +79,19 @@
       "embedded-postgres@18.1.0-beta.16": "patches/embedded-postgres@18.1.0-beta.16.patch"
     },
     "overrides": {
-      "rollup": ">=4.59.0"
+      "defu": "6.1.7",
+      "esbuild": "0.27.7",
+      "fast-xml-parser": "5.7.2",
+      "hono": "4.12.16",
+      "kysely": "0.28.16",
+      "lodash-es": "4.18.1",
+      "path-to-regexp": "8.4.2",
+      "picomatch": "4.0.4",
+      "postcss": "8.5.13",
+      "rollup": ">=4.59.0",
+      "uuid": "14.0.0",
+      "vite@^6.0.0": "6.4.2",
+      "vite@^7.0.0": "7.3.2"
     }
   }
 }

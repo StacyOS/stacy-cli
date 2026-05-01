@@ -806,7 +806,11 @@ export function buildInvocationEnvForLogs(
 
   const resolvedCommand = options.resolvedCommand?.trim();
   if (resolvedCommand) {
-    merged[options.resolvedCommandEnvKey ?? "PAPERCLIP_RESOLVED_COMMAND"] = resolvedCommand;
+    const resolvedCommandEnvKey = options.resolvedCommandEnvKey ?? "PAPERCLIP_RESOLVED_COMMAND";
+    merged[resolvedCommandEnvKey] = resolvedCommand;
+    if (resolvedCommandEnvKey === "PAPERCLIP_RESOLVED_COMMAND" && !merged.STACY_RESOLVED_COMMAND) {
+      merged.STACY_RESOLVED_COMMAND = resolvedCommand;
+    }
   }
 
   return redactEnvForLogs(merged);
@@ -820,17 +824,22 @@ export function buildPaperclipEnv(agent: { id: string; companyId: string }): Rec
     return host;
   };
   const vars: Record<string, string> = {
+    STACY_AGENT_ID: agent.id,
+    STACY_COMPANY_ID: agent.companyId,
     PAPERCLIP_AGENT_ID: agent.id,
     PAPERCLIP_COMPANY_ID: agent.companyId,
   };
   const runtimeHost = resolveHostForUrl(
-    process.env.PAPERCLIP_LISTEN_HOST ?? process.env.HOST ?? "localhost",
+    process.env.STACY_LISTEN_HOST ?? process.env.PAPERCLIP_LISTEN_HOST ?? process.env.HOST ?? "localhost",
   );
-  const runtimePort = process.env.PAPERCLIP_LISTEN_PORT ?? process.env.PORT ?? "3100";
+  const runtimePort = process.env.STACY_LISTEN_PORT ?? process.env.PAPERCLIP_LISTEN_PORT ?? process.env.PORT ?? "3100";
   const apiUrl =
+    process.env.STACY_RUNTIME_API_URL ??
+    process.env.STACY_API_URL ??
     process.env.PAPERCLIP_RUNTIME_API_URL ??
     process.env.PAPERCLIP_API_URL ??
     `http://${runtimeHost}:${runtimePort}`;
+  vars.STACY_API_URL = apiUrl;
   vars.PAPERCLIP_API_URL = apiUrl;
   return vars;
 }
@@ -864,6 +873,9 @@ export function applyPaperclipWorkspaceEnv(
   for (const [key, value] of mappings) {
     if (typeof value === "string" && value.length > 0) {
       env[key] = value;
+      if (key.startsWith("PAPERCLIP_WORKSPACE_")) {
+        env[`STACY_${key.slice("PAPERCLIP_".length)}`] = value;
+      }
     }
   }
 
@@ -873,10 +885,10 @@ export function applyPaperclipWorkspaceEnv(
 export function sanitizeInheritedPaperclipEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...baseEnv };
   for (const key of Object.keys(env)) {
-    if (!key.startsWith("PAPERCLIP_")) continue;
-    if (key === "PAPERCLIP_RUNTIME_API_URL") continue;
-    if (key === "PAPERCLIP_LISTEN_HOST") continue;
-    if (key === "PAPERCLIP_LISTEN_PORT") continue;
+    if (!key.startsWith("PAPERCLIP_") && !key.startsWith("STACY_")) continue;
+    if (key === "PAPERCLIP_RUNTIME_API_URL" || key === "STACY_RUNTIME_API_URL") continue;
+    if (key === "PAPERCLIP_LISTEN_HOST" || key === "STACY_LISTEN_HOST") continue;
+    if (key === "PAPERCLIP_LISTEN_PORT" || key === "STACY_LISTEN_PORT") continue;
     delete env[key];
   }
   return env;

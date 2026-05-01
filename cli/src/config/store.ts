@@ -1,10 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { paperclipConfigSchema, type PaperclipConfig } from "./schema.js";
+import { applyStacyEnvAliases } from "./env-aliases.js";
 import {
   resolveDefaultConfigPath,
   resolvePaperclipInstanceId,
 } from "./home.js";
+
+applyStacyEnvAliases();
 
 const DEFAULT_CONFIG_BASENAME = "config.json";
 

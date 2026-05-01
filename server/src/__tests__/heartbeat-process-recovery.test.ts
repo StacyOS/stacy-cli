@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
-import { and, eq, or, inArray } from "drizzle-orm";
+import { and, eq, or, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
@@ -9,6 +9,7 @@ import {
   agentWakeupRequests,
   companySkills,
   companies,
+  costEvents,
   createDb,
   documentRevisions,
   documents,
@@ -126,6 +127,43 @@ async function waitForValue<T>(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return latest ?? null;
+}
+
+async function installSkipCancelUpdateTrigger(db: ReturnType<typeof createDb>, runId: string) {
+  await db.execute(sql`
+    create table if not exists paperclip_test_skip_cancel_run_ids (
+      id text primary key
+    )
+  `);
+  await db.execute(sql`delete from paperclip_test_skip_cancel_run_ids`);
+  await db.execute(sql`insert into paperclip_test_skip_cancel_run_ids (id) values (${runId})`);
+  await db.execute(sql`
+    create or replace function paperclip_test_skip_cancel_update()
+    returns trigger as $$
+    begin
+      if NEW.status = 'cancelled'
+        and exists (
+          select 1 from paperclip_test_skip_cancel_run_ids where id = OLD.id::text
+        )
+      then
+        return null;
+      end if;
+      return NEW;
+    end;
+    $$ language plpgsql
+  `);
+  await db.execute(sql`drop trigger if exists paperclip_test_skip_cancel on heartbeat_runs`);
+  await db.execute(sql`
+    create trigger paperclip_test_skip_cancel
+    before update on heartbeat_runs
+    for each row execute function paperclip_test_skip_cancel_update()
+  `);
+}
+
+async function uninstallSkipCancelUpdateTrigger(db: ReturnType<typeof createDb>) {
+  await db.execute(sql`drop trigger if exists paperclip_test_skip_cancel on heartbeat_runs`);
+  await db.execute(sql`drop function if exists paperclip_test_skip_cancel_update()`);
+  await db.execute(sql`drop table if exists paperclip_test_skip_cancel_run_ids`);
 }
 
 async function waitForHeartbeatIdle(
@@ -306,6 +344,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await db.delete(activityLog);
     await db.delete(agentRuntimeState);
     await db.delete(companySkills);
+    await db.delete(costEvents);
     await db.delete(issueComments);
     await db.delete(issueDocuments);
     await db.delete(documentRevisions);
@@ -326,6 +365,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     }
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await db.delete(activityLog);
+      await db.delete(costEvents);
       await db.delete(heartbeatRunEvents);
       try {
         await db.delete(heartbeatRuns);
@@ -385,6 +425,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     includeIssue?: boolean;
     runErrorCode?: string | null;
     runError?: string | null;
+    claimToken?: string | null;
+    claimOwner?: string | null;
+    claimLeasedAt?: Date | null;
+    claimLeaseExpiresAt?: Date | null;
   }) {
     const companyId = randomUUID();
     const agentId = randomUUID();
@@ -440,6 +484,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       processLossRetryCount: input?.processLossRetryCount ?? 0,
       errorCode: input?.runErrorCode ?? null,
       error: input?.runError ?? null,
+      claimToken: input?.claimToken ?? null,
+      claimOwner: input?.claimOwner ?? null,
+      claimLeasedAt: input?.claimLeasedAt ?? null,
+      claimLeaseExpiresAt: input?.claimLeaseExpiresAt ?? null,
       startedAt: now,
       updatedAt: new Date("2026-03-19T00:00:00.000Z"),
     });
@@ -1024,6 +1072,49 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     expect(comments).toHaveLength(0);
   });
 
+  it("records subscription-included runs in the cost ledger even when tokens are unavailable", async () => {
+    mockAdapterExecute.mockResolvedValueOnce({
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      errorMessage: null,
+      summary: "Completed subscription run before token usage was available.",
+      provider: "openai",
+      biller: "chatgpt",
+      model: "gpt-5.4-codex",
+      billingType: "subscription_included",
+      usage: null,
+      costUsd: null,
+    });
+
+    const { agentId, runId, issueId } = await seedQueuedIssueRunFixture();
+    const heartbeat = heartbeatService(db);
+
+    await heartbeat.resumeQueuedRuns();
+    await waitForRunToSettle(heartbeat, runId);
+
+    const events = await waitForValue(async () => {
+      const rows = await db
+        .select()
+        .from(costEvents)
+        .where(eq(costEvents.heartbeatRunId, runId));
+      return rows.length > 0 ? rows : null;
+    });
+    expect(events).toHaveLength(1);
+    expect(events?.[0]).toMatchObject({
+      agentId,
+      issueId,
+      provider: "openai",
+      biller: "chatgpt",
+      billingType: "subscription_included",
+      model: "gpt-5.4-codex",
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      costCents: 0,
+    });
+  });
+
   it("clears the detached warning when the run reports activity again", async () => {
     const { runId } = await seedRunFixture({
       includeIssue: false,
@@ -1039,6 +1130,30 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const run = await heartbeat.getRun(runId);
     expect(run?.errorCode).toBeNull();
     expect(run?.error).toBeNull();
+  });
+
+  it("renews the durable claim lease when a running run reports activity", async () => {
+    const claimToken = randomUUID();
+    const claimLeasedAt = new Date("2026-03-19T00:00:00.000Z");
+    const claimLeaseExpiresAt = new Date("2026-03-19T00:10:00.000Z");
+    const { runId } = await seedRunFixture({
+      agentStatus: "running",
+      includeIssue: false,
+      claimToken,
+      claimOwner: "stacy-server:test",
+      claimLeasedAt,
+      claimLeaseExpiresAt,
+    });
+    const heartbeat = heartbeatService(db);
+
+    const updated = await heartbeat.reportRunActivity(runId);
+    expect(updated?.claimToken).toBe(claimToken);
+    expect(updated?.claimOwner).toMatch(/^stacy-server:/);
+    expect(updated?.claimLeasedAt?.getTime()).toBeGreaterThan(claimLeasedAt.getTime());
+    expect(updated?.claimLeaseExpiresAt?.getTime()).toBeGreaterThan(claimLeaseExpiresAt.getTime());
+
+    const run = await heartbeat.getRun(runId);
+    expect(run?.claimLeaseExpiresAt?.getTime()).toBe(updated?.claimLeaseExpiresAt?.getTime());
   });
 
   it("tracks the first heartbeat with the agent role instead of adapter type", async () => {
@@ -1074,6 +1189,90 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       timeoutConfigured: false,
       timeoutFired: false,
     });
+    const transition = await db
+      .select()
+      .from(heartbeatRunEvents)
+      .where(and(
+        eq(heartbeatRunEvents.runId, runId),
+        eq(heartbeatRunEvents.eventType, "status.transition"),
+      ))
+      .then((rows) => rows.find((event) => event.message === "Run status transition: running -> cancelled"));
+    expect(transition?.payload).toMatchObject({
+      fromStatus: "running",
+      toStatus: "cancelled",
+      reason: "manual_cancel",
+    });
+  });
+
+  it("leaves wakeup bookkeeping untouched when the cancellation transition loses the race", async () => {
+    const { runId, wakeupRequestId } = await seedRunFixture({
+      agentStatus: "running",
+      includeIssue: false,
+    });
+    await installSkipCancelUpdateTrigger(db, runId);
+
+    try {
+      const heartbeat = heartbeatService(db);
+      const result = await heartbeat.cancelRun(runId);
+      expect(result?.status).toBe("running");
+
+      const run = await heartbeat.getRun(runId);
+      expect(run?.status).toBe("running");
+
+      const wakeup = await db
+        .select()
+        .from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.id, wakeupRequestId))
+        .then((rows) => rows[0] ?? null);
+      expect(wakeup?.status).toBe("claimed");
+      expect(wakeup?.finishedAt).toBeNull();
+      expect(wakeup?.error).toBeNull();
+
+      const events = await db
+        .select()
+        .from(heartbeatRunEvents)
+        .where(eq(heartbeatRunEvents.runId, runId));
+      expect(events.some((event) => event.message === "run cancelled")).toBe(false);
+      expect(events.some((event) => event.message === "Run status transition: running -> cancelled")).toBe(false);
+    } finally {
+      await uninstallSkipCancelUpdateTrigger(db);
+    }
+  });
+
+  it("does not auto-recover manually cancelled issue runs", async () => {
+    const { agentId, issueId, runId } = await seedRunFixture({
+      agentStatus: "running",
+    });
+    const heartbeat = heartbeatService(db);
+
+    const cancelled = await heartbeat.cancelRun(runId);
+    expect(cancelled?.status).toBe("cancelled");
+
+    const issue = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, issueId))
+      .then((rows) => rows[0] ?? null);
+    expect(issue?.status).toBe("in_progress");
+    expect(issue?.executionRunId).toBeNull();
+
+    const runsAfterCancel = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.agentId, agentId));
+    expect(runsAfterCancel).toHaveLength(1);
+
+    const result = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(result.dispatchRequeued).toBe(0);
+    expect(result.continuationRequeued).toBe(0);
+    expect(result.escalated).toBe(0);
+    expect(result.issueIds).toEqual([]);
+
+    const runsAfterReconcile = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.agentId, agentId));
+    expect(runsAfterReconcile).toHaveLength(1);
   });
 
   it("re-enqueues assigned todo work when the last issue run died and no wake remains", async () => {

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { config as loadDotenv } from "dotenv";
+import { applyStacyEnvAliases } from "./env-aliases.js";
 import { resolvePaperclipEnvPath } from "./paths.js";
 import { maybeRepairLegacyWorktreeConfigAndEnvFiles } from "./worktree-config.js";
 import {
@@ -29,10 +30,17 @@ import {
   resolveDefaultStorageDir,
   resolveHomeAwarePath,
 } from "./home-paths.js";
+import {
+  normalizeHeartbeatDispatchMode,
+  type HeartbeatDispatchMode,
+} from "./services/heartbeat-dispatch-mode.js";
+
+applyStacyEnvAliases();
 
 const PAPERCLIP_ENV_FILE_PATH = resolvePaperclipEnvPath();
 if (existsSync(PAPERCLIP_ENV_FILE_PATH)) {
   loadDotenv({ path: PAPERCLIP_ENV_FILE_PATH, override: false, quiet: true });
+  applyStacyEnvAliases();
 }
 
 const CWD_ENV_PATH = resolve(process.cwd(), ".env");
@@ -41,6 +49,7 @@ const isSameFile = existsSync(CWD_ENV_PATH) && existsSync(PAPERCLIP_ENV_FILE_PAT
   : CWD_ENV_PATH === PAPERCLIP_ENV_FILE_PATH;
 if (!isSameFile && existsSync(CWD_ENV_PATH)) {
   loadDotenv({ path: CWD_ENV_PATH, override: false, quiet: true });
+  applyStacyEnvAliases();
 }
 
 maybeRepairLegacyWorktreeConfigAndEnvFiles();
@@ -85,6 +94,11 @@ export interface Config {
   feedbackExportBackendToken: string | undefined;
   heartbeatSchedulerEnabled: boolean;
   heartbeatSchedulerIntervalMs: number;
+  heartbeatDispatchMode: HeartbeatDispatchMode;
+  heartbeatDispatchWorkerEnabled: boolean;
+  heartbeatDispatchWorkerIntervalMs: number;
+  heartbeatDispatchWorkerBatchSize: number;
+  heartbeatDispatchWorkerLeaseMs: number;
   companyDeletionEnabled: boolean;
   telemetryEnabled: boolean;
 }
@@ -284,6 +298,10 @@ export function loadConfig(): Config {
   if (resolvedBind.errors.length > 0) {
     throw new Error(resolvedBind.errors[0]);
   }
+  const heartbeatDispatchMode = normalizeHeartbeatDispatchMode(process.env.PAPERCLIP_HEARTBEAT_DISPATCH_MODE);
+  const heartbeatDispatchWorkerEnabled =
+    heartbeatDispatchMode !== "direct" ||
+    process.env.PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_ENABLED === "true";
 
   return {
     deploymentMode,
@@ -331,6 +349,20 @@ export function loadConfig(): Config {
     feedbackExportBackendToken,
     heartbeatSchedulerEnabled: process.env.HEARTBEAT_SCHEDULER_ENABLED !== "false",
     heartbeatSchedulerIntervalMs: Math.max(10000, Number(process.env.HEARTBEAT_SCHEDULER_INTERVAL_MS) || 30000),
+    heartbeatDispatchMode,
+    heartbeatDispatchWorkerEnabled,
+    heartbeatDispatchWorkerIntervalMs: Math.max(
+      1000,
+      Number(process.env.PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS) || 5000,
+    ),
+    heartbeatDispatchWorkerBatchSize: Math.max(
+      1,
+      Math.min(100, Number(process.env.PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE) || 10),
+    ),
+    heartbeatDispatchWorkerLeaseMs: Math.max(
+      5000,
+      Number(process.env.PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_LEASE_MS) || 60000,
+    ),
     companyDeletionEnabled,
     telemetryEnabled: fileConfig?.telemetry?.enabled ?? true,
   };

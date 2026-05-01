@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   build: {
     minify: "esbuild",
+    target: "es2022",
   },
   esbuild:
     mode === "production"

@@ -89,4 +89,16 @@ describeEmbeddedPostgres("companySkillService.list", () => {
       editable: true,
     });
   });
+
+  it("returns not found for stale company ids before seeding bundled skills", async () => {
+    const staleCompanyId = randomUUID();
+
+    await expect(svc.list(staleCompanyId)).rejects.toMatchObject({
+      status: 404,
+      message: "Company not found",
+    });
+
+    const rows = await db.select().from(companySkills);
+    expect(rows).toHaveLength(0);
+  });
 });

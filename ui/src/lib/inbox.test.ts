@@ -299,6 +299,25 @@ const dashboard: DashboardSummary = {
     pausedAgents: 0,
     pausedProjects: 0,
   },
+  controlPlane: {
+    liveRuns: 0,
+    cancellableRuns: 0,
+    failedRuns24h: 0,
+    cancelledRuns24h: 0,
+    dispatchQueue: {
+      status: "clear",
+      pending: 0,
+      ready: 0,
+      leased: 0,
+      expiredLeases: 0,
+      failed: 0,
+      stalePending: 0,
+      oldestPendingAgeMs: null,
+      oldestLeasedAgeMs: null,
+    },
+    riskLevel: "watch",
+    riskReasons: ["1 agent in error state", "1 pending approval", "90% of monthly budget used"],
+  },
   runActivity: [],
 };
 

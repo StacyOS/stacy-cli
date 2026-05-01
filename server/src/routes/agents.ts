@@ -98,6 +98,17 @@ function readLiveRunsQueryInt(value: unknown, max: number, fallback = 0) {
   return Math.max(0, Math.min(max, Math.trunc(parsed)));
 }
 
+function redactHeartbeatRunControlFields<T extends Record<string, unknown>>(run: T) {
+  const {
+    claimToken: _claimToken,
+    claimOwner: _claimOwner,
+    claimLeasedAt: _claimLeasedAt,
+    claimLeaseExpiresAt: _claimLeaseExpiresAt,
+    ...publicRun
+  } = run;
+  return publicRun;
+}
+
 export function agentRoutes(
   db: Db,
   options: { pluginWorkerManager?: PluginWorkerManager } = {},
@@ -2438,7 +2449,7 @@ export function agentRoutes(
       details: { agentId: id },
     });
 
-    res.status(202).json(run);
+    res.status(202).json(redactHeartbeatRunControlFields(run));
   });
 
   router.post("/agents/:id/heartbeat/invoke", async (req, res) => {
@@ -2491,7 +2502,7 @@ export function agentRoutes(
       details: { agentId: id },
     });
 
-    res.status(202).json(run);
+    res.status(202).json(redactHeartbeatRunControlFields(run));
   });
 
   router.post("/agents/:id/claude-login", async (req, res) => {
@@ -2623,9 +2634,10 @@ export function agentRoutes(
     }
     assertCompanyAccess(req, run.companyId);
     const retryExhaustedReason = await heartbeat.getRetryExhaustedReason(runId);
+    const publicRun = redactHeartbeatRunControlFields(run);
     res.json(
       redactCurrentUserValue(
-        { ...run, retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
+        { ...publicRun, retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
         await getCurrentUserRedactionOptions(),
       ),
     );
@@ -2652,7 +2664,7 @@ export function agentRoutes(
       });
     }
 
-    res.json(run);
+    res.json(run ? redactHeartbeatRunControlFields(run) : run);
   });
 
   router.post("/heartbeat-runs/:runId/watchdog-decisions", async (req, res) => {

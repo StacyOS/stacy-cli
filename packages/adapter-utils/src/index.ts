@@ -34,6 +34,17 @@ export type {
   CreateConfigValues,
 } from "./types.js";
 export type {
+  AdapterExecutionErrorFamily,
+  AdapterExecutionFailureTaxonomyEntry,
+  AdapterExecutionOperatorAction,
+} from "./failure-taxonomy.js";
+export {
+  ADAPTER_EXECUTION_ERROR_FAMILIES,
+  ADAPTER_EXECUTION_FAILURE_TAXONOMY,
+  getAdapterExecutionFailureTaxonomyEntry,
+  isAdapterExecutionErrorFamily,
+} from "./failure-taxonomy.js";
+export type {
   SessionCompactionPolicy,
   NativeContextManagement,
   AdapterSessionManagement,

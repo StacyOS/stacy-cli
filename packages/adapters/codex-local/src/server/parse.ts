@@ -10,11 +10,52 @@ const CODEX_TRANSIENT_UPSTREAM_RE =
 const CODEX_REMOTE_COMPACTION_RE = /remote\s+compact\s+task/i;
 const CODEX_USAGE_LIMIT_RE =
   /you(?:'|’)ve hit your usage limit for .+\.\s+switch to another model now,\s+or try again at\s+([^.!\n]+)(?:[.!]|\n|$)/i;
+const CODEX_AUTH_REQUIRED_RE =
+  /(?:not\s+logged\s+in|login\s+required|authentication\s+required|unauthorized|invalid(?:\s+or\s+missing)?\s+api(?:[_\s-]?key)?|openai[_\s-]?api[_\s-]?key|api[_\s-]?key.*required|please\s+run\s+`?codex\s+(?:login|auth)`?)/i;
+const CODEX_VALIDATION_ERROR_RE =
+  /(?:invalid[_\s-]?request|unknown parameter|unrecognized option|invalid option|unsupported option|configuration error|invalid configuration)/i;
+
+function readFiniteNumber(value: unknown): number | null {
+  const direct = asNumber(value, Number.NaN);
+  if (Number.isFinite(direct)) return direct;
+
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readUsageNumber(
+  usageObj: Record<string, unknown>,
+  keys: string[],
+  fallback: number,
+): number {
+  for (const key of keys) {
+    const value = readFiniteNumber(usageObj[key]);
+    if (value !== null) return value;
+  }
+  return fallback;
+}
+
+function mergeUsageSummary(
+  usage: { inputTokens: number; cachedInputTokens: number; outputTokens: number },
+  rawUsage: unknown,
+) {
+  const usageObj = parseObject(rawUsage);
+  usage.inputTokens = readUsageNumber(usageObj, ["input_tokens", "inputTokens"], usage.inputTokens);
+  usage.cachedInputTokens = readUsageNumber(
+    usageObj,
+    ["cached_input_tokens", "cache_read_input_tokens", "cachedInputTokens"],
+    usage.cachedInputTokens,
+  );
+  usage.outputTokens = readUsageNumber(usageObj, ["output_tokens", "outputTokens"], usage.outputTokens);
+}
 
 export function parseCodexJsonl(stdout: string) {
   let sessionId: string | null = null;
   let finalMessage: string | null = null;
   let errorMessage: string | null = null;
+  let costUsd: number | null = null;
+  let resultJson: Record<string, unknown> | null = null;
   const usage = {
     inputTokens: 0,
     cachedInputTokens: 0,
@@ -50,14 +91,16 @@ export function parseCodexJsonl(stdout: string) {
     }
 
     if (type === "turn.completed") {
-      const usageObj = parseObject(event.usage);
-      usage.inputTokens = asNumber(usageObj.input_tokens, usage.inputTokens);
-      usage.cachedInputTokens = asNumber(usageObj.cached_input_tokens, usage.cachedInputTokens);
-      usage.outputTokens = asNumber(usageObj.output_tokens, usage.outputTokens);
+      mergeUsageSummary(usage, event.usage);
+      costUsd = readFiniteNumber(event.total_cost_usd) ?? readFiniteNumber(event.totalCostUsd) ?? costUsd;
+      resultJson = event;
       continue;
     }
 
     if (type === "turn.failed") {
+      mergeUsageSummary(usage, event.usage);
+      costUsd = readFiniteNumber(event.total_cost_usd) ?? readFiniteNumber(event.totalCostUsd) ?? costUsd;
+      resultJson = event;
       const err = parseObject(event.error);
       const msg = asString(err.message, "").trim();
       if (msg) errorMessage = msg;
@@ -68,6 +111,8 @@ export function parseCodexJsonl(stdout: string) {
     sessionId,
     summary: finalMessage?.trim() ?? "",
     usage,
+    costUsd,
+    resultJson,
     errorMessage,
   };
 }
@@ -81,6 +126,22 @@ export function isCodexUnknownSessionError(stdout: string, stderr: string): bool
   return /unknown (session|thread)|session .* not found|thread .* not found|conversation .* not found|missing rollout path for thread|state db missing rollout path|no rollout found for thread id/i.test(
     haystack,
   );
+}
+
+export function isCodexAuthRequiredError(input: {
+  stdout?: string | null;
+  stderr?: string | null;
+  errorMessage?: string | null;
+}): boolean {
+  return CODEX_AUTH_REQUIRED_RE.test(buildCodexErrorHaystack(input));
+}
+
+export function isCodexValidationError(input: {
+  stdout?: string | null;
+  stderr?: string | null;
+  errorMessage?: string | null;
+}): boolean {
+  return CODEX_VALIDATION_ERROR_RE.test(buildCodexErrorHaystack(input));
 }
 
 function buildCodexErrorHaystack(input: {

@@ -82,8 +82,11 @@ function createFreshConfigPath() {
 describe("onboard", () => {
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV };
+    delete process.env.STACY_AGENT_JWT_SECRET;
     delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+    delete process.env.STACY_SECRETS_MASTER_KEY;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY;
+    delete process.env.STACY_SECRETS_MASTER_KEY_FILE;
     delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
   });
 

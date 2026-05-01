@@ -87,11 +87,15 @@ function sortTopologically(packages) {
   return ordered;
 }
 
-function replaceWorkspaceDeps(deps, version) {
+function replaceWorkspaceDeps(deps, version, publicPackageNames) {
   if (!deps) return deps;
   const next = { ...deps };
 
   for (const [name, value] of Object.entries(next)) {
+    if (publicPackageNames.has(name)) {
+      next[name] = version;
+      continue;
+    }
     if (!name.startsWith("@paperclipai/")) continue;
     if (typeof value !== "string" || !value.startsWith("workspace:")) continue;
     next[name] = version;
@@ -102,15 +106,16 @@ function replaceWorkspaceDeps(deps, version) {
 
 function setVersion(version) {
   const packages = sortTopologically(discoverPublicPackages());
+  const publicPackageNames = new Set(packages.map((pkg) => pkg.name));
 
   for (const pkg of packages) {
     const nextPkg = {
       ...pkg.pkg,
       version,
-      dependencies: replaceWorkspaceDeps(pkg.pkg.dependencies, version),
-      optionalDependencies: replaceWorkspaceDeps(pkg.pkg.optionalDependencies, version),
-      peerDependencies: replaceWorkspaceDeps(pkg.pkg.peerDependencies, version),
-      devDependencies: replaceWorkspaceDeps(pkg.pkg.devDependencies, version),
+      dependencies: replaceWorkspaceDeps(pkg.pkg.dependencies, version, publicPackageNames),
+      optionalDependencies: replaceWorkspaceDeps(pkg.pkg.optionalDependencies, version, publicPackageNames),
+      peerDependencies: replaceWorkspaceDeps(pkg.pkg.peerDependencies, version, publicPackageNames),
+      devDependencies: replaceWorkspaceDeps(pkg.pkg.devDependencies, version, publicPackageNames),
     };
 
     writeFileSync(pkg.pkgPath, `${JSON.stringify(nextPkg, null, 2)}\n`);

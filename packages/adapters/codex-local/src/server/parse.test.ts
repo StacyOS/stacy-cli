@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   extractCodexRetryNotBefore,
+  isCodexAuthRequiredError,
   isCodexTransientUpstreamError,
   isCodexUnknownSessionError,
+  isCodexValidationError,
   parseCodexJsonl,
 } from "./parse.js";
 
@@ -29,11 +31,18 @@ describe("parseCodexJsonl", () => {
         cachedInputTokens: 2,
         outputTokens: 4,
       },
+      costUsd: null,
+      resultJson: { type: "turn.failed", error: { message: "resume failed" } },
       errorMessage: "resume failed",
     });
   });
 
-  it("uses the last agent message as the summary when commentary updates precede the final answer", () => {
+  it("uses the last agent message as the summary and preserves completed-turn cost metadata", () => {
+    const completedTurn = {
+      type: "turn.completed",
+      usage: { input_tokens: 10, cached_input_tokens: 2, output_tokens: 4 },
+      total_cost_usd: 0.0345,
+    };
     const stdout = [
       JSON.stringify({ type: "thread.started", thread_id: "thread_123" }),
       JSON.stringify({
@@ -48,10 +57,7 @@ describe("parseCodexJsonl", () => {
         type: "item.completed",
         item: { type: "agent_message", text: "Fixed the issue and verified the targeted tests pass." },
       }),
-      JSON.stringify({
-        type: "turn.completed",
-        usage: { input_tokens: 10, cached_input_tokens: 2, output_tokens: 4 },
-      }),
+      JSON.stringify(completedTurn),
     ].join("\n");
 
     expect(parseCodexJsonl(stdout)).toEqual({
@@ -62,7 +68,35 @@ describe("parseCodexJsonl", () => {
         cachedInputTokens: 2,
         outputTokens: 4,
       },
+      costUsd: 0.0345,
+      resultJson: completedTurn,
       errorMessage: null,
+    });
+  });
+
+  it("captures failed-turn usage and cost for billing even when Codex exits non-zero", () => {
+    const failedTurn = {
+      type: "turn.failed",
+      usage: { inputTokens: 25, cache_read_input_tokens: 7, output_tokens: 9 },
+      total_cost_usd: "0.0125",
+      error: { message: "We're currently experiencing high demand." },
+    };
+    const stdout = [
+      JSON.stringify({ type: "thread.started", thread_id: "thread_456" }),
+      JSON.stringify(failedTurn),
+    ].join("\n");
+
+    expect(parseCodexJsonl(stdout)).toEqual({
+      sessionId: "thread_456",
+      summary: "",
+      usage: {
+        inputTokens: 25,
+        cachedInputTokens: 7,
+        outputTokens: 9,
+      },
+      costUsd: 0.0125,
+      resultJson: failedTurn,
+      errorMessage: "We're currently experiencing high demand.",
     });
   });
 });
@@ -84,6 +118,20 @@ describe("isCodexUnknownSessionError", () => {
 
   it("does not classify unrelated Codex failures as stale sessions", () => {
     expect(isCodexUnknownSessionError("", "model overloaded")).toBe(false);
+  });
+});
+
+describe("Codex deterministic failure classifiers", () => {
+  it("classifies authentication-required failures", () => {
+    expect(isCodexAuthRequiredError({ stderr: "Please run `codex login` first." })).toBe(true);
+    expect(isCodexAuthRequiredError({ errorMessage: "OPENAI_API_KEY is required." })).toBe(true);
+    expect(isCodexAuthRequiredError({ stderr: "model overloaded" })).toBe(false);
+  });
+
+  it("classifies validation/configuration failures", () => {
+    expect(isCodexValidationError({ errorMessage: "Invalid request_error: Unknown parameter 'foo'." })).toBe(true);
+    expect(isCodexValidationError({ stderr: "unrecognized option --fast-mode" })).toBe(true);
+    expect(isCodexValidationError({ stderr: "Please run codex login." })).toBe(false);
   });
 });
 

@@ -1,9 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import { applyStacyEnvAliases } from "./env-aliases.js";
 import { resolveDefaultConfigPath } from "./home-paths.js";
 
 const PAPERCLIP_CONFIG_BASENAME = "config.json";
 const PAPERCLIP_ENV_FILENAME = ".env";
+
+applyStacyEnvAliases();
 
 function findConfigFileFromAncestors(startDir: string): string | null {
   const absoluteStartDir = path.resolve(startDir);

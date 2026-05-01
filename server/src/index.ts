@@ -36,6 +36,8 @@ import {
   routineService,
 } from "./services/index.js";
 import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
+import { heartbeatDispatchOutboxService } from "./services/heartbeat-dispatch-outbox.js";
+import { createHeartbeatDispatchWorker } from "./services/heartbeat-dispatch-worker.js";
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
 import { createStorageServiceFromConfig } from "./storage/index.js";
@@ -669,8 +671,43 @@ export async function startServer(): Promise<StartedServer> {
     });
   
   if (config.heartbeatSchedulerEnabled) {
-    const heartbeat = heartbeatService(db as any, { pluginWorkerManager });
+    const heartbeat = heartbeatService(db as any, {
+      pluginWorkerManager,
+      dispatchMode: config.heartbeatDispatchMode,
+    });
+    const dispatchOutbox = heartbeatDispatchOutboxService(db as any);
     const routines = routineService(db as any, { pluginWorkerManager });
+
+    if (config.heartbeatDispatchWorkerEnabled) {
+      const dispatchWorker = createHeartbeatDispatchWorker({
+        db: db as any,
+        dispatchQueuedRun: heartbeat.dispatchQueuedRun,
+        intervalMs: config.heartbeatDispatchWorkerIntervalMs,
+        batchSize: config.heartbeatDispatchWorkerBatchSize,
+        leaseMs: config.heartbeatDispatchWorkerLeaseMs,
+      });
+      dispatchWorker.start();
+    }
+
+    void dispatchOutbox
+      .summarizeQueueHealth()
+      .then((dispatchQueue) => {
+        const activeDispatchRows = dispatchQueue.pending + dispatchQueue.leased + dispatchQueue.failed;
+        if (activeDispatchRows === 0) return;
+
+        const payload = {
+          dispatchMode: config.heartbeatDispatchMode,
+          dispatchQueue,
+        };
+        if (dispatchQueue.status === "action") {
+          logger.warn(payload, "heartbeat dispatch queue needs attention at startup");
+        } else {
+          logger.info(payload, "heartbeat dispatch queue has pending work at startup");
+        }
+      })
+      .catch((err) => {
+        logger.warn({ err }, "failed to inspect heartbeat dispatch queue at startup");
+      });
   
     // Reap orphaned running runs at startup while in-memory execution state is empty,
     // then resume any persisted queued runs that were waiting on the previous process.

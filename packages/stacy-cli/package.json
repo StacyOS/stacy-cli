@@ -1,0 +1,31 @@
+{
+  "name": "stacy-cli",
+  "version": "2026.428.0",
+  "description": "Stacy CLI for the trust-first AI agent control plane",
+  "type": "module",
+  "bin": {
+    "stacy": "bin/stacy.js"
+  },
+  "keywords": [
+    "stacy",
+    "ai",
+    "agents",
+    "orchestration",
+    "control-plane",
+    "cli"
+  ],
+  "license": "MIT",
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node --check bin/stacy.js",
+    "typecheck": "node --check bin/stacy.js"
+  },
+  "dependencies": {
+    "paperclipai": "workspace:*"
+  }
+}

@@ -3,6 +3,7 @@ import type { Db } from "@paperclipai/db";
 import { agentWakeupRequests, agents, heartbeatRuns, issues } from "@paperclipai/db";
 import type { RunLivenessState } from "@paperclipai/shared";
 import { RECOVERY_REASON_KINDS } from "./origins.js";
+import { ACTIVE_WAKEUP_REQUEST_STATUSES } from "../execution-kernel/status.js";
 
 export const RUN_LIVENESS_CONTINUATION_REASON = RECOVERY_REASON_KINDS.runLivenessContinuation;
 export const DEFAULT_MAX_LIVENESS_CONTINUATION_ATTEMPTS = 2;
@@ -12,7 +13,7 @@ const CONTINUATION_ACTIVE_ISSUE_STATUSES = new Set(["todo", "in_progress"]);
 // A prior adapter error should not permanently suppress bounded liveness
 // continuations; the max-attempt/idempotency guards prevent unbounded retries.
 const CONTINUATION_AGENT_STATUSES = new Set(["active", "idle", "running", "error"]);
-const IDEMPOTENT_WAKE_STATUSES = ["queued", "deferred_issue_execution", "completed"];
+const IDEMPOTENT_WAKE_STATUSES = [...ACTIVE_WAKEUP_REQUEST_STATUSES, "completed"];
 
 type HeartbeatRunRow = typeof heartbeatRuns.$inferSelect;
 type IssueRow = Pick<

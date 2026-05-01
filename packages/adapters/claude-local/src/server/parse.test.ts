@@ -2,7 +2,84 @@ import { describe, expect, it } from "vitest";
 import {
   extractClaudeRetryNotBefore,
   isClaudeTransientUpstreamError,
+  parseClaudeStreamJson,
 } from "./parse.js";
+
+describe("parseClaudeStreamJson", () => {
+  it("captures session, model, summary, usage, cost, and raw result metadata", () => {
+    const resultEvent = {
+      type: "result",
+      session_id: "claude-session-123",
+      model: "claude-sonnet-4-5",
+      result: "Finished and verified.",
+      total_cost_usd: 0.045,
+      usage: {
+        input_tokens: 30,
+        cache_read_input_tokens: 12,
+        output_tokens: 6,
+      },
+    };
+    const stdout = [
+      JSON.stringify({
+        type: "system",
+        subtype: "init",
+        session_id: "claude-session-123",
+        model: "claude-sonnet-4-5",
+      }),
+      JSON.stringify({
+        type: "assistant",
+        session_id: "claude-session-123",
+        message: {
+          content: [{ type: "text", text: "Working through the task." }],
+        },
+      }),
+      JSON.stringify(resultEvent),
+    ].join("\n");
+
+    expect(parseClaudeStreamJson(stdout)).toEqual({
+      sessionId: "claude-session-123",
+      model: "claude-sonnet-4-5",
+      costUsd: 0.045,
+      usage: {
+        inputTokens: 30,
+        cachedInputTokens: 12,
+        outputTokens: 6,
+      },
+      summary: "Finished and verified.",
+      resultJson: resultEvent,
+    });
+  });
+
+  it("falls back to assistant text when no final result event is emitted", () => {
+    const stdout = [
+      JSON.stringify({
+        type: "system",
+        subtype: "init",
+        session_id: "claude-session-456",
+        model: "claude-opus-4-1",
+      }),
+      JSON.stringify({
+        type: "assistant",
+        session_id: "claude-session-456",
+        message: { content: [{ type: "text", text: "First update." }] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        session_id: "claude-session-456",
+        message: { content: [{ type: "text", text: "Second update." }] },
+      }),
+    ].join("\n");
+
+    expect(parseClaudeStreamJson(stdout)).toEqual({
+      sessionId: "claude-session-456",
+      model: "claude-opus-4-1",
+      costUsd: null,
+      usage: null,
+      summary: "First update.\n\nSecond update.",
+      resultJson: null,
+    });
+  });
+});
 
 describe("isClaudeTransientUpstreamError", () => {
   it("classifies the 'out of extra usage' subscription window failure as transient", () => {

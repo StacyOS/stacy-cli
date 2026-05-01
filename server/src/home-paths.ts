@@ -1,5 +1,8 @@
 import os from "node:os";
 import path from "node:path";
+import { applyStacyEnvAliases } from "./env-aliases.js";
+
+applyStacyEnvAliases();
 
 const DEFAULT_INSTANCE_ID = "default";
 const INSTANCE_ID_RE = /^[a-zA-Z0-9_-]+$/;

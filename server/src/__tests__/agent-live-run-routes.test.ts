@@ -10,7 +10,9 @@ const mockHeartbeatService = vi.hoisted(() => ({
   buildRunOutputSilence: vi.fn(),
   getRunIssueSummary: vi.fn(),
   getActiveRunIssueSummaryForAgent: vi.fn(),
-  buildRunOutputSilence: vi.fn(),
+  getRun: vi.fn(),
+  getRetryExhaustedReason: vi.fn(),
+  cancelRun: vi.fn(),
   getRunLogAccess: vi.fn(),
   readLog: vi.fn(),
 }));
@@ -175,6 +177,35 @@ describe("agent live run routes", () => {
     });
     mockHeartbeatService.getActiveRunIssueSummaryForAgent.mockResolvedValue(null);
     mockHeartbeatService.buildRunOutputSilence.mockResolvedValue(null);
+    mockHeartbeatService.getRun.mockResolvedValue({
+      id: "run-1",
+      companyId: "company-1",
+      agentId: "agent-1",
+      status: "running",
+      invocationSource: "on_demand",
+      triggerDetail: "manual",
+      startedAt: new Date("2026-04-10T09:30:00.000Z"),
+      finishedAt: null,
+      createdAt: new Date("2026-04-10T09:29:59.000Z"),
+      updatedAt: new Date("2026-04-10T09:31:00.000Z"),
+      contextSnapshot: {},
+      resultJson: null,
+      claimToken: "secret-claim-token",
+      claimOwner: "stacy-server:12345",
+      claimLeasedAt: new Date("2026-04-10T09:30:00.000Z"),
+      claimLeaseExpiresAt: new Date("2026-04-11T09:30:00.000Z"),
+    });
+    mockHeartbeatService.getRetryExhaustedReason.mockResolvedValue(null);
+    mockHeartbeatService.cancelRun.mockResolvedValue({
+      id: "run-1",
+      companyId: "company-1",
+      agentId: "agent-1",
+      status: "cancelled",
+      claimToken: "secret-claim-token",
+      claimOwner: "stacy-server:12345",
+      claimLeasedAt: new Date("2026-04-10T09:30:00.000Z"),
+      claimLeaseExpiresAt: new Date("2026-04-11T09:30:00.000Z"),
+    });
     mockHeartbeatService.getRunLogAccess.mockResolvedValue({
       id: "run-1",
       companyId: "company-1",
@@ -217,6 +248,45 @@ describe("agent live run routes", () => {
     expect(res.body).not.toHaveProperty("contextSnapshot");
     expect(res.body).not.toHaveProperty("logRef");
   }, 10_000);
+
+  it("redacts durable claim metadata from public run detail responses", async () => {
+    const res = await requestApp(
+      await createApp(),
+      (baseUrl) => request(baseUrl).get("/api/heartbeat-runs/run-1"),
+    );
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body).toMatchObject({
+      id: "run-1",
+      companyId: "company-1",
+      status: "running",
+      retryExhaustedReason: null,
+      outputSilence: null,
+    });
+    expect(res.body).not.toHaveProperty("claimToken");
+    expect(res.body).not.toHaveProperty("claimOwner");
+    expect(res.body).not.toHaveProperty("claimLeasedAt");
+    expect(res.body).not.toHaveProperty("claimLeaseExpiresAt");
+  });
+
+  it("redacts durable claim metadata from cancel responses", async () => {
+    const res = await requestApp(
+      await createApp(),
+      (baseUrl) => request(baseUrl).post("/api/heartbeat-runs/run-1/cancel").send({}),
+    );
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(mockHeartbeatService.cancelRun).toHaveBeenCalledWith("run-1");
+    expect(res.body).toMatchObject({
+      id: "run-1",
+      companyId: "company-1",
+      status: "cancelled",
+    });
+    expect(res.body).not.toHaveProperty("claimToken");
+    expect(res.body).not.toHaveProperty("claimOwner");
+    expect(res.body).not.toHaveProperty("claimLeasedAt");
+    expect(res.body).not.toHaveProperty("claimLeaseExpiresAt");
+  });
 
   it("ignores a stale execution run from another issue and falls back to the assignee's matching run", async () => {
     mockHeartbeatService.getRunIssueSummary.mockResolvedValue({

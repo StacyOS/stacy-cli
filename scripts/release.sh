@@ -76,6 +76,8 @@ cleanup_release_state() {
       fi
     done
   fi
+
+  cleanup_npm_token_auth
 }
 
 set_cleanup_trap() {
@@ -154,10 +156,15 @@ fi
 NOTES_FILE="$(release_notes_file "$TARGET_STABLE_VERSION")"
 
 require_clean_worktree
+configure_npm_token_auth
 require_npm_publish_auth "$dry_run"
 
 if [ "$channel" = "stable" ] && [ ! -f "$NOTES_FILE" ]; then
-  release_fail "stable release notes file is required at $NOTES_FILE before publishing stable."
+  release_fail "stable release notes file is required at $NOTES_FILE before publishing stable. Create it with: pnpm release:notes -- --version $TARGET_STABLE_VERSION"
+fi
+
+if [ "$channel" = "stable" ] && grep -Eiq '^> Status:[[:space:]]*Draft[[:space:]]*$' "$NOTES_FILE"; then
+  release_fail "stable release notes are still marked as draft in $NOTES_FILE. Edit the notes and remove or update '> Status: Draft' before publishing stable."
 fi
 
 if [ "$channel" = "canary" ] && [ -f "$NOTES_FILE" ]; then

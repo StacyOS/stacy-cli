@@ -23,6 +23,7 @@ function tempConfigPath(): string {
 describe("agent jwt env helpers", () => {
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV };
+    delete process.env.STACY_AGENT_JWT_SECRET;
     delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
   });
 
@@ -39,6 +40,7 @@ describe("agent jwt env helpers", () => {
     const envPath = resolveAgentJwtEnvFile(configPath);
     expect(fs.existsSync(envPath)).toBe(true);
     const contents = fs.readFileSync(envPath, "utf-8");
+    expect(contents).toContain("STACY_AGENT_JWT_SECRET=");
     expect(contents).toContain("PAPERCLIP_AGENT_JWT_SECRET=");
   });
 

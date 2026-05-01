@@ -12,8 +12,8 @@ const {
   syncDirectoryToSsh,
 } = vi.hoisted(() => ({
   runChildProcess: vi.fn(async () => ({
-    exitCode: 1,
-    signal: null,
+    exitCode: 1 as number | null,
+    signal: null as string | null,
     timedOut: false,
     stdout: "",
     stderr: "remote failure",
@@ -355,5 +355,273 @@ describe("codex remote execution", () => {
     ]);
     expect(call?.[3].env.CODEX_HOME).toBe("/remote/workspace/.paperclip-runtime/codex/home");
     expect(call?.[3].remoteExecution?.remoteCwd).toBe("/remote/workspace");
+  });
+
+  it("surfaces parsed usage, cost, session, and result metadata from the Codex CLI", async () => {
+    const completedTurn = {
+      type: "turn.completed",
+      usage: { input_tokens: 44, cache_read_input_tokens: 11, output_tokens: 8 },
+      total_cost_usd: 0.056,
+    };
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      stdout: [
+        JSON.stringify({ type: "thread.started", thread_id: "thread-contract" }),
+        JSON.stringify({
+          type: "item.completed",
+          item: { type: "agent_message", text: "Implemented the requested change." },
+        }),
+        JSON.stringify(completedTurn),
+      ].join("\n"),
+      stderr: "",
+      pid: 456,
+      startedAt: new Date().toISOString(),
+    });
+
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-contract-"));
+    cleanupDirs.push(rootDir);
+    const workspaceDir = path.join(rootDir, "workspace");
+    const codexHomeDir = path.join(rootDir, "codex-home");
+    await mkdir(workspaceDir, { recursive: true });
+    await mkdir(codexHomeDir, { recursive: true });
+
+    const result = await execute({
+      runId: "run-contract",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "CodexCoder",
+        adapterType: "codex_local",
+        adapterConfig: {},
+      },
+      runtime: {
+        sessionId: null,
+        sessionParams: null,
+        sessionDisplayId: null,
+        taskKey: null,
+      },
+      config: {
+        command: "codex",
+        env: {
+          CODEX_HOME: codexHomeDir,
+          OPENAI_API_KEY: "sk-test",
+        },
+      },
+      context: {
+        paperclipWorkspace: {
+          cwd: workspaceDir,
+          source: "project_primary",
+        },
+      },
+      onLog: async () => {},
+    });
+
+    expect(result).toMatchObject({
+      exitCode: 0,
+      errorMessage: null,
+      sessionId: "thread-contract",
+      sessionDisplayId: "thread-contract",
+      provider: "openai",
+      billingType: "api",
+      costUsd: 0.056,
+      usage: {
+        inputTokens: 44,
+        cachedInputTokens: 11,
+        outputTokens: 8,
+      },
+      summary: "Implemented the requested change.",
+      resultJson: expect.objectContaining({
+        ...completedTurn,
+        total_cost_usd: 0.056,
+        stderr: "",
+      }),
+    });
+  });
+
+  it("retries with a fresh Codex session when a saved resume session is stale", async () => {
+    runChildProcess
+      .mockResolvedValueOnce({
+        exitCode: 1,
+        signal: null,
+        timedOut: false,
+        stdout: "",
+        stderr: "Error: thread/resume failed: no rollout found for thread id stale-session",
+        pid: 456,
+        startedAt: new Date().toISOString(),
+      })
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        stdout: [
+          JSON.stringify({ type: "thread.started", thread_id: "fresh-thread" }),
+          JSON.stringify({
+            type: "item.completed",
+            item: { type: "agent_message", text: "Recovered on a fresh session." },
+          }),
+          JSON.stringify({
+            type: "turn.completed",
+            usage: { input_tokens: 7, cached_input_tokens: 0, output_tokens: 3 },
+          }),
+        ].join("\n"),
+        stderr: "",
+        pid: 789,
+        startedAt: new Date().toISOString(),
+      });
+
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-stale-session-"));
+    cleanupDirs.push(rootDir);
+    const workspaceDir = path.join(rootDir, "workspace");
+    const codexHomeDir = path.join(rootDir, "codex-home");
+    await mkdir(workspaceDir, { recursive: true });
+    await mkdir(codexHomeDir, { recursive: true });
+    const logs: string[] = [];
+
+    const result = await execute({
+      runId: "run-stale-session",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "CodexCoder",
+        adapterType: "codex_local",
+        adapterConfig: {},
+      },
+      runtime: {
+        sessionId: "stale-session",
+        sessionParams: {
+          sessionId: "stale-session",
+          cwd: workspaceDir,
+        },
+        sessionDisplayId: "stale-session",
+        taskKey: null,
+      },
+      config: {
+        command: "codex",
+        cwd: workspaceDir,
+        env: {
+          CODEX_HOME: codexHomeDir,
+        },
+      },
+      context: {},
+      onLog: async (_stream, chunk) => {
+        logs.push(chunk);
+      },
+    });
+
+    expect(runChildProcess).toHaveBeenCalledTimes(2);
+    const firstCall = runChildProcess.mock.calls[0] as unknown as [string, string, string[]] | undefined;
+    const secondCall = runChildProcess.mock.calls[1] as unknown as [string, string, string[]] | undefined;
+    expect(firstCall?.[2]).toEqual(["exec", "--json", "resume", "stale-session", "-"]);
+    expect(secondCall?.[2]).toEqual(["exec", "--json", "-"]);
+    expect(logs.join("")).toContain('Codex resume session "stale-session" is unavailable');
+    expect(result).toMatchObject({
+      exitCode: 0,
+      errorMessage: null,
+      sessionId: "fresh-thread",
+      sessionDisplayId: "fresh-thread",
+      summary: "Recovered on a fresh session.",
+      usage: {
+        inputTokens: 7,
+        cachedInputTokens: 0,
+        outputTokens: 3,
+      },
+    });
+  });
+
+  it("uses shared failure families for Codex auth, validation, unknown-session, and timeout failures", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-codex-failure-family-"));
+    cleanupDirs.push(rootDir);
+    const workspaceDir = path.join(rootDir, "workspace");
+    const codexHomeDir = path.join(rootDir, "codex-home");
+    await mkdir(workspaceDir, { recursive: true });
+    await mkdir(codexHomeDir, { recursive: true });
+
+    const baseContext = {
+      runId: "run-family",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "CodexCoder",
+        adapterType: "codex_local",
+        adapterConfig: {},
+      },
+      runtime: {
+        sessionId: null,
+        sessionParams: null,
+        sessionDisplayId: null,
+        taskKey: null,
+      },
+      config: {
+        command: "codex",
+        cwd: workspaceDir,
+        env: {
+          CODEX_HOME: codexHomeDir,
+        },
+      },
+      context: {},
+      onLog: async () => {},
+    };
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      stdout: "",
+      stderr: "Please run `codex login` first.",
+      pid: 456,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "codex_auth_required",
+      errorFamily: "auth_required",
+      resultJson: expect.objectContaining({ errorFamily: "auth_required" }),
+    });
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      stdout: "",
+      stderr: "Invalid request_error: Unknown parameter 'foo'.",
+      pid: 457,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "codex_validation",
+      errorFamily: "validation",
+      resultJson: expect.objectContaining({ errorFamily: "validation" }),
+    });
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      stdout: "",
+      stderr: "unknown thread id abc",
+      pid: 458,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "codex_unknown_session",
+      errorFamily: "unknown_session",
+      clearSession: true,
+      resultJson: expect.objectContaining({ errorFamily: "unknown_session" }),
+    });
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: null as number | null,
+      signal: "SIGTERM" as string | null,
+      timedOut: true,
+      stdout: "",
+      stderr: "",
+      pid: 459,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "timeout",
+      errorFamily: "timeout",
+    });
   });
 });

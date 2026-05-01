@@ -36,18 +36,25 @@ import {
 import {
   parseCodexJsonl,
   extractCodexRetryNotBefore,
+  isCodexAuthRequiredError,
   isCodexTransientUpstreamError,
   isCodexUnknownSessionError,
+  isCodexValidationError,
 } from "./parse.js";
 import { pathExists, prepareManagedCodexHome, resolveManagedCodexHomeDir, resolveSharedCodexHomeDir } from "./codex-home.js";
 import { resolveCodexDesiredSkillNames } from "./skills.js";
 import { buildCodexExecArgs } from "./codex-args.js";
 
 const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
-const CODEX_ROLLOUT_NOISE_RE =
-  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+ERROR\s+codex_core::rollout::list:\s+state db missing rollout path for thread\s+[a-z0-9-]+$/i;
+const CODEX_TRUST_SURFACE_NOISE_RES = [
+  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+ERROR\s+codex_core::rollout::list:\s+state db missing rollout path for thread\s+[a-z0-9-]+$/i,
+  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core_plugins::loader:\s+failed to load plugin:\s+plugin is not installed\s+plugin=.+$/i,
+  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core_plugins::manifest:\s+ignoring interface\.defaultPrompt.+$/i,
+  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core::plugins::manager:\s+ignoring remote plugins missing from local marketplace.+$/i,
+  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+ERROR\s+codex_core::session:\s+failed to record rollout items:\s+thread\s+[a-z0-9-]+\s+not found$/i,
+] as const;
 
-function stripCodexRolloutNoise(text: string): string {
+export function stripCodexTrustSurfaceNoise(text: string): string {
   const parts = text.split(/\r?\n/);
   const kept: string[] = [];
   for (const part of parts) {
@@ -56,7 +63,7 @@ function stripCodexRolloutNoise(text: string): string {
       kept.push(part);
       continue;
     }
-    if (CODEX_ROLLOUT_NOISE_RE.test(trimmed)) continue;
+    if (CODEX_TRUST_SURFACE_NOISE_RES.some((regex) => regex.test(trimmed))) continue;
     kept.push(part);
   }
   return kept.join("\n");
@@ -656,12 +663,12 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
           await onLog(stream, chunk);
           return;
         }
-        const cleaned = stripCodexRolloutNoise(chunk);
+        const cleaned = stripCodexTrustSurfaceNoise(chunk);
         if (!cleaned.trim()) return;
         await onLog(stream, cleaned);
       },
     });
-    const cleanedStderr = stripCodexRolloutNoise(proc.stderr);
+    const cleanedStderr = stripCodexTrustSurfaceNoise(proc.stderr);
     return {
       proc: {
         ...proc,
@@ -683,6 +690,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         signal: attempt.proc.signal,
         timedOut: true,
         errorMessage: `Timed out after ${timeoutSec}s`,
+        errorCode: "timeout",
+        errorFamily: "timeout",
         clearSession: clearSessionOnMissingSession,
       };
     }
@@ -726,6 +735,47 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         stderr: attempt.proc.stderr,
         errorMessage: fallbackErrorMessage,
       });
+    const authRequired =
+      (attempt.proc.exitCode ?? 0) !== 0 &&
+      !transientUpstream &&
+      isCodexAuthRequiredError({
+        stdout: attempt.proc.stdout,
+        stderr: attempt.proc.stderr,
+        errorMessage: fallbackErrorMessage,
+      });
+    const unknownSession =
+      (attempt.proc.exitCode ?? 0) !== 0 &&
+      !transientUpstream &&
+      !authRequired &&
+      isCodexUnknownSessionError(attempt.proc.stdout, attempt.rawStderr);
+    const validationError =
+      (attempt.proc.exitCode ?? 0) !== 0 &&
+      !transientUpstream &&
+      !authRequired &&
+      !unknownSession &&
+      isCodexValidationError({
+        stdout: attempt.proc.stdout,
+        stderr: attempt.proc.stderr,
+        errorMessage: fallbackErrorMessage,
+      });
+    const errorCode = transientUpstream
+      ? "codex_transient_upstream"
+      : authRequired
+      ? "codex_auth_required"
+      : unknownSession
+      ? "codex_unknown_session"
+      : validationError
+      ? "codex_validation"
+      : null;
+    const errorFamily = transientUpstream
+      ? "transient_upstream"
+      : authRequired
+      ? "auth_required"
+      : unknownSession
+      ? "unknown_session"
+      : validationError
+      ? "validation"
+      : null;
 
     return {
       exitCode: attempt.proc.exitCode,
@@ -735,11 +785,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         (attempt.proc.exitCode ?? 0) === 0
           ? null
           : fallbackErrorMessage,
-      errorCode:
-        transientUpstream
-          ? "codex_transient_upstream"
-          : null,
-      errorFamily: transientUpstream ? "transient_upstream" : null,
+      errorCode,
+      errorFamily,
       retryNotBefore: transientRetryNotBefore ? transientRetryNotBefore.toISOString() : null,
       usage: attempt.parsed.usage,
       sessionId: resolvedSessionId,
@@ -749,16 +796,18 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       biller: resolveCodexBiller(effectiveEnv, billingType),
       model,
       billingType,
-      costUsd: null,
+      costUsd: attempt.parsed.costUsd,
       resultJson: {
+        ...(attempt.parsed.resultJson ?? {}),
         stdout: attempt.proc.stdout,
         stderr: attempt.proc.stderr,
-        ...(transientUpstream ? { errorFamily: "transient_upstream" } : {}),
+        ...(attempt.parsed.costUsd !== null ? { total_cost_usd: attempt.parsed.costUsd } : {}),
+        ...(errorFamily ? { errorFamily } : {}),
         ...(transientRetryNotBefore ? { retryNotBefore: transientRetryNotBefore.toISOString() } : {}),
         ...(transientRetryNotBefore ? { transientRetryNotBefore: transientRetryNotBefore.toISOString() } : {}),
       },
       summary: attempt.parsed.summary,
-      clearSession: Boolean((clearSessionOnMissingSession || forceFreshSession) && !resolvedSessionId),
+      clearSession: Boolean(unknownSession || ((clearSessionOnMissingSession || forceFreshSession) && !resolvedSessionId)),
     };
   };
 

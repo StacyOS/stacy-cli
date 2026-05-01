@@ -46,6 +46,12 @@ import {
   issueTreeControlService,
   type ActiveIssueTreePauseHoldGate,
 } from "./issue-tree-control.js";
+import {
+  ACTIVE_HEARTBEAT_RUN_STATUSES,
+  ACTIVE_WAKEUP_REQUEST_STATUSES,
+  COVERING_HEARTBEAT_RUN_STATUSES,
+  isTerminalHeartbeatRunStatus,
+} from "./execution-kernel/status.js";
 
 const ALL_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const MAX_ISSUE_COMMENT_PAGE_LIMIT = 500;
@@ -185,7 +191,6 @@ function sameRunLock(checkoutRunId: string | null, actorRunId: string | null) {
   return checkoutRunId == null;
 }
 
-const TERMINAL_HEARTBEAT_RUN_STATUSES = new Set(["succeeded", "failed", "cancelled", "timed_out"]);
 const ISSUE_LIST_DESCRIPTION_MAX_CHARS = 1200;
 const ISSUE_LIST_DESCRIPTION_MAX_BYTES = ISSUE_LIST_DESCRIPTION_MAX_CHARS * 4;
 
@@ -660,9 +665,9 @@ async function withIssueLabels(dbOrTx: any, rows: IssueRow[]): Promise<IssueWith
   });
 }
 
-const ACTIVE_RUN_STATUSES = ["queued", "running"];
-const BLOCKER_ATTENTION_ACTIVE_RUN_STATUSES = ["queued", "running"];
-const BLOCKER_ATTENTION_ACTIVE_WAKE_STATUSES = ["queued", "deferred_issue_execution"];
+const ACTIVE_RUN_STATUSES = ACTIVE_HEARTBEAT_RUN_STATUSES;
+const BLOCKER_ATTENTION_ACTIVE_RUN_STATUSES = COVERING_HEARTBEAT_RUN_STATUSES;
+const BLOCKER_ATTENTION_ACTIVE_WAKE_STATUSES = ACTIVE_WAKEUP_REQUEST_STATUSES;
 const BLOCKER_ATTENTION_PENDING_INTERACTION_STATUSES = ["pending"];
 const BLOCKER_ATTENTION_PENDING_APPROVAL_STATUSES = ["pending", "revision_requested"];
 const BLOCKER_ATTENTION_OPEN_RECOVERY_ORIGIN_KIND = "harness_liveness_escalation";
@@ -1832,7 +1837,7 @@ export function issueService(db: Db) {
       .where(eq(heartbeatRuns.id, runId))
       .then((rows) => rows[0] ?? null);
     if (!run) return true;
-    return TERMINAL_HEARTBEAT_RUN_STATUSES.has(run.status);
+    return isTerminalHeartbeatRunStatus(run.status);
   }
 
   async function adoptStaleCheckoutRun(input: {
@@ -1928,7 +1933,7 @@ export function issueService(db: Db) {
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, issue.executionRunId))
         .then((rows) => rows[0] ?? null);
-      if (run && !TERMINAL_HEARTBEAT_RUN_STATUSES.has(run.status)) return false;
+      if (run && !isTerminalHeartbeatRunStatus(run.status)) return false;
 
       const updated = await tx
         .update(issues)

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AdapterExecutionContext, AdapterExecutionResult } from "@paperclipai/adapter-utils";
+import type { AdapterExecutionContext, AdapterExecutionErrorFamily, AdapterExecutionResult } from "@paperclipai/adapter-utils";
 import type { RunProcessResult } from "@paperclipai/adapter-utils/server-utils";
 import {
   adapterExecutionTargetIsRemote,
@@ -606,6 +606,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         timedOut: true,
         errorMessage: `Timed out after ${timeoutSec}s`,
         errorCode: "timeout",
+        errorFamily: "timeout",
         errorMeta,
         clearSession: Boolean(opts.clearSessionOnMissingSession),
       };
@@ -635,19 +636,24 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         : transientUpstream
         ? "claude_transient_upstream"
         : null;
+      const errorFamily: AdapterExecutionErrorFamily | null = loginMeta.requiresLogin
+        ? "auth_required"
+        : transientUpstream
+        ? "transient_upstream"
+        : null;
       return {
         exitCode: proc.exitCode,
         signal: proc.signal,
         timedOut: false,
         errorMessage: fallbackErrorMessage,
         errorCode,
-        errorFamily: transientUpstream ? "transient_upstream" : null,
+        errorFamily,
         retryNotBefore: transientRetryNotBefore ? transientRetryNotBefore.toISOString() : null,
         errorMeta,
         resultJson: {
           stdout: proc.stdout,
           stderr: proc.stderr,
-          ...(transientUpstream ? { errorFamily: "transient_upstream" } : {}),
+          ...(errorFamily ? { errorFamily } : {}),
           ...(transientRetryNotBefore
             ? { retryNotBefore: transientRetryNotBefore.toISOString() }
             : {}),
@@ -689,6 +695,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       } as Record<string, unknown>)
       : null;
     const clearSessionForMaxTurns = isClaudeMaxTurnsResult(parsed);
+    const unknownSession = isClaudeUnknownSessionError(parsed);
     const parsedIsError = asBoolean(parsed.is_error, false);
     const failed = (proc.exitCode ?? 0) !== 0 || parsedIsError;
     const errorMessage = failed
@@ -713,12 +720,25 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       : null;
     const resolvedErrorCode = loginMeta.requiresLogin
       ? "claude_auth_required"
+      : unknownSession
+      ? "claude_unknown_session"
+      : clearSessionForMaxTurns
+      ? "claude_max_turns"
       : transientUpstream
       ? "claude_transient_upstream"
       : null;
+    const resolvedErrorFamily: AdapterExecutionErrorFamily | null = loginMeta.requiresLogin
+      ? "auth_required"
+      : unknownSession
+      ? "unknown_session"
+      : clearSessionForMaxTurns
+      ? "max_turns"
+      : transientUpstream
+      ? "transient_upstream"
+      : null;
     const mergedResultJson: Record<string, unknown> = {
       ...parsed,
-      ...(transientUpstream ? { errorFamily: "transient_upstream" } : {}),
+      ...(resolvedErrorFamily ? { errorFamily: resolvedErrorFamily } : {}),
       ...(transientRetryNotBefore ? { retryNotBefore: transientRetryNotBefore.toISOString() } : {}),
       ...(transientRetryNotBefore ? { transientRetryNotBefore: transientRetryNotBefore.toISOString() } : {}),
     };
@@ -729,7 +749,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       timedOut: false,
       errorMessage,
       errorCode: resolvedErrorCode,
-      errorFamily: transientUpstream ? "transient_upstream" : null,
+      errorFamily: resolvedErrorFamily,
       retryNotBefore: transientRetryNotBefore ? transientRetryNotBefore.toISOString() : null,
       errorMeta,
       usage,
@@ -743,7 +763,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       costUsd: parsedStream.costUsd ?? asNumber(parsed.total_cost_usd, 0),
       resultJson: mergedResultJson,
       summary: parsedStream.summary || asString(parsed.result, ""),
-      clearSession: clearSessionForMaxTurns || Boolean(opts.clearSessionOnMissingSession && !resolvedSessionId),
+      clearSession: clearSessionForMaxTurns || unknownSession || Boolean(opts.clearSessionOnMissingSession && !resolvedSessionId),
     };
   };
 

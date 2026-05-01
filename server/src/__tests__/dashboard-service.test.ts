@@ -165,5 +165,23 @@ describeEmbeddedPostgres("dashboard service", () => {
       other: 1,
       total: 3,
     });
+    expect(summary.controlPlane).toMatchObject({
+      liveRuns: 0,
+      cancellableRuns: 0,
+      failedRuns24h: 2,
+      cancelledRuns24h: 1,
+      dispatchQueue: {
+        status: "clear",
+        pending: 0,
+        ready: 0,
+        leased: 0,
+        expiredLeases: 0,
+        failed: 0,
+        stalePending: 0,
+        oldestPendingAgeMs: null,
+        oldestLeasedAgeMs: null,
+      },
+      riskLevel: "watch",
+    });
   });
 });

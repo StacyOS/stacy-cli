@@ -1,12 +1,27 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildPaperclipEnv } from "../adapters/utils.js";
 
 const ORIGINAL_PAPERCLIP_RUNTIME_API_URL = process.env.PAPERCLIP_RUNTIME_API_URL;
 const ORIGINAL_PAPERCLIP_API_URL = process.env.PAPERCLIP_API_URL;
 const ORIGINAL_PAPERCLIP_LISTEN_HOST = process.env.PAPERCLIP_LISTEN_HOST;
 const ORIGINAL_PAPERCLIP_LISTEN_PORT = process.env.PAPERCLIP_LISTEN_PORT;
+const ORIGINAL_STACY_RUNTIME_API_URL = process.env.STACY_RUNTIME_API_URL;
+const ORIGINAL_STACY_API_URL = process.env.STACY_API_URL;
+const ORIGINAL_STACY_LISTEN_HOST = process.env.STACY_LISTEN_HOST;
+const ORIGINAL_STACY_LISTEN_PORT = process.env.STACY_LISTEN_PORT;
 const ORIGINAL_HOST = process.env.HOST;
 const ORIGINAL_PORT = process.env.PORT;
+
+beforeEach(() => {
+  delete process.env.PAPERCLIP_RUNTIME_API_URL;
+  delete process.env.PAPERCLIP_API_URL;
+  delete process.env.PAPERCLIP_LISTEN_HOST;
+  delete process.env.PAPERCLIP_LISTEN_PORT;
+  delete process.env.STACY_RUNTIME_API_URL;
+  delete process.env.STACY_API_URL;
+  delete process.env.STACY_LISTEN_HOST;
+  delete process.env.STACY_LISTEN_PORT;
+});
 
 afterEach(() => {
   if (ORIGINAL_PAPERCLIP_RUNTIME_API_URL === undefined) delete process.env.PAPERCLIP_RUNTIME_API_URL;
@@ -20,6 +35,18 @@ afterEach(() => {
 
   if (ORIGINAL_PAPERCLIP_LISTEN_PORT === undefined) delete process.env.PAPERCLIP_LISTEN_PORT;
   else process.env.PAPERCLIP_LISTEN_PORT = ORIGINAL_PAPERCLIP_LISTEN_PORT;
+
+  if (ORIGINAL_STACY_RUNTIME_API_URL === undefined) delete process.env.STACY_RUNTIME_API_URL;
+  else process.env.STACY_RUNTIME_API_URL = ORIGINAL_STACY_RUNTIME_API_URL;
+
+  if (ORIGINAL_STACY_API_URL === undefined) delete process.env.STACY_API_URL;
+  else process.env.STACY_API_URL = ORIGINAL_STACY_API_URL;
+
+  if (ORIGINAL_STACY_LISTEN_HOST === undefined) delete process.env.STACY_LISTEN_HOST;
+  else process.env.STACY_LISTEN_HOST = ORIGINAL_STACY_LISTEN_HOST;
+
+  if (ORIGINAL_STACY_LISTEN_PORT === undefined) delete process.env.STACY_LISTEN_PORT;
+  else process.env.STACY_LISTEN_PORT = ORIGINAL_STACY_LISTEN_PORT;
 
   if (ORIGINAL_HOST === undefined) delete process.env.HOST;
   else process.env.HOST = ORIGINAL_HOST;
@@ -38,6 +65,9 @@ describe("buildPaperclipEnv", () => {
     const env = buildPaperclipEnv({ id: "agent-1", companyId: "company-1" });
 
     expect(env.PAPERCLIP_API_URL).toBe("http://100.104.161.29:3102");
+    expect(env.STACY_API_URL).toBe("http://100.104.161.29:3102");
+    expect(env.STACY_AGENT_ID).toBe("agent-1");
+    expect(env.STACY_COMPANY_ID).toBe("company-1");
   });
 
   it("falls back to PAPERCLIP_API_URL when no runtime URL is configured", () => {
@@ -70,5 +100,21 @@ describe("buildPaperclipEnv", () => {
     const env = buildPaperclipEnv({ id: "agent-1", companyId: "company-1" });
 
     expect(env.PAPERCLIP_API_URL).toBe("http://[::1]:3101");
+  });
+
+  it("accepts STACY runtime aliases while preserving PAPERCLIP compatibility", () => {
+    delete process.env.PAPERCLIP_RUNTIME_API_URL;
+    delete process.env.PAPERCLIP_API_URL;
+    delete process.env.PAPERCLIP_LISTEN_HOST;
+    delete process.env.PAPERCLIP_LISTEN_PORT;
+    process.env.STACY_RUNTIME_API_URL = "http://stacy-runtime:3200";
+    process.env.STACY_API_URL = "http://stacy-api:3100";
+    process.env.STACY_LISTEN_HOST = "127.0.0.1";
+    process.env.STACY_LISTEN_PORT = "3201";
+
+    const env = buildPaperclipEnv({ id: "agent-1", companyId: "company-1" });
+
+    expect(env.STACY_API_URL).toBe("http://stacy-runtime:3200");
+    expect(env.PAPERCLIP_API_URL).toBe("http://stacy-runtime:3200");
   });
 });

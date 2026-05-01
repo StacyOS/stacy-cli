@@ -17,6 +17,37 @@ release_fail() {
   exit 1
 }
 
+RELEASE_TEMP_NPM_USERCONFIG_DIR=""
+
+cleanup_npm_token_auth() {
+  if [ -n "$RELEASE_TEMP_NPM_USERCONFIG_DIR" ]; then
+    rm -rf "$RELEASE_TEMP_NPM_USERCONFIG_DIR"
+    RELEASE_TEMP_NPM_USERCONFIG_DIR=""
+  fi
+}
+
+configure_npm_token_auth() {
+  local token="${NPM_TOKEN:-${NODE_AUTH_TOKEN:-}}"
+  local userconfig="${npm_config_userconfig:-${NPM_CONFIG_USERCONFIG:-}}"
+  local userconfig_path
+
+  [ -n "$token" ] || return 0
+  [ -z "$userconfig" ] || return 0
+
+  RELEASE_TEMP_NPM_USERCONFIG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/stacy-npm-userconfig.XXXXXX")"
+  userconfig_path="$RELEASE_TEMP_NPM_USERCONFIG_DIR/.npmrc"
+  cat >"$userconfig_path" <<'EOF'
+registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=${NPM_TOKEN}
+always-auth=true
+EOF
+  chmod 600 "$userconfig_path"
+  export NPM_TOKEN="$token"
+  export NODE_AUTH_TOKEN="$token"
+  export npm_config_userconfig="$userconfig_path"
+  trap cleanup_npm_token_auth EXIT
+}
+
 git_remote_exists() {
   git -C "$REPO_ROOT" remote get-url "$1" >/dev/null 2>&1
 }

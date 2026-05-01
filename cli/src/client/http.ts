@@ -205,7 +205,7 @@ function buildConnectionErrorMessage(input: {
 }): string {
   const healthUrl = buildHealthCheckUrl(input.url);
   const lines = [
-    "Could not reach the Paperclip API.",
+    "Could not reach the Stacy API.",
     "",
     `Request: ${input.method} ${input.url}`,
   ];
@@ -214,12 +214,12 @@ function buildConnectionErrorMessage(input: {
   }
   lines.push(
     "",
-    "This usually means the Paperclip server is not running, the configured URL is wrong, or the request is being blocked before it reaches Paperclip.",
+    "This usually means the Stacy server is not running, the configured URL is wrong, or the request is being blocked before it reaches Stacy.",
     "",
     "Try:",
-    "- Start Paperclip with `pnpm dev` or `pnpm paperclipai run`.",
+    "- Start Stacy with `pnpm dev` or `pnpm stacy run`.",
     `- Verify the server is reachable with \`curl ${healthUrl}\`.`,
-    `- If Paperclip is running elsewhere, pass \`--api-base ${input.apiBase.replace(/\/+$/, "")}\` or set \`PAPERCLIP_API_URL\`.`,
+    `- If Stacy is running elsewhere, pass \`--api-base ${input.apiBase.replace(/\/+$/, "")}\` or set \`STACY_API_URL\` (or legacy \`PAPERCLIP_API_URL\`).`,
   );
   return lines.join("\n");
 }

@@ -22,6 +22,10 @@ import {
   type IssueTreePreviewWarning,
 } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
+import {
+  ACTIVE_HEARTBEAT_RUN_STATUSES,
+  PENDING_WAKEUP_REQUEST_STATUSES,
+} from "./execution-kernel/status.js";
 
 type IssueRow = typeof issues.$inferSelect;
 type HoldRow = typeof issueTreeHolds.$inferSelect;
@@ -69,7 +73,7 @@ type RestoreTreeStatusResult = TreeStatusUpdateResult & {
 };
 
 const TERMINAL_ISSUE_STATUSES = new Set<IssueStatus>(["done", "cancelled"]);
-const ACTIVE_RUN_STATUSES = ["queued", "running"] as const;
+const ACTIVE_RUN_STATUSES = ACTIVE_HEARTBEAT_RUN_STATUSES;
 const DEFAULT_RELEASE_POLICY: IssueTreeHoldReleasePolicy = { strategy: "manual" };
 const MAX_PAUSE_HOLD_GATE_DEPTH = 15;
 export const ISSUE_TREE_CONTROL_INTERACTION_WAKE_REASONS: ReadonlySet<string> = new Set([
@@ -1065,7 +1069,7 @@ export function issueTreeControlService(db: Db) {
       .where(
         and(
           eq(agentWakeupRequests.companyId, companyId),
-          inArray(agentWakeupRequests.status, ["queued", "deferred_issue_execution"]),
+          inArray(agentWakeupRequests.status, PENDING_WAKEUP_REQUEST_STATUSES),
           isNull(agentWakeupRequests.runId),
           inArray(sql<string | null>`${agentWakeupRequests.payload} ->> 'issueId'`, issueIds),
         ),

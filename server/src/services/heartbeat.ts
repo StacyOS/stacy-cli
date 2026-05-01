@@ -109,6 +109,8 @@ import {
 } from "./recovery/index.js";
 import { isAutomaticRecoverySuppressedByPauseHold } from "./recovery/pause-hold-guard.js";
 import { recoveryService } from "./recovery/service.js";
+import { heartbeatDispatchOutboxService } from "./heartbeat-dispatch-outbox.js";
+import type { HeartbeatDispatchMode } from "./heartbeat-dispatch-mode.js";
 import { withAgentStartLock } from "./agent-start-lock.js";
 import { redactCurrentUserText, redactCurrentUserValue } from "../log-redaction.js";
 import {
@@ -125,6 +127,19 @@ import { environmentService } from "./environments.js";
 import { environmentRuntimeService } from "./environment-runtime.js";
 import { environmentRunOrchestrator } from "./environment-run-orchestrator.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
+import {
+  CANCELLABLE_HEARTBEAT_RUN_STATUSES,
+  EXECUTION_PATH_HEARTBEAT_RUN_STATUSES,
+  PENDING_WAKEUP_REQUEST_STATUSES,
+  allowedHeartbeatRunTransitionSources,
+  formatHeartbeatRunStatusTransition,
+  isAllowedHeartbeatRunStatusTransition,
+  isActiveHeartbeatRunStatus,
+  isCancellableHeartbeatRunStatus,
+  isHeartbeatRunStatus,
+  isTerminalHeartbeatRunStatus,
+  isUnsuccessfulHeartbeatRunTerminalStatus,
+} from "./execution-kernel/status.js";
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
 const MAX_PERSISTED_LOG_CHUNK_CHARS = 64 * 1024;
@@ -145,14 +160,13 @@ const PAPERCLIP_HARNESS_CHECKOUT_KEY = "paperclipHarnessCheckedOut";
 const DETACHED_PROCESS_ERROR_CODE = "process_detached";
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
 const MANAGED_WORKSPACE_GIT_CLONE_TIMEOUT_MS = 10 * 60 * 1000;
+const HEARTBEAT_RUN_CLAIM_LEASE_TTL_MS = 24 * 60 * 60 * 1000;
+const HEARTBEAT_RUN_CLAIM_RENEW_INTERVAL_MS = 60 * 1000;
+const HEARTBEAT_RUN_CLAIM_OWNER = `stacy-server:${process.pid}`;
 const MAX_INLINE_WAKE_COMMENTS = 8;
 const MAX_INLINE_WAKE_COMMENT_BODY_CHARS = 4_000;
 const MAX_INLINE_WAKE_COMMENT_BODY_TOTAL_CHARS = 12_000;
 const execFile = promisify(execFileCallback);
-const EXECUTION_PATH_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"] as const;
-const CANCELLABLE_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"] as const;
-const HEARTBEAT_RUN_TERMINAL_STATUSES = ["succeeded", "failed", "cancelled", "timed_out"] as const;
-const UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES = ["failed", "cancelled", "timed_out"] as const;
 export {
   ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS,
   ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS,
@@ -851,6 +865,25 @@ function normalizeMaxConcurrentRuns(value: unknown) {
   return Math.max(HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT, Math.min(HEARTBEAT_MAX_CONCURRENT_RUNS_MAX, parsed));
 }
 
+function heartbeatRunClaimLeaseExpiresAt(claimedAt: Date) {
+  return new Date(claimedAt.getTime() + HEARTBEAT_RUN_CLAIM_LEASE_TTL_MS);
+}
+
+function runningClaimGuard(
+  run: Pick<typeof heartbeatRuns.$inferSelect, "claimToken">,
+): SetRunStatusOptions {
+  return {
+    expectedClaimToken: run.claimToken,
+    expectedCurrentStatuses: ["running"],
+  };
+}
+
+function cancellableRunGuard(): SetRunStatusOptions {
+  return {
+    expectedCurrentStatuses: [...CANCELLABLE_HEARTBEAT_RUN_STATUSES],
+  };
+}
+
 interface WakeupOptions {
   source?: "timer" | "assignment" | "on_demand" | "automation";
   triggerDetail?: "manual" | "ping" | "callback" | "system";
@@ -866,6 +899,11 @@ type UsageTotals = {
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
+};
+
+type SetRunStatusOptions = {
+  expectedClaimToken?: string | null;
+  expectedCurrentStatuses?: string[];
 };
 
 type SessionCompactionDecision = {
@@ -1003,12 +1041,8 @@ function didAutomaticRecoveryFail(
 
   const latestContext = parseObject(latestRun.contextSnapshot);
   const latestRetryReason = readNonEmptyString(latestContext.retryReason);
-  return (
-    latestRetryReason === expectedRetryReason &&
-    UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES.includes(
-      latestRun.status as (typeof UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES)[number],
-    )
-  );
+  return latestRetryReason === expectedRetryReason &&
+    isUnsuccessfulHeartbeatRunTerminalStatus(latestRun.status);
 }
 
 function normalizeLedgerBillingType(value: unknown): BillingType {
@@ -1763,14 +1797,6 @@ function isTrackedLocalChildProcessAdapter(adapterType: string) {
   return SESSIONED_LOCAL_ADAPTERS.has(adapterType);
 }
 
-function isHeartbeatRunTerminalStatus(
-  status: string | null | undefined,
-): status is (typeof HEARTBEAT_RUN_TERMINAL_STATUSES)[number] {
-  return HEARTBEAT_RUN_TERMINAL_STATUSES.includes(
-    status as (typeof HEARTBEAT_RUN_TERMINAL_STATUSES)[number],
-  );
-}
-
 export function buildPaperclipTaskMarkdown(input: {
   issue: {
     id: string;
@@ -1873,6 +1899,27 @@ function buildProcessLossMessage(run: {
   return "Process lost -- server may have restarted";
 }
 
+function isExpiredRunClaim(
+  run: Pick<typeof heartbeatRuns.$inferSelect, "claimLeaseExpiresAt">,
+  now: Date,
+) {
+  return Boolean(
+    run.claimLeaseExpiresAt &&
+    new Date(run.claimLeaseExpiresAt).getTime() <= now.getTime(),
+  );
+}
+
+function buildExpiredRunClaimMessage(
+  run: Pick<typeof heartbeatRuns.$inferSelect, "claimOwner" | "claimLeasedAt" | "claimLeaseExpiresAt">,
+) {
+  return [
+    "Run claim lease expired before the control plane could confirm an active executor",
+    `owner ${run.claimOwner ?? "unknown"}`,
+    `leased at ${run.claimLeasedAt?.toISOString() ?? "unknown"}`,
+    `expired at ${run.claimLeaseExpiresAt?.toISOString() ?? "unknown"}`,
+  ].join(" -- ");
+}
+
 function truncateDisplayId(value: string | null | undefined, max = 128) {
   if (!value) return null;
   return value.length > max ? value.slice(0, max) : value;
@@ -1973,6 +2020,7 @@ export type HeartbeatEnvironmentRuntime = ReturnType<typeof environmentRuntimeSe
 export interface HeartbeatServiceOptions {
   pluginWorkerManager?: PluginWorkerManager;
   environmentRuntime?: HeartbeatEnvironmentRuntime;
+  dispatchMode?: HeartbeatDispatchMode;
 }
 
 export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) {
@@ -2002,6 +2050,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
   };
   const budgets = budgetService(db, budgetHooks);
   const recovery = recoveryService(db, { enqueueWakeup });
+  const dispatchOutbox = heartbeatDispatchOutboxService(db);
+  const dispatchMode = options.dispatchMode ?? "direct";
   let unsafeTextProjectionPromise: Promise<boolean> | null = null;
 
   async function hasUnsafeTextProjectionDatabase() {
@@ -2044,6 +2094,85 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, runId))
       .then((rows) => rows[0] ?? null);
+  }
+
+  async function enqueueHeartbeatDispatchRequest(
+    run: typeof heartbeatRuns.$inferSelect,
+    reason: string,
+    payload?: Record<string, unknown>,
+  ) {
+    try {
+      await dispatchOutbox.enqueueRunDispatch({
+        companyId: run.companyId,
+        agentId: run.agentId,
+        runId: run.id,
+        wakeupRequestId: run.wakeupRequestId,
+        reason,
+        payload,
+      });
+    } catch (err) {
+      logger.warn({ err, runId: run.id, reason }, "failed to record heartbeat dispatch outbox request");
+    }
+  }
+
+  async function markHeartbeatDispatchCompleted(run: typeof heartbeatRuns.$inferSelect, reason: string) {
+    try {
+      await dispatchOutbox.markRunDispatchCompleted(run.id, { error: reason });
+    } catch (err) {
+      logger.warn({ err, runId: run.id, reason }, "failed to complete heartbeat dispatch outbox request");
+    }
+  }
+
+  async function cancelHeartbeatDispatchRequest(run: typeof heartbeatRuns.$inferSelect, reason: string) {
+    try {
+      await dispatchOutbox.cancelRunDispatch(run.id, { error: reason });
+    } catch (err) {
+      logger.warn({ err, runId: run.id, reason }, "failed to cancel heartbeat dispatch outbox request");
+    }
+  }
+
+  async function enqueueQueuedRunDispatchRequestsForAgent(
+    agentId: string,
+    reason = "queued_run_recovery",
+  ) {
+    const queuedRuns = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.status, "queued")));
+
+    for (const run of queuedRuns) {
+      await enqueueHeartbeatDispatchRequest(run, reason, {
+        source: "heartbeat.dispatch_mode",
+        dispatchMode,
+      });
+    }
+
+    return queuedRuns.length;
+  }
+
+  async function findIdempotentWakeupRun(
+    agent: Pick<typeof agents.$inferSelect, "id" | "companyId">,
+    idempotencyKeyInput: string | null | undefined,
+  ) {
+    const idempotencyKey = readNonEmptyString(idempotencyKeyInput);
+    if (!idempotencyKey) return null;
+
+    const existingWake = await db
+      .select({ runId: agentWakeupRequests.runId })
+      .from(agentWakeupRequests)
+      .where(
+        and(
+          eq(agentWakeupRequests.companyId, agent.companyId),
+          eq(agentWakeupRequests.agentId, agent.id),
+          eq(agentWakeupRequests.idempotencyKey, idempotencyKey),
+          sql`${agentWakeupRequests.runId} is not null`,
+        ),
+      )
+      .orderBy(desc(agentWakeupRequests.requestedAt))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+
+    return existingWake?.runId ? getRun(existingWake.runId) : null;
   }
 
   async function getRunLogAccess(runId: string) {
@@ -2659,11 +2788,36 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     runId: string,
     status: string,
     patch?: Partial<typeof heartbeatRuns.$inferInsert>,
+    options: SetRunStatusOptions = {},
   ) {
+    if (!isHeartbeatRunStatus(status)) {
+      throw new Error(`Unknown heartbeat run status: ${status}`);
+    }
+
+    const whereConditions = [eq(heartbeatRuns.id, runId)];
+    const expectedClaimToken = readNonEmptyString(options.expectedClaimToken);
+    const allowedSourceStatuses = allowedHeartbeatRunTransitionSources(status, { allowNoop: true });
+    whereConditions.push(inArray(heartbeatRuns.status, allowedSourceStatuses));
+    if (expectedClaimToken) {
+      whereConditions.push(eq(heartbeatRuns.claimToken, expectedClaimToken));
+    }
+    if (options.expectedCurrentStatuses && options.expectedCurrentStatuses.length > 0) {
+      const invalidExpectedStatuses = options.expectedCurrentStatuses.filter((expectedStatus) =>
+        !isHeartbeatRunStatus(expectedStatus) ||
+        !isAllowedHeartbeatRunStatusTransition(expectedStatus, status, { allowNoop: true }),
+      );
+      if (invalidExpectedStatuses.length > 0) {
+        throw new Error(
+          `Invalid heartbeat run status transition guard for ${status}: ${invalidExpectedStatuses.join(", ")}`,
+        );
+      }
+      whereConditions.push(inArray(heartbeatRuns.status, options.expectedCurrentStatuses));
+    }
+
     const updated = await db
       .update(heartbeatRuns)
       .set({ status, ...patch, updatedAt: new Date() })
-      .where(eq(heartbeatRuns.id, runId))
+      .where(and(...whereConditions))
       .returning()
       .then((rows) => rows[0] ?? null);
 
@@ -2687,6 +2841,30 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     }
 
     return updated;
+  }
+
+  async function renewRunClaimLease(
+    run: Pick<typeof heartbeatRuns.$inferSelect, "id" | "claimToken">,
+    renewedAt = new Date(),
+  ) {
+    const claimToken = readNonEmptyString(run.claimToken);
+    if (!claimToken) return null;
+
+    return db
+      .update(heartbeatRuns)
+      .set({
+        claimOwner: HEARTBEAT_RUN_CLAIM_OWNER,
+        claimLeasedAt: renewedAt,
+        claimLeaseExpiresAt: heartbeatRunClaimLeaseExpiresAt(renewedAt),
+        updatedAt: renewedAt,
+      })
+      .where(and(
+        eq(heartbeatRuns.id, run.id),
+        eq(heartbeatRuns.claimToken, claimToken),
+        eq(heartbeatRuns.status, "running"),
+      ))
+      .returning()
+      .then((rows) => rows[0] ?? null);
   }
 
   function publishRunLifecyclePluginEvent(run: typeof heartbeatRuns.$inferSelect) {
@@ -2922,6 +3100,53 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     });
   }
 
+  async function appendRunStatusTransitionEvent(
+    run: typeof heartbeatRuns.$inferSelect,
+    opts: {
+      fromStatus?: string | null;
+      toStatus: string;
+      reason?: string | null;
+      seq?: number;
+      level?: "info" | "warn" | "error";
+      payload?: Record<string, unknown>;
+    },
+  ) {
+    const fromStatus = opts.fromStatus ?? null;
+    if (!isHeartbeatRunStatus(opts.toStatus)) {
+      throw new Error(`Unknown heartbeat run transition target: ${opts.toStatus}`);
+    }
+    if (fromStatus !== null && !isHeartbeatRunStatus(fromStatus)) {
+      throw new Error(`Unknown heartbeat run transition source: ${fromStatus}`);
+    }
+    if (!isAllowedHeartbeatRunStatusTransition(fromStatus, opts.toStatus)) {
+      throw new Error(
+        `Invalid heartbeat run status transition: ${formatHeartbeatRunStatusTransition(fromStatus, opts.toStatus)}`,
+      );
+    }
+    const transition = formatHeartbeatRunStatusTransition(fromStatus, opts.toStatus);
+    const level = opts.level ??
+      (opts.toStatus === "failed" || opts.toStatus === "timed_out"
+        ? "error"
+        : opts.toStatus === "cancelled"
+          ? "warn"
+          : "info");
+    await appendRunEvent(run, opts.seq ?? await nextRunEventSeq(run.id), {
+      eventType: "status.transition",
+      stream: "system",
+      level,
+      message: `Run status transition: ${transition}`,
+      payload: {
+        fromStatus,
+        toStatus: opts.toStatus,
+        ...(opts.reason ? { reason: opts.reason } : {}),
+        wakeupRequestId: run.wakeupRequestId,
+        invocationSource: run.invocationSource,
+        triggerDetail: run.triggerDetail,
+        ...opts.payload,
+      },
+    });
+  }
+
   async function nextRunEventSeq(runId: string) {
     const [row] = await db
       .select({ maxSeq: sql<number | null>`max(${heartbeatRunEvents.seq})` })
@@ -2949,14 +3174,32 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
   }
 
   async function clearDetachedRunWarning(runId: string) {
+    const activityAt = new Date();
+    const existing = await getRun(runId);
+    if (!existing || existing.status !== "running") return null;
+
+    const renewed = await renewRunClaimLease(existing, activityAt);
+    const activeRun = renewed ?? existing;
+    if (activeRun.errorCode !== DETACHED_PROCESS_ERROR_CODE) return activeRun;
+
+    const whereConditions = [
+      eq(heartbeatRuns.id, runId),
+      eq(heartbeatRuns.status, "running"),
+      eq(heartbeatRuns.errorCode, DETACHED_PROCESS_ERROR_CODE),
+    ];
+    const claimToken = readNonEmptyString(activeRun.claimToken);
+    if (claimToken) {
+      whereConditions.push(eq(heartbeatRuns.claimToken, claimToken));
+    }
+
     const updated = await db
       .update(heartbeatRuns)
       .set({
         error: null,
         errorCode: null,
-        updatedAt: new Date(),
+        updatedAt: activityAt,
       })
-      .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.errorCode, DETACHED_PROCESS_ERROR_CODE)))
+      .where(and(...whereConditions))
       .returning()
       .then((rows) => rows[0] ?? null);
     if (!updated) return null;
@@ -3150,6 +3393,19 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         invocationSource: retryRun.invocationSource,
         triggerDetail: retryRun.triggerDetail,
         wakeupRequestId: retryRun.wakeupRequestId,
+      },
+    });
+    await enqueueHeartbeatDispatchRequest(retryRun, "missing_issue_comment_retry", {
+      retryOfRunId: run.id,
+      issueId,
+    });
+    await appendRunStatusTransitionEvent(retryRun, {
+      fromStatus: null,
+      toStatus: "queued",
+      reason: "missing_issue_comment_retry",
+      payload: {
+        retryOfRunId: run.id,
+        issueId,
       },
     });
 
@@ -3351,7 +3607,20 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       },
     });
 
-    await appendRunEvent(queued, 1, {
+    await enqueueHeartbeatDispatchRequest(queued, "process_lost_retry", {
+      retryOfRunId: run.id,
+    });
+
+    await appendRunStatusTransitionEvent(queued, {
+      fromStatus: null,
+      toStatus: "queued",
+      reason: "process_lost_retry",
+      payload: {
+        retryOfRunId: run.id,
+      },
+    });
+
+    await appendRunEvent(queued, await nextRunEventSeq(queued.id), {
       eventType: "lifecycle",
       stream: "system",
       level: "warn",
@@ -3520,6 +3789,16 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         ...(codexTransientFallbackMode ? { codexTransientFallbackMode } : {}),
       },
     });
+    await appendRunStatusTransitionEvent(retryRun, {
+      fromStatus: null,
+      toStatus: "scheduled_retry",
+      reason: retryReason,
+      payload: {
+        retryOfRunId: run.id,
+        scheduledRetryAttempt: schedule.attempt,
+        scheduledRetryAt: schedule.dueAt.toISOString(),
+      },
+    });
 
     return {
       outcome: "scheduled" as const,
@@ -3585,6 +3864,18 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
           if (!cancelled) continue;
 
+          await appendRunStatusTransitionEvent(cancelled, {
+            fromStatus: "scheduled_retry",
+            toStatus: "cancelled",
+            reason: issueCancelled ? "issue_cancelled" : "issue_reassigned",
+            payload: {
+              issueId: issue.id,
+              issueStatus: issue.status,
+              scheduledRetryAttempt: cancelled.scheduledRetryAttempt,
+              scheduledRetryAt: cancelled.scheduledRetryAt ? new Date(cancelled.scheduledRetryAt).toISOString() : null,
+            },
+          });
+
           if (cancelled.wakeupRequestId) {
             await db
               .update(agentWakeupRequests)
@@ -3648,6 +3939,23 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       if (!promoted) continue;
 
       promotedRunIds.push(promoted.id);
+
+      await enqueueHeartbeatDispatchRequest(promoted, "scheduled_retry_due", {
+        scheduledRetryAttempt: promoted.scheduledRetryAttempt,
+        scheduledRetryAt: promoted.scheduledRetryAt ? new Date(promoted.scheduledRetryAt).toISOString() : null,
+        scheduledRetryReason: promoted.scheduledRetryReason,
+      });
+
+      await appendRunStatusTransitionEvent(promoted, {
+        fromStatus: "scheduled_retry",
+        toStatus: "queued",
+        reason: "scheduled_retry_due",
+        payload: {
+          scheduledRetryAttempt: promoted.scheduledRetryAttempt,
+          scheduledRetryAt: promoted.scheduledRetryAt ? new Date(promoted.scheduledRetryAt).toISOString() : null,
+          scheduledRetryReason: promoted.scheduledRetryReason,
+        },
+      });
 
       await appendRunEvent(promoted, await nextRunEventSeq(promoted.id), {
         eventType: "lifecycle",
@@ -3730,7 +4038,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     return Number(count ?? 0);
   }
 
-  async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect) {
+  async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect, opts?: {
+    dispatchCompletionReason?: string | null;
+  }) {
     if (run.status !== "queued") return run;
     const agent = await getAgent(run.agentId);
     if (!agent) {
@@ -3806,10 +4116,15 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     }
 
     const claimedAt = new Date();
+    const claimToken = randomUUID();
     const claimed = await db
       .update(heartbeatRuns)
       .set({
         status: "running",
+        claimToken,
+        claimOwner: HEARTBEAT_RUN_CLAIM_OWNER,
+        claimLeasedAt: claimedAt,
+        claimLeaseExpiresAt: heartbeatRunClaimLeaseExpiresAt(claimedAt),
         startedAt: run.startedAt ?? claimedAt,
         updatedAt: claimedAt,
       })
@@ -3836,6 +4151,22 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     publishRunLifecyclePluginEvent(claimed);
 
     await setWakeupStatus(claimed.wakeupRequestId, "claimed", { claimedAt });
+    const dispatchCompletionReason = opts?.dispatchCompletionReason === undefined
+      ? "claimed_by_in_process_dispatch"
+      : opts.dispatchCompletionReason;
+    if (dispatchCompletionReason) {
+      await markHeartbeatDispatchCompleted(claimed, dispatchCompletionReason);
+    }
+    await appendRunStatusTransitionEvent(claimed, {
+      fromStatus: "queued",
+      toStatus: "running",
+      reason: "run_claimed",
+      payload: {
+        claimOwner: claimed.claimOwner,
+        claimLeasedAt: claimed.claimLeasedAt?.toISOString() ?? null,
+        claimLeaseExpiresAt: claimed.claimLeaseExpiresAt?.toISOString() ?? null,
+      },
+    });
 
     // Fix A (lazy locking): stamp executionRunId now that the run is actually running,
     // not at queue time. Guard is idempotent — safe if called more than once.
@@ -3885,12 +4216,26 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         timeoutSource: "dependency_gate",
         timeoutFired: false,
       },
+    }, {
+      expectedCurrentStatuses: ["queued"],
     });
     if (!cancelled) return null;
 
     await setWakeupStatus(run.wakeupRequestId, "skipped", {
       finishedAt: now,
       error: reason,
+    });
+
+    await cancelHeartbeatDispatchRequest(cancelled, reason);
+
+    await appendRunStatusTransitionEvent(cancelled, {
+      fromStatus: "queued",
+      toStatus: "cancelled",
+      reason: "issue_dependencies_blocked",
+      payload: {
+        issueId,
+        unresolvedBlockerIssueIds,
+      },
     });
 
     await db
@@ -4033,12 +4378,23 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         timeoutSource: "stale_queued_run_gate",
         timeoutFired: false,
       },
+    }, {
+      expectedCurrentStatuses: ["queued"],
     });
     if (!cancelled) return null;
 
     await setWakeupStatus(run.wakeupRequestId, "skipped", {
       finishedAt: now,
       error: staleness.reason,
+    });
+
+    await cancelHeartbeatDispatchRequest(cancelled, staleness.reason);
+
+    await appendRunStatusTransitionEvent(cancelled, {
+      fromStatus: "queued",
+      toStatus: "cancelled",
+      reason: staleness.errorCode,
+      payload: staleness.details,
     });
 
     await db
@@ -4280,8 +4636,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
     const [eventStats] = await db
       .select({
-        count: sql<number>`count(*) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))::int`,
-        latestAt: sql<Date | null>`max(${heartbeatRunEvents.createdAt}) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))`,
+        count: sql<number>`count(*) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error', 'status.transition'))::int`,
+        latestAt: sql<Date | null>`max(${heartbeatRunEvents.createdAt}) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error', 'status.transition'))`,
       })
       .from(heartbeatRunEvents)
       .where(and(eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id)));
@@ -4397,19 +4753,27 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         });
       }
 
-      const shouldRetry = tracksLocalChild && (!!run.processPid || !!run.processGroupId) && (run.processLossRetryCount ?? 0) < 1;
-      const baseMessage = buildProcessLossMessage(run, descendantOnlyCleanup ? { descendantOnly: true } : undefined);
+      const claimLeaseExpired = isExpiredRunClaim(run, now);
+      const errorCode = claimLeaseExpired ? "claim_lease_expired" : "process_lost";
+      const shouldRetry =
+        !claimLeaseExpired &&
+        tracksLocalChild &&
+        (!!run.processPid || !!run.processGroupId) &&
+        (run.processLossRetryCount ?? 0) < 1;
+      const baseMessage = claimLeaseExpired
+        ? buildExpiredRunClaimMessage(run)
+        : buildProcessLossMessage(run, descendantOnlyCleanup ? { descendantOnly: true } : undefined);
 
       let finalizedRun = await setRunStatus(run.id, "failed", {
         error: shouldRetry ? `${baseMessage}; retrying once` : baseMessage,
-        errorCode: "process_lost",
+        errorCode,
         finishedAt: now,
         resultJson: mergeRunStopMetadataForAgent(
           { adapterType, adapterConfig },
           "failed",
           {
             resultJson: parseObject(run.resultJson),
-            errorCode: "process_lost",
+            errorCode,
             errorMessage: shouldRetry ? `${baseMessage}; retrying once` : baseMessage,
           },
         ),
@@ -4421,6 +4785,21 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       if (!finalizedRun) finalizedRun = await getRun(run.id);
       if (!finalizedRun) continue;
       finalizedRun = await classifyAndPersistRunLiveness(finalizedRun, parseObject(finalizedRun.resultJson)) ?? finalizedRun;
+      await appendRunStatusTransitionEvent(finalizedRun, {
+        fromStatus: "running",
+        toStatus: "failed",
+        reason: errorCode,
+        payload: {
+          ...(claimLeaseExpired ? {
+            claimOwner: run.claimOwner,
+            claimLeasedAt: run.claimLeasedAt?.toISOString() ?? null,
+            claimLeaseExpiresAt: run.claimLeaseExpiresAt?.toISOString() ?? null,
+          } : {}),
+          ...(run.processPid ? { processPid: run.processPid } : {}),
+          ...(run.processGroupId ? { processGroupId: run.processGroupId } : {}),
+          ...(descendantOnlyCleanup ? { descendantOnlyCleanup: true } : {}),
+        },
+      });
 
       let retriedRun: typeof heartbeatRuns.$inferSelect | null = null;
       if (shouldRetry) {
@@ -4440,6 +4819,11 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           ? `${baseMessage}; queued retry ${retriedRun?.id ?? ""}`.trim()
           : baseMessage,
         payload: {
+          ...(claimLeaseExpired ? {
+            claimOwner: run.claimOwner,
+            claimLeasedAt: run.claimLeasedAt?.toISOString() ?? null,
+            claimLeaseExpiresAt: run.claimLeaseExpiresAt?.toISOString() ?? null,
+          } : {}),
           ...(run.processPid ? { processPid: run.processPid } : {}),
           ...(run.processGroupId ? { processGroupId: run.processGroupId } : {}),
           ...(descendantOnlyCleanup ? { descendantOnlyCleanup: true } : {}),
@@ -4448,7 +4832,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       });
 
       await finalizeAgentStatus(run.agentId, "failed");
-      await startNextQueuedRunForAgent(run.agentId);
+      await driveQueuedRunsForAgent(run.agentId, "orphaned_run_reaped");
       runningProcesses.delete(run.id);
       reaped.push(run.id);
     }
@@ -4467,7 +4851,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
     const agentIds = [...new Set(queuedRuns.map((r) => r.agentId))];
     for (const agentId of agentIds) {
-      await startNextQueuedRunForAgent(agentId);
+      await driveQueuedRunsForAgent(agentId, "startup_resume_queued_runs");
     }
   }
 
@@ -4520,6 +4904,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     result: AdapterExecutionResult,
     session: { legacySessionId: string | null },
     normalizedUsage?: UsageTotals | null,
+    options?: { statusOverride?: (typeof heartbeatRuns.$inferSelect)["status"] | null },
   ) {
     await ensureRuntimeState(agent);
     const usage = normalizedUsage ?? normalizeUsageTotals(result.usage);
@@ -4529,6 +4914,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     const billingType = normalizeLedgerBillingType(result.billingType);
     const additionalCostCents = normalizeBilledCostCents(result.costUsd, billingType);
     const hasTokenUsage = inputTokens > 0 || outputTokens > 0 || cachedInputTokens > 0;
+    const isSubscriptionLedgerRun =
+      billingType === "subscription_included" || billingType === "subscription_overage";
     const provider = result.provider ?? "unknown";
     const biller = resolveLedgerBiller(result);
     const ledgerScope = await resolveLedgerScopeForRun(db, agent.companyId, run);
@@ -4539,7 +4926,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         adapterType: agent.adapterType,
         sessionId: session.legacySessionId,
         lastRunId: run.id,
-        lastRunStatus: run.status,
+        lastRunStatus: options?.statusOverride ?? run.status,
         lastError: result.errorMessage ?? null,
         totalInputTokens: sql`${agentRuntimeState.totalInputTokens} + ${inputTokens}`,
         totalOutputTokens: sql`${agentRuntimeState.totalOutputTokens} + ${outputTokens}`,
@@ -4549,7 +4936,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       })
       .where(eq(agentRuntimeState.agentId, agent.id));
 
-    if (additionalCostCents > 0 || hasTokenUsage) {
+    if (additionalCostCents > 0 || hasTokenUsage || isSubscriptionLedgerRun) {
       const costs = costService(db, budgetHooks);
       await costs.createEvent(agent.companyId, {
         heartbeatRunId: run.id,
@@ -4642,6 +5029,77 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     });
   }
 
+  async function driveQueuedRunsForAgent(agentId: string, reason = "queued_run_driver") {
+    await enqueueQueuedRunDispatchRequestsForAgent(agentId, reason);
+    if (dispatchMode === "worker_owned") return [];
+    return startNextQueuedRunForAgent(agentId);
+  }
+
+  async function dispatchQueuedRun(runId: string) {
+    const initialRun = await getRun(runId);
+    if (!initialRun) {
+      return { outcome: "not_found" as const, reason: "run_not_found" };
+    }
+    if (initialRun.status !== "queued") {
+      return {
+        outcome: "not_queued" as const,
+        status: initialRun.status,
+        reason: `run_already_${initialRun.status}`,
+      };
+    }
+
+    return withAgentStartLock(initialRun.agentId, async () => {
+      const run = await getRun(runId);
+      if (!run) {
+        return { outcome: "not_found" as const, reason: "run_not_found" };
+      }
+      if (run.status !== "queued") {
+        return {
+          outcome: "not_queued" as const,
+          status: run.status,
+          reason: `run_already_${run.status}`,
+        };
+      }
+
+      const agent = await getAgent(run.agentId);
+      if (!agent) {
+        await cancelRunInternal(run.id, "Cancelled because the agent no longer exists");
+        return { outcome: "skipped" as const, reason: "agent_not_found" };
+      }
+      if (agent.status === "paused" || agent.status === "terminated" || agent.status === "pending_approval") {
+        await cancelRunInternal(run.id, "Cancelled because the agent is not invokable");
+        return { outcome: "skipped" as const, reason: "agent_not_invokable" };
+      }
+
+      const policy = parseHeartbeatPolicy(agent);
+      const runningCount = await countRunningRunsForAgent(run.agentId);
+      if (runningCount >= policy.maxConcurrentRuns) {
+        return {
+          outcome: "deferred" as const,
+          reason: "agent_concurrency_full",
+          retryAfterMs: 30_000,
+        };
+      }
+
+      const claimed = await claimQueuedRun(run, {
+        dispatchCompletionReason: null,
+      });
+      if (!claimed) {
+        const latest = await getRun(run.id);
+        return {
+          outcome: "skipped" as const,
+          reason: latest ? `claim_rejected_${latest.status}` : "claim_rejected",
+        };
+      }
+
+      void executeRun(claimed.id).catch((err) => {
+        logger.error({ err, runId: claimed.id }, "outbox-dispatched heartbeat execution failed");
+      });
+
+      return { outcome: "dispatched" as const, runId: claimed.id };
+    });
+  }
+
   async function executeRun(runId: string) {
     let run = await getRun(runId);
     if (!run) return;
@@ -4657,15 +5115,45 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     }
 
     activeRunExecutions.add(run.id);
+    let claimRenewalTimer: ReturnType<typeof setInterval> | null = null;
+    let lastClaimRenewedAt = run.claimLeasedAt ?? run.startedAt ?? new Date();
+    const renewActiveRunClaimLease = async (opts?: { force?: boolean; now?: Date }) => {
+      if (!readNonEmptyString(run.claimToken)) return;
+
+      const renewedAt = opts?.now ?? new Date();
+      if (
+        opts?.force !== true &&
+        renewedAt.getTime() - lastClaimRenewedAt.getTime() < HEARTBEAT_RUN_CLAIM_RENEW_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      const renewedRun = await renewRunClaimLease(run, renewedAt);
+      if (!renewedRun) return;
+
+      run = renewedRun;
+      lastClaimRenewedAt = renewedRun.claimLeasedAt ?? renewedAt;
+    };
+
+    if (readNonEmptyString(run.claimToken)) {
+      claimRenewalTimer = setInterval(() => {
+        void renewActiveRunClaimLease().catch((err) => {
+          logger.warn({ err, runId: run.id }, "failed to renew heartbeat run claim lease");
+        });
+      }, HEARTBEAT_RUN_CLAIM_RENEW_INTERVAL_MS);
+    }
 
     try {
+    await renewActiveRunClaimLease({ force: true }).catch((err) => {
+      logger.warn({ err, runId: run.id }, "failed to renew heartbeat run claim lease before execution");
+    });
     const agent = await getAgent(run.agentId);
     if (!agent) {
       await setRunStatus(runId, "failed", {
         error: "Agent not found",
         errorCode: "agent_not_found",
         finishedAt: new Date(),
-      });
+      }, runningClaimGuard(run));
       await setWakeupStatus(run.wakeupRequestId, "failed", {
         finishedAt: new Date(),
         error: "Agent not found",
@@ -5251,7 +5739,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       taskKey,
     };
 
-    let seq = 1;
+    let seq = await nextRunEventSeq(run.id);
     let handle: RunLogHandle | null = null;
     let stdoutExcerpt = "";
     let stderrExcerpt = "";
@@ -5284,6 +5772,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           updatedAt: new Date(),
         })
         .where(eq(heartbeatRuns.id, run.id));
+      await renewActiveRunClaimLease({ force: true }).catch((err) => {
+        logger.warn({ err, runId: run.id }, "failed to renew heartbeat run claim lease after output progress");
+      });
       lastOutputFlushAt = pendingOutputProgress.at;
       outputProgressState.pending = null;
     };
@@ -5568,7 +6059,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
       let outcome: "succeeded" | "failed" | "cancelled" | "timed_out";
       const latestRun = await getRun(run.id);
-      if (isHeartbeatRunTerminalStatus(latestRun?.status)) {
+      if (isTerminalHeartbeatRunStatus(latestRun?.status)) {
         outcome = latestRun.status;
       } else if (adapterResult.timedOut) {
         outcome = "timed_out";
@@ -5653,6 +6144,12 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         adapterResult.summary ?? null,
       );
 
+      await updateRuntimeState(agent, run, adapterResult, {
+        legacySessionId: nextSessionState.legacySessionId,
+      }, normalizedUsage, {
+        statusOverride: status,
+      });
+
       let persistedRun = await setRunStatus(run.id, status, {
         finishedAt: new Date(),
         error: runErrorMessage,
@@ -5667,7 +6164,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         logBytes: logSummary?.bytes,
         logSha256: logSummary?.sha256,
         logCompressed: logSummary?.compressed ?? false,
-      });
+      }, runningClaimGuard(run));
       if (persistedRun) {
         persistedRun = await classifyAndPersistRunLiveness(persistedRun, persistedResultJson) ?? persistedRun;
       }
@@ -5679,6 +6176,21 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
       const finalizedRun = persistedRun ?? (await getRun(run.id));
       if (finalizedRun) {
+        if (persistedRun) {
+          await appendRunStatusTransitionEvent(finalizedRun, {
+            fromStatus: "running",
+            toStatus: status,
+            reason: "adapter_result",
+            seq: seq++,
+            payload: {
+              outcome,
+              exitCode: adapterResult.exitCode,
+              signal: adapterResult.signal,
+              timedOut: adapterResult.timedOut,
+              errorCode: runErrorCode,
+            },
+          });
+        }
         await appendRunEvent(finalizedRun, seq++, {
           eventType: "lifecycle",
           stream: "system",
@@ -5716,9 +6228,6 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       }
 
       if (finalizedRun) {
-        await updateRuntimeState(agent, finalizedRun, adapterResult, {
-          legacySessionId: nextSessionState.legacySessionId,
-        }, normalizedUsage);
         if (taskKey) {
           if (adapterResult.clearSession || (!nextSessionState.params && !nextSessionState.displayId)) {
             await clearTaskSessions(agent.companyId, agent.id, {
@@ -5776,13 +6285,22 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         logBytes: logSummary?.bytes,
         logSha256: logSummary?.sha256,
         logCompressed: logSummary?.compressed ?? false,
-      });
+      }, runningClaimGuard(run));
       await setWakeupStatus(run.wakeupRequestId, "failed", {
         finishedAt: new Date(),
         error: message,
       });
 
       if (failedRun) {
+        await appendRunStatusTransitionEvent(failedRun, {
+          fromStatus: "running",
+          toStatus: "failed",
+          reason: "adapter_exception",
+          seq: seq++,
+          payload: {
+            errorCode: "adapter_failed",
+          },
+        });
         await appendRunEvent(failedRun, seq++, {
           eventType: "error",
           stream: "system",
@@ -5835,7 +6353,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
                 errorMessage: message,
               }),
             } : {}),
-          }).catch(() => undefined);
+          }, runningClaimGuard(run)).catch(() => undefined);
           await setWakeupStatus(run.wakeupRequestId, "failed", {
             finishedAt: new Date(),
             error: message,
@@ -5844,7 +6362,15 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           if (failedRun) {
             // Emit a run-log event so the failure is visible in the run timeline,
             // consistent with what the inner catch block does for adapter failures.
-            await appendRunEvent(failedRun, 1, {
+            await appendRunStatusTransitionEvent(failedRun, {
+              fromStatus: "running",
+              toStatus: "failed",
+              reason: "adapter_setup_exception",
+              payload: {
+                errorCode: "adapter_failed",
+              },
+            }).catch(() => undefined);
+            await appendRunEvent(failedRun, await nextRunEventSeq(failedRun.id), {
               eventType: "error",
               stream: "system",
               level: "error",
@@ -5862,6 +6388,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           // DB calls threw (e.g. a transient DB error in finalizeAgentStatus).
           await finalizeAgentStatus(run.agentId, "failed").catch(() => undefined);
         } finally {
+          if (claimRenewalTimer) clearInterval(claimRenewalTimer);
           const latestRun = await getRun(run.id).catch(() => null);
           const releaseResult = await envOrchestrator.releaseForRun({
             heartbeatRunId: run.id,
@@ -5881,7 +6408,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           }
           await releaseRuntimeServicesForRun(run.id).catch(() => undefined);
           activeRunExecutions.delete(run.id);
-          await startNextQueuedRunForAgent(run.agentId);
+          await driveQueuedRunsForAgent(run.agentId, "run_finished");
         }
   }
 
@@ -6165,7 +6692,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         (issue.status === "todo" || issue.status === "in_progress") &&
         !issue.assigneeUserId &&
         issue.assigneeAgentId === run.agentId &&
-        (run.status === "failed" || run.status === "timed_out" || run.status === "cancelled");
+        (run.status === "failed" || run.status === "timed_out");
 
       if (!issueNeedsImmediateRecovery) {
         return { kind: "released" as const };
@@ -6310,8 +6837,27 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         wakeupRequestId: promotedRun.wakeupRequestId,
       },
     });
+    await enqueueHeartbeatDispatchRequest(
+      promotedRun,
+      promotionResult?.kind === "promoted"
+        ? "deferred_issue_execution_promoted"
+        : "execution_path_recovery",
+      {
+        retryOfRunId: run.id,
+      },
+    );
+    await appendRunStatusTransitionEvent(promotedRun, {
+      fromStatus: null,
+      toStatus: "queued",
+      reason: promotionResult?.kind === "promoted"
+        ? "deferred_issue_execution_promoted"
+        : "execution_path_recovery",
+      payload: {
+        retryOfRunId: run.id,
+      },
+    });
 
-    await startNextQueuedRunForAgent(promotedRun.agentId);
+    await driveQueuedRunsForAgent(promotedRun.agentId, "deferred_issue_execution_promoted");
   }
 
   async function enqueueWakeup(agentId: string, opts: WakeupOptions = {}) {
@@ -6336,6 +6882,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
     const agent = await getAgent(agentId);
     if (!agent) throw notFound("Agent not found");
+    const idempotentRun = await findIdempotentWakeupRun(agent, opts.idempotencyKey);
+    if (idempotentRun) return idempotentRun;
+
     const explicitResumeSession = await resolveExplicitResumeSessionOverride(agent, payload, taskKey);
     if (explicitResumeSession) {
       enrichedContextSnapshot.resumeFromRunId = explicitResumeSession.resumeFromRunId;
@@ -6558,12 +7107,35 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             .select({ maxSeq: sql<number | null>`max(${heartbeatRunEvents.seq})` })
             .from(heartbeatRunEvents)
             .where(eq(heartbeatRunEvents.runId, cancelled.id));
+          let nextSeq = Number(eventSeq?.maxSeq ?? 0) + 1;
 
           await tx.insert(heartbeatRunEvents).values({
             companyId: cancelled.companyId,
             runId: cancelled.id,
             agentId: cancelled.agentId,
-            seq: Number(eventSeq?.maxSeq ?? 0) + 1,
+            seq: nextSeq,
+            eventType: "status.transition",
+            stream: "system",
+            level: "warn",
+            message: "Run status transition: scheduled_retry -> cancelled",
+            payload: {
+              fromStatus: "scheduled_retry",
+              toStatus: "cancelled",
+              reason: issueCancelled ? "issue_cancelled" : "issue_reassigned",
+              issueId: issue.id,
+              issueStatus: issue.status,
+              scheduledRetryAttempt: cancelled.scheduledRetryAttempt,
+              scheduledRetryAt: cancelled.scheduledRetryAt ? new Date(cancelled.scheduledRetryAt).toISOString() : null,
+              scheduledRetryReason: cancelled.scheduledRetryReason,
+            },
+          });
+          nextSeq += 1;
+
+          await tx.insert(heartbeatRunEvents).values({
+            companyId: cancelled.companyId,
+            runId: cancelled.id,
+            agentId: cancelled.agentId,
+            seq: nextSeq,
             eventType: "lifecycle",
             stream: "system",
             level: "warn",
@@ -6592,12 +7164,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             .then((rows) => rows[0] ?? null)
           : null;
 
-        if (
-          activeExecutionRun &&
-          !EXECUTION_PATH_HEARTBEAT_RUN_STATUSES.includes(
-            activeExecutionRun.status as (typeof EXECUTION_PATH_HEARTBEAT_RUN_STATUSES)[number],
-          )
-        ) {
+        if (activeExecutionRun && !isActiveHeartbeatRunStatus(activeExecutionRun.status)) {
           activeExecutionRun = null;
         }
 
@@ -6868,7 +7435,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
       if (outcome.kind === "deferred" || outcome.kind === "skipped") return null;
       if (outcome.kind === "coalesced") {
-        await startNextQueuedRunForAgent(agent.id);
+        await driveQueuedRunsForAgent(agent.id, "coalesced_wakeup");
         return outcome.run;
       }
 
@@ -6884,8 +7451,21 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           wakeupRequestId: newRun.wakeupRequestId,
         },
       });
+      await enqueueHeartbeatDispatchRequest(newRun, "wakeup_enqueued", {
+        requestedByActorType: opts.requestedByActorType ?? null,
+        requestedByActorId: opts.requestedByActorId ?? null,
+      });
+      await appendRunStatusTransitionEvent(newRun, {
+        fromStatus: null,
+        toStatus: "queued",
+        reason: "wakeup_enqueued",
+        payload: {
+          requestedByActorType: opts.requestedByActorType ?? null,
+          requestedByActorId: opts.requestedByActorId ?? null,
+        },
+      });
 
-      await startNextQueuedRunForAgent(agent.id);
+      await driveQueuedRunsForAgent(agent.id, "wakeup_enqueued");
       return newRun;
     }
 
@@ -6999,8 +7579,21 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         wakeupRequestId: newRun.wakeupRequestId,
       },
     });
+    await enqueueHeartbeatDispatchRequest(newRun, "wakeup_enqueued", {
+      requestedByActorType: opts.requestedByActorType ?? null,
+      requestedByActorId: opts.requestedByActorId ?? null,
+    });
+    await appendRunStatusTransitionEvent(newRun, {
+      fromStatus: null,
+      toStatus: "queued",
+      reason: "wakeup_enqueued",
+      payload: {
+        requestedByActorType: opts.requestedByActorType ?? null,
+        requestedByActorId: opts.requestedByActorId ?? null,
+      },
+    });
 
-    await startNextQueuedRunForAgent(agent.id);
+    await driveQueuedRunsForAgent(agent.id, "wakeup_enqueued");
 
     return newRun;
   }
@@ -7047,7 +7640,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       .where(
         and(
           eq(agentWakeupRequests.companyId, companyId),
-          inArray(agentWakeupRequests.status, ["queued", "deferred_issue_execution"]),
+          inArray(agentWakeupRequests.status, PENDING_WAKEUP_REQUEST_STATUSES),
           sql`${agentWakeupRequests.runId} is null`,
           sql`${effectiveProjectId} = ${projectId}`,
         ),
@@ -7067,7 +7660,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         .where(
           and(
             eq(agentWakeupRequests.companyId, scope.companyId),
-            inArray(agentWakeupRequests.status, ["queued", "deferred_issue_execution"]),
+            inArray(agentWakeupRequests.status, PENDING_WAKEUP_REQUEST_STATUSES),
             sql`${agentWakeupRequests.runId} is null`,
           ),
         )
@@ -7080,7 +7673,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           and(
             eq(agentWakeupRequests.companyId, scope.companyId),
             eq(agentWakeupRequests.agentId, scope.scopeId),
-            inArray(agentWakeupRequests.status, ["queued", "deferred_issue_execution"]),
+            inArray(agentWakeupRequests.status, PENDING_WAKEUP_REQUEST_STATUSES),
             sql`${agentWakeupRequests.runId} is null`,
           ),
         )
@@ -7104,25 +7697,33 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     return wakeupIds.length;
   }
 
+  async function terminateRunProcessAfterCancellation(run: typeof heartbeatRuns.$inferSelect) {
+    const running = runningProcesses.get(run.id);
+    try {
+      if (running) {
+        await terminateHeartbeatRunProcess({
+          pid: running.child.pid ?? run.processPid,
+          processGroupId: running.processGroupId ?? run.processGroupId,
+          graceMs: Math.max(1, running.graceSec) * 1000,
+        });
+      } else if (run.processPid || run.processGroupId) {
+        await terminateHeartbeatRunProcess({
+          pid: run.processPid,
+          processGroupId: run.processGroupId,
+        });
+      }
+    } catch (err) {
+      logger.warn({ err, runId: run.id }, "failed to terminate heartbeat run process after cancellation");
+    } finally {
+      runningProcesses.delete(run.id);
+    }
+  }
+
   async function cancelRunInternal(runId: string, reason = "Cancelled by control plane") {
     const run = await getRun(runId);
     if (!run) throw notFound("Heartbeat run not found");
-    if (!CANCELLABLE_HEARTBEAT_RUN_STATUSES.includes(run.status as (typeof CANCELLABLE_HEARTBEAT_RUN_STATUSES)[number])) return run;
+    if (!isCancellableHeartbeatRunStatus(run.status)) return run;
     const agent = await getAgent(run.agentId);
-
-    const running = runningProcesses.get(run.id);
-    if (running) {
-      await terminateHeartbeatRunProcess({
-        pid: running.child.pid ?? run.processPid,
-        processGroupId: running.processGroupId ?? run.processGroupId,
-        graceMs: Math.max(1, running.graceSec) * 1000,
-      });
-    } else if (run.processPid || run.processGroupId) {
-      await terminateHeartbeatRunProcess({
-        pid: run.processPid,
-        processGroupId: run.processGroupId,
-      });
-    }
 
     const cancelled = await setRunStatus(run.id, "cancelled", {
       finishedAt: new Date(),
@@ -7135,26 +7736,37 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           errorMessage: reason,
         }),
       } : {}),
-    });
+    }, cancellableRunGuard());
+    if (!cancelled) return await getRun(run.id) ?? run;
 
-    await setWakeupStatus(run.wakeupRequestId, "cancelled", {
+    await terminateRunProcessAfterCancellation(cancelled);
+
+    await setWakeupStatus(cancelled.wakeupRequestId, "cancelled", {
       finishedAt: new Date(),
       error: reason,
     });
 
-    if (cancelled) {
-      await appendRunEvent(cancelled, 1, {
-        eventType: "lifecycle",
-        stream: "system",
-        level: "warn",
-        message: "run cancelled",
-      });
-      await releaseIssueExecutionAndPromote(cancelled);
-    }
+    await cancelHeartbeatDispatchRequest(cancelled, reason);
 
-    runningProcesses.delete(run.id);
+    await appendRunStatusTransitionEvent(cancelled, {
+      fromStatus: run.status,
+      toStatus: "cancelled",
+      reason: "manual_cancel",
+      payload: {
+        errorCode: "cancelled",
+      },
+    });
+
+    await appendRunEvent(cancelled, await nextRunEventSeq(cancelled.id), {
+      eventType: "lifecycle",
+      stream: "system",
+      level: "warn",
+      message: "run cancelled",
+    });
+    await releaseIssueExecutionAndPromote(cancelled);
+
     await finalizeAgentStatus(run.agentId, "cancelled");
-    await startNextQueuedRunForAgent(run.agentId);
+    await driveQueuedRunsForAgent(run.agentId, "run_cancelled");
     return cancelled;
   }
 
@@ -7165,8 +7777,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       .from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.agentId, agentId), inArray(heartbeatRuns.status, [...CANCELLABLE_HEARTBEAT_RUN_STATUSES])));
 
+    let cancelledCount = 0;
     for (const run of runs) {
-      await setRunStatus(run.id, "cancelled", {
+      const cancelled = await setRunStatus(run.id, "cancelled", {
         finishedAt: new Date(),
         error: reason,
         errorCode: "cancelled",
@@ -7177,31 +7790,32 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             errorMessage: reason,
           }),
         } : {}),
-      });
+      }, cancellableRunGuard());
+      if (!cancelled) continue;
+      cancelledCount += 1;
 
-      await setWakeupStatus(run.wakeupRequestId, "cancelled", {
+      await terminateRunProcessAfterCancellation(cancelled);
+
+      await setWakeupStatus(cancelled.wakeupRequestId, "cancelled", {
         finishedAt: new Date(),
         error: reason,
       });
 
-      const running = runningProcesses.get(run.id);
-      if (running) {
-        await terminateHeartbeatRunProcess({
-          pid: running.child.pid ?? run.processPid,
-          processGroupId: running.processGroupId ?? run.processGroupId,
-          graceMs: Math.max(1, running.graceSec) * 1000,
-        });
-        runningProcesses.delete(run.id);
-      } else if (run.processPid || run.processGroupId) {
-        await terminateHeartbeatRunProcess({
-          pid: run.processPid,
-          processGroupId: run.processGroupId,
-        });
-      }
-      await releaseIssueExecutionAndPromote(run);
+      await cancelHeartbeatDispatchRequest(cancelled, reason);
+
+      await appendRunStatusTransitionEvent(cancelled, {
+        fromStatus: run.status,
+        toStatus: "cancelled",
+        reason: "bulk_cancel",
+        payload: {
+          errorCode: "cancelled",
+        },
+      });
+
+      await releaseIssueExecutionAndPromote(cancelled);
     }
 
-    return runs.length;
+    return cancelledCount;
   }
 
   async function cancelBudgetScopeWork(scope: BudgetEnforcementScope) {
@@ -7466,6 +8080,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     promoteDueScheduledRetries,
 
     resumeQueuedRuns,
+
+    dispatchQueuedRun,
 
     scheduleBoundedRetry: async (
       runId: string,

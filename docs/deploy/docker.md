@@ -3,7 +3,7 @@ title: Docker
 summary: Docker Compose quickstart
 ---
 
-Run Paperclip in Docker without installing Node or pnpm locally.
+Run Stacy in Docker without installing Node or pnpm locally.
 
 ## Compose Quickstart (Recommended)
 
@@ -16,16 +16,28 @@ Open [http://localhost:3100](http://localhost:3100).
 Defaults:
 
 - Host port: `3100`
-- Data directory: `./data/docker-paperclip`
+- Data directory: `./data/docker-stacy`
+- Auth secret: local-only default from the quickstart compose file
 
 Override with environment variables:
 
 ```sh
-PAPERCLIP_PORT=3200 PAPERCLIP_DATA_DIR=../data/pc \
+PAPERCLIP_PORT=3200 PAPERCLIP_DATA_DIR=../data/stacy BETTER_AUTH_SECRET=change-me \
   docker compose -f docker/docker-compose.quickstart.yml up --build
 ```
 
-**Note:** `PAPERCLIP_DATA_DIR` is resolved relative to the compose file (`docker/`), so `../data/pc` maps to `data/pc` in the project root.
+**Note:** `PAPERCLIP_DATA_DIR` is resolved relative to the compose file (`docker/`), so `../data/stacy` maps to `data/stacy` in the project root.
+
+Validate the quickstart from a checkout with:
+
+```sh
+pnpm smoke:docker-quickstart
+```
+
+The smoke starts Stacy on `http://localhost:3132`, checks `/api/health`,
+verifies embedded Postgres data and server logs persist in the mounted data
+dir, restarts the service, and checks health again. It skips cleanly when
+Docker is not installed or not running.
 
 ## Manual Docker Build
 
@@ -35,18 +47,42 @@ docker run --name paperclip \
   -p 3100:3100 \
   -e HOST=0.0.0.0 \
   -e PAPERCLIP_HOME=/paperclip \
-  -v "$(pwd)/data/docker-paperclip:/paperclip" \
+  -v "$(pwd)/data/docker-stacy:/paperclip" \
   paperclip-local
 ```
 
 ## Data Persistence
 
-All data is persisted under the bind mount (`./data/docker-paperclip`):
+All data is persisted under the bind mount (`./data/docker-stacy`):
 
 - Embedded PostgreSQL data
 - Uploaded assets
 - Local secrets key
 - Agent workspace data
+
+## Backups And Restore
+
+Create a manual backup from a running local checkout:
+
+```sh
+pnpm stacy db:backup
+```
+
+Before upgrading, run the read-only preflight:
+
+```sh
+pnpm stacy upgrade:check
+```
+
+Before applying a restore, stop the app, inspect the target, then run restore
+from the checkout or from an operator shell that has the same config mounted:
+
+```sh
+docker compose -f docker/docker-compose.quickstart.yml down
+pnpm stacy db:restore ./data/docker-stacy/instances/default/data/backups/stacy-20260430-010000.sql.gz --dry-run
+pnpm stacy db:restore ./data/docker-stacy/instances/default/data/backups/stacy-20260430-010000.sql.gz --yes
+docker compose -f docker/docker-compose.quickstart.yml up -d
+```
 
 ## Claude and Codex Adapters in Docker
 
@@ -64,7 +100,7 @@ docker run --name paperclip \
   -e PAPERCLIP_HOME=/paperclip \
   -e OPENAI_API_KEY=sk-... \
   -e ANTHROPIC_API_KEY=sk-... \
-  -v "$(pwd)/data/docker-paperclip:/paperclip" \
+  -v "$(pwd)/data/docker-stacy:/paperclip" \
   paperclip-local
 ```
 

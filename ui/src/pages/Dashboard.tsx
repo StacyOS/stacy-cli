@@ -20,11 +20,11 @@ import { ActivityRow } from "../components/ActivityRow";
 import { Identity } from "../components/Identity";
 import { timeAgo } from "../lib/timeAgo";
 import { cn, formatCents } from "../lib/utils";
-import { Bot, CircleDot, DollarSign, ShieldCheck, LayoutDashboard, PauseCircle } from "lucide-react";
+import { Activity, AlertTriangle, Bot, CircleCheck, CircleDot, Clock3, DollarSign, LayoutDashboard, ListChecks, PauseCircle, ShieldCheck, Square } from "lucide-react";
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
-import type { Agent, Issue } from "@paperclipai/shared";
+import type { Agent, DashboardSummary, Issue } from "@paperclipai/shared";
 import { PluginSlotOutlet } from "@/plugins/slots";
 
 const DASHBOARD_ACTIVITY_LIMIT = 10;
@@ -32,6 +32,128 @@ const DASHBOARD_ACTIVITY_LIMIT = 10;
 function getRecentIssues(issues: Issue[]): Issue[] {
   return [...issues]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
+
+function riskTone(level: DashboardSummary["controlPlane"]["riskLevel"]) {
+  if (level === "action") {
+    return {
+      icon: AlertTriangle,
+      label: "Action",
+      className: "border-red-500/25 bg-red-950/20 text-red-100",
+      accent: "text-red-300",
+    };
+  }
+  if (level === "watch") {
+    return {
+      icon: Activity,
+      label: "Watch",
+      className: "border-amber-500/25 bg-amber-950/20 text-amber-100",
+      accent: "text-amber-300",
+    };
+  }
+  return {
+    icon: CircleCheck,
+    label: "Clear",
+    className: "border-emerald-500/20 bg-emerald-950/15 text-emerald-100",
+    accent: "text-emerald-300",
+  };
+}
+
+function dispatchQueueTone(status: DashboardSummary["controlPlane"]["dispatchQueue"]["status"]) {
+  if (status === "action") return "text-red-300";
+  if (status === "watch") return "text-amber-300";
+  return "text-emerald-300";
+}
+
+function formatQueueAge(ms: number | null): string | null {
+  if (ms === null) return null;
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function dispatchQueueLabel(queue: DashboardSummary["controlPlane"]["dispatchQueue"]): string {
+  if (queue.failed > 0) return `${queue.failed} failed`;
+  if (queue.expiredLeases > 0) return `${queue.expiredLeases} expired lease${queue.expiredLeases === 1 ? "" : "s"}`;
+  if (queue.stalePending > 0) {
+    const oldest = formatQueueAge(queue.oldestPendingAgeMs);
+    return oldest ? `${queue.stalePending} stale, oldest ${oldest}` : `${queue.stalePending} stale`;
+  }
+  if (queue.ready > 0) return `${queue.ready} ready`;
+  if (queue.leased > 0) return `${queue.leased} leased`;
+  if (queue.pending > 0) return `${queue.pending} scheduled`;
+  return "No pending dispatch";
+}
+
+function ControlPlaneBand({ summary }: { summary: DashboardSummary }) {
+  const control = summary.controlPlane;
+  const tone = riskTone(control.riskLevel);
+  const RiskIcon = tone.icon;
+  const queue = control.dispatchQueue;
+  const queueAccent = dispatchQueueTone(queue.status);
+  const queueTotal = queue.pending + queue.leased + queue.failed;
+  const reasons = control.riskReasons.length > 0 ? control.riskReasons.slice(0, 3) : ["No active risk signals"];
+
+  return (
+    <section className={cn("overflow-hidden rounded-md border", tone.className)}>
+      <div className="grid gap-0 md:grid-cols-[1.2fr_1fr_1fr_1fr_1fr]">
+        <div className="min-w-0 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <RiskIcon className={cn("h-4 w-4 shrink-0", tone.accent)} />
+            <span>Stacy cockpit</span>
+            <span className={cn("rounded-sm border border-current/20 px-1.5 py-0.5 text-xs", tone.accent)}>
+              {tone.label}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-current/75">
+            {reasons.map((reason) => (
+              <span key={reason} className="min-w-0 truncate">{reason}</span>
+            ))}
+          </div>
+        </div>
+        <Link
+          to="/dashboard/live"
+          className="flex min-h-[76px] items-center justify-between gap-3 border-t border-current/10 px-4 py-3 text-current no-underline transition-colors hover:bg-current/5 md:border-l md:border-t-0"
+        >
+          <span>
+            <span className="block text-xs text-current/60">Live runs</span>
+            <span className="mt-1 block text-2xl font-semibold leading-none">{control.liveRuns}</span>
+          </span>
+          <Square className="h-4 w-4 text-current/60" />
+        </Link>
+        <div className="flex min-h-[76px] items-center justify-between gap-3 border-t border-current/10 px-4 py-3 md:border-l md:border-t-0">
+          <span>
+            <span className="block text-xs text-current/60">Failed 24h</span>
+            <span className="mt-1 block text-2xl font-semibold leading-none">{control.failedRuns24h}</span>
+          </span>
+          <Clock3 className="h-4 w-4 text-current/60" />
+        </div>
+        <div className="flex min-h-[76px] min-w-0 items-center justify-between gap-3 border-t border-current/10 px-4 py-3 md:border-l md:border-t-0">
+          <span className="min-w-0">
+            <span className="block text-xs text-current/60">Dispatch queue</span>
+            <span className="mt-1 block text-2xl font-semibold leading-none">{queueTotal}</span>
+            <span className={cn("mt-1 block truncate text-xs", queueAccent)}>{dispatchQueueLabel(queue)}</span>
+          </span>
+          <ListChecks className={cn("h-4 w-4 shrink-0", queueAccent)} />
+        </div>
+        <Link
+          to="/costs"
+          className="flex min-h-[76px] items-center justify-between gap-3 border-t border-current/10 px-4 py-3 text-current no-underline transition-colors hover:bg-current/5 md:border-l md:border-t-0"
+        >
+          <span>
+            <span className="block text-xs text-current/60">Budget used</span>
+            <span className="mt-1 block text-2xl font-semibold leading-none">
+              {summary.costs.monthBudgetCents > 0 ? `${summary.costs.monthUtilizationPercent}%` : formatCents(summary.costs.monthSpendCents)}
+            </span>
+          </span>
+          <DollarSign className="h-4 w-4 text-current/60" />
+        </Link>
+      </div>
+    </section>
+  );
 }
 
 export function Dashboard() {
@@ -176,7 +298,7 @@ export function Dashboard() {
       return (
         <EmptyState
           icon={LayoutDashboard}
-          message="Welcome to Paperclip. Set up your first company and agent to get started."
+          message="Welcome to Stacy. Set up your first company and agent to get started."
           action="Get Started"
           onAction={openOnboarding}
         />
@@ -218,6 +340,8 @@ export function Dashboard() {
 
       {data && (
         <>
+          <ControlPlaneBand summary={data} />
+
           {data.budgets.activeIncidents > 0 ? (
             <div className="flex items-start justify-between gap-3 rounded-xl border border-red-500/20 bg-[linear-gradient(180deg,rgba(255,80,80,0.12),rgba(255,255,255,0.02))] px-4 py-3">
               <div className="flex items-start gap-2.5">

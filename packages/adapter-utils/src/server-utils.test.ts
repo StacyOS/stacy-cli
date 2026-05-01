@@ -452,6 +452,14 @@ describe("applyPaperclipWorkspaceEnv", () => {
       PAPERCLIP_WORKSPACE_REPO_REF: "main",
       PAPERCLIP_WORKSPACE_BRANCH: "feature/test",
       PAPERCLIP_WORKSPACE_WORKTREE_PATH: "/tmp/worktree",
+      STACY_WORKSPACE_CWD: "/tmp/workspace",
+      STACY_WORKSPACE_SOURCE: "project_primary",
+      STACY_WORKSPACE_STRATEGY: "git_worktree",
+      STACY_WORKSPACE_ID: "workspace-1",
+      STACY_WORKSPACE_REPO_URL: "https://github.com/paperclipai/paperclip.git",
+      STACY_WORKSPACE_REPO_REF: "main",
+      STACY_WORKSPACE_BRANCH: "feature/test",
+      STACY_WORKSPACE_WORKTREE_PATH: "/tmp/worktree",
       AGENT_HOME: "/tmp/agent-home",
     });
   });

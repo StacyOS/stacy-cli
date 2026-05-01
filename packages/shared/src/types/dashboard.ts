@@ -6,6 +6,28 @@ export interface DashboardRunActivityDay {
   total: number;
 }
 
+export interface DashboardControlPlaneSummary {
+  liveRuns: number;
+  cancellableRuns: number;
+  failedRuns24h: number;
+  cancelledRuns24h: number;
+  dispatchQueue: DashboardDispatchQueueSummary;
+  riskLevel: "ok" | "watch" | "action";
+  riskReasons: string[];
+}
+
+export interface DashboardDispatchQueueSummary {
+  status: "clear" | "watch" | "action";
+  pending: number;
+  ready: number;
+  leased: number;
+  expiredLeases: number;
+  failed: number;
+  stalePending: number;
+  oldestPendingAgeMs: number | null;
+  oldestLeasedAgeMs: number | null;
+}
+
 export interface DashboardSummary {
   companyId: string;
   agents: {
@@ -32,5 +54,6 @@ export interface DashboardSummary {
     pausedAgents: number;
     pausedProjects: number;
   };
+  controlPlane: DashboardControlPlaneSummary;
   runActivity: DashboardRunActivityDay[];
 }

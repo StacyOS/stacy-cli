@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   runChildProcess,
@@ -12,8 +12,8 @@ const {
   syncDirectoryToSsh,
 } = vi.hoisted(() => ({
   runChildProcess: vi.fn(async () => ({
-    exitCode: 0,
-    signal: null,
+    exitCode: 0 as number | null,
+    signal: null as string | null,
     timedOut: false,
     stdout: [
       JSON.stringify({ type: "system", subtype: "init", session_id: "claude-session-1", model: "claude-sonnet" }),
@@ -57,11 +57,31 @@ vi.mock("@paperclipai/adapter-utils/ssh", async () => {
 
 import { execute } from "./execute.js";
 
+const ORIGINAL_PAPERCLIP_HOME = process.env.PAPERCLIP_HOME;
+const ORIGINAL_PAPERCLIP_INSTANCE_ID = process.env.PAPERCLIP_INSTANCE_ID;
+
 describe("claude remote execution", () => {
   const cleanupDirs: string[] = [];
 
+  beforeEach(async () => {
+    const homeDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-test-home-"));
+    cleanupDirs.push(homeDir);
+    process.env.PAPERCLIP_HOME = homeDir;
+    process.env.PAPERCLIP_INSTANCE_ID = "adapter-contract-test";
+  });
+
   afterEach(async () => {
     vi.clearAllMocks();
+    if (ORIGINAL_PAPERCLIP_HOME === undefined) {
+      delete process.env.PAPERCLIP_HOME;
+    } else {
+      process.env.PAPERCLIP_HOME = ORIGINAL_PAPERCLIP_HOME;
+    }
+    if (ORIGINAL_PAPERCLIP_INSTANCE_ID === undefined) {
+      delete process.env.PAPERCLIP_INSTANCE_ID;
+    } else {
+      process.env.PAPERCLIP_INSTANCE_ID = ORIGINAL_PAPERCLIP_INSTANCE_ID;
+    }
     while (cleanupDirs.length > 0) {
       const dir = cleanupDirs.pop();
       if (!dir) continue;
@@ -257,6 +277,297 @@ describe("claude remote execution", () => {
     const call = runChildProcess.mock.calls[0] as unknown as [string, string, string[]] | undefined;
     expect(call?.[2]).toContain("--resume");
     expect(call?.[2]).toContain("session-123");
+  });
+
+  it("surfaces parsed usage, cost, session, and result metadata from the Claude CLI", async () => {
+    const resultEvent = {
+      type: "result",
+      session_id: "claude-contract",
+      model: "claude-sonnet-4-5",
+      result: "Implemented the requested change.",
+      total_cost_usd: 0.067,
+      usage: {
+        input_tokens: 52,
+        cache_read_input_tokens: 13,
+        output_tokens: 9,
+      },
+    };
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      stdout: [
+        JSON.stringify({
+          type: "system",
+          subtype: "init",
+          session_id: "claude-contract",
+          model: "claude-sonnet-4-5",
+        }),
+        JSON.stringify({
+          type: "assistant",
+          session_id: "claude-contract",
+          message: { content: [{ type: "text", text: "Working through the task." }] },
+        }),
+        JSON.stringify(resultEvent),
+      ].join("\n"),
+      stderr: "",
+      pid: 456,
+      startedAt: new Date().toISOString(),
+    });
+
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-contract-"));
+    cleanupDirs.push(rootDir);
+    const workspaceDir = path.join(rootDir, "workspace");
+    await mkdir(workspaceDir, { recursive: true });
+
+    const result = await execute({
+      runId: "run-contract",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "Claude Coder",
+        adapterType: "claude_local",
+        adapterConfig: {},
+      },
+      runtime: {
+        sessionId: null,
+        sessionParams: null,
+        sessionDisplayId: null,
+        taskKey: null,
+      },
+      config: {
+        command: "claude",
+        env: {
+          ANTHROPIC_API_KEY: "sk-ant-test",
+        },
+      },
+      context: {
+        paperclipWorkspace: {
+          cwd: workspaceDir,
+          source: "project_primary",
+        },
+      },
+      onLog: async () => {},
+    });
+
+    expect(result).toMatchObject({
+      exitCode: 0,
+      errorMessage: null,
+      sessionId: "claude-contract",
+      sessionDisplayId: "claude-contract",
+      provider: "anthropic",
+      biller: "anthropic",
+      billingType: "api",
+      model: "claude-sonnet-4-5",
+      costUsd: 0.067,
+      usage: {
+        inputTokens: 52,
+        cachedInputTokens: 13,
+        outputTokens: 9,
+      },
+      summary: "Implemented the requested change.",
+      resultJson: expect.objectContaining(resultEvent),
+    });
+  });
+
+  it("retries with a fresh Claude session when a saved resume session is stale", async () => {
+    runChildProcess
+      .mockResolvedValueOnce({
+        exitCode: 1,
+        signal: null,
+        timedOut: false,
+        stdout: JSON.stringify({
+          type: "result",
+          subtype: "error",
+          session_id: "stale-session",
+          is_error: true,
+          result: "No conversation found with session id stale-session",
+          errors: [{ message: "No conversation found with session id stale-session" }],
+        }),
+        stderr: "",
+        pid: 456,
+        startedAt: new Date().toISOString(),
+      })
+      .mockResolvedValueOnce({
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        stdout: [
+          JSON.stringify({
+            type: "system",
+            subtype: "init",
+            session_id: "fresh-claude-session",
+            model: "claude-sonnet-4-5",
+          }),
+          JSON.stringify({
+            type: "result",
+            session_id: "fresh-claude-session",
+            model: "claude-sonnet-4-5",
+            result: "Recovered on a fresh session.",
+            usage: { input_tokens: 8, cache_read_input_tokens: 0, output_tokens: 4 },
+          }),
+        ].join("\n"),
+        stderr: "",
+        pid: 789,
+        startedAt: new Date().toISOString(),
+      });
+
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-stale-session-"));
+    cleanupDirs.push(rootDir);
+    const workspaceDir = path.join(rootDir, "workspace");
+    await mkdir(workspaceDir, { recursive: true });
+    const logs: string[] = [];
+
+    const result = await execute({
+      runId: "run-stale-session",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "Claude Coder",
+        adapterType: "claude_local",
+        adapterConfig: {},
+      },
+      runtime: {
+        sessionId: "stale-session",
+        sessionParams: {
+          sessionId: "stale-session",
+          cwd: workspaceDir,
+        },
+        sessionDisplayId: "stale-session",
+        taskKey: null,
+      },
+      config: {
+        command: "claude",
+        cwd: workspaceDir,
+      },
+      context: {},
+      onLog: async (_stream, chunk) => {
+        logs.push(chunk);
+      },
+    });
+
+    expect(runChildProcess).toHaveBeenCalledTimes(2);
+    const firstCall = runChildProcess.mock.calls[0] as unknown as [string, string, string[]] | undefined;
+    const secondCall = runChildProcess.mock.calls[1] as unknown as [string, string, string[]] | undefined;
+    expect(firstCall?.[2]).toContain("--resume");
+    expect(firstCall?.[2]).toContain("stale-session");
+    expect(secondCall?.[2]).not.toContain("--resume");
+    expect(logs.join("")).toContain('Claude resume session "stale-session" is unavailable');
+    expect(result).toMatchObject({
+      exitCode: 0,
+      errorMessage: null,
+      sessionId: "fresh-claude-session",
+      sessionDisplayId: "fresh-claude-session",
+      model: "claude-sonnet-4-5",
+      summary: "Recovered on a fresh session.",
+      usage: {
+        inputTokens: 8,
+        cachedInputTokens: 0,
+        outputTokens: 4,
+      },
+    });
+  });
+
+  it("uses shared failure families for Claude auth, unknown-session, max-turns, and timeout failures", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-failure-family-"));
+    cleanupDirs.push(rootDir);
+    const workspaceDir = path.join(rootDir, "workspace");
+    await mkdir(workspaceDir, { recursive: true });
+
+    const baseContext = {
+      runId: "run-family",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "Claude Coder",
+        adapterType: "claude_local",
+        adapterConfig: {},
+      },
+      runtime: {
+        sessionId: null,
+        sessionParams: null,
+        sessionDisplayId: null,
+        taskKey: null,
+      },
+      config: {
+        command: "claude",
+        cwd: workspaceDir,
+      },
+      context: {},
+      onLog: async () => {},
+    };
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      stdout: "",
+      stderr: "Please log in. Run `claude login` first.",
+      pid: 456,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "claude_auth_required",
+      errorFamily: "auth_required",
+      resultJson: expect.objectContaining({ errorFamily: "auth_required" }),
+    });
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      stdout: JSON.stringify({
+        type: "result",
+        subtype: "error",
+        is_error: true,
+        result: "No conversation found with session id missing-session",
+        errors: [{ message: "No conversation found with session id missing-session" }],
+      }),
+      stderr: "",
+      pid: 457,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "claude_unknown_session",
+      errorFamily: "unknown_session",
+      clearSession: true,
+      resultJson: expect.objectContaining({ errorFamily: "unknown_session" }),
+    });
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      stdout: JSON.stringify({
+        type: "result",
+        subtype: "error_max_turns",
+        is_error: true,
+        result: "Maximum turns reached.",
+      }),
+      stderr: "",
+      pid: 458,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "claude_max_turns",
+      errorFamily: "max_turns",
+      clearSession: true,
+      resultJson: expect.objectContaining({ errorFamily: "max_turns" }),
+    });
+
+    runChildProcess.mockResolvedValueOnce({
+      exitCode: null as number | null,
+      signal: "SIGTERM" as string | null,
+      timedOut: true,
+      stdout: "",
+      stderr: "",
+      pid: 459,
+      startedAt: new Date().toISOString(),
+    });
+    await expect(execute(baseContext)).resolves.toMatchObject({
+      errorCode: "timeout",
+      errorFamily: "timeout",
+    });
   });
 
 });

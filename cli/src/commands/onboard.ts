@@ -57,7 +57,7 @@ type OnboardOptions = {
 type OnboardDefaults = Pick<PaperclipConfig, "database" | "logging" | "server" | "auth" | "storage" | "secrets">;
 
 const TAILNET_BIND_WARNING =
-  "No Tailscale address was detected during setup. The saved config will stay on loopback until Tailscale is available or PAPERCLIP_TAILNET_BIND_HOST is set.";
+  "No Tailscale address was detected during setup. The saved config will stay on loopback until Tailscale is available or STACY_TAILNET_BIND_HOST is set.";
 
 const ONBOARD_ENV_KEYS = [
   "PAPERCLIP_PUBLIC_URL",
@@ -328,7 +328,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   }
 
   printPaperclipCliBanner();
-  p.intro(pc.bgCyan(pc.black(" paperclipai onboard ")));
+  p.intro(pc.bgCyan(pc.black(" stacy onboard ")));
   const configPath = resolveConfigPath(opts.config);
   const instance = describeLocalInstancePaths(resolvePaperclipInstanceId());
   p.log.message(
@@ -354,18 +354,18 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
 
   if (existingConfig) {
     p.log.message(
-      pc.dim("Existing Paperclip install detected; keeping the current configuration unchanged."),
+      pc.dim("Existing Stacy install detected; keeping the current configuration unchanged."),
     );
-    p.log.message(pc.dim(`Use ${pc.cyan("paperclipai configure")} if you want to change settings.`));
+    p.log.message(pc.dim(`Use ${pc.cyan("pnpm stacy configure")} if you want to change settings.`));
 
     const jwtSecret = ensureAgentJwtSecret(configPath);
     const envFilePath = resolveAgentJwtEnvFile(configPath);
     if (jwtSecret.created) {
-      p.log.success(`Created ${pc.cyan("PAPERCLIP_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
+      p.log.success(`Created ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
     } else if (process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim()) {
-      p.log.info(`Using existing ${pc.cyan("PAPERCLIP_AGENT_JWT_SECRET")} from environment`);
+      p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} from environment`);
     } else {
-      p.log.info(`Using existing ${pc.cyan("PAPERCLIP_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
+      p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
     }
 
     const keyResult = ensureLocalSecretsKeyFile(existingConfig, configPath);
@@ -386,16 +386,16 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
         `Auth URL mode: ${existingConfig.auth.baseUrlMode}${existingConfig.auth.publicBaseUrl ? ` (${existingConfig.auth.publicBaseUrl})` : ""}`,
         `Storage: ${existingConfig.storage.provider}`,
         `Secrets: ${existingConfig.secrets.provider} (strict mode ${existingConfig.secrets.strictMode ? "on" : "off"})`,
-        "Agent auth: PAPERCLIP_AGENT_JWT_SECRET configured",
+        "Agent auth: STACY_AGENT_JWT_SECRET configured",
       ].join("\n"),
       "Configuration ready",
     );
 
     p.note(
       [
-        `Run: ${pc.cyan("paperclipai run")}`,
-        `Reconfigure later: ${pc.cyan("paperclipai configure")}`,
-        `Diagnose setup: ${pc.cyan("paperclipai doctor")}`,
+        `Run: ${pc.cyan("pnpm stacy run")}`,
+        `Reconfigure later: ${pc.cyan("pnpm stacy configure")}`,
+        `Diagnose setup: ${pc.cyan("pnpm stacy doctor")}`,
       ].join("\n"),
       "Next commands",
     );
@@ -403,7 +403,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     let shouldRunNow = opts.run === true || opts.yes === true;
     if (!shouldRunNow && !opts.invokedByRun && process.stdin.isTTY && process.stdout.isTTY) {
       const answer = await p.confirm({
-        message: "Start Paperclip now?",
+        message: "Start Stacy now?",
         initialValue: true,
       });
       if (!p.isCancel(answer)) {
@@ -418,7 +418,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
       return;
     }
 
-    p.outro("Existing Paperclip setup is ready.");
+    p.outro("Existing Stacy setup is ready.");
     return;
   }
 
@@ -497,7 +497,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
         await db.execute("SELECT 1");
         s.stop("Database connection successful");
       } catch {
-        s.stop(pc.yellow("Could not connect to database — you can fix this later with `paperclipai doctor`"));
+        s.stop(pc.yellow("Could not connect to database — you can fix this later with `pnpm stacy doctor`"));
       }
     }
 
@@ -593,11 +593,11 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   const jwtSecret = ensureAgentJwtSecret(configPath);
   const envFilePath = resolveAgentJwtEnvFile(configPath);
   if (jwtSecret.created) {
-    p.log.success(`Created ${pc.cyan("PAPERCLIP_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
+    p.log.success(`Created ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
   } else if (process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim()) {
-    p.log.info(`Using existing ${pc.cyan("PAPERCLIP_AGENT_JWT_SECRET")} from environment`);
+    p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} from environment`);
   } else {
-    p.log.info(`Using existing ${pc.cyan("PAPERCLIP_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
+    p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
   }
 
   const config: PaperclipConfig = {
@@ -641,16 +641,16 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
       `Auth URL mode: ${auth.baseUrlMode}${auth.publicBaseUrl ? ` (${auth.publicBaseUrl})` : ""}`,
       `Storage: ${storage.provider}`,
       `Secrets: ${secrets.provider} (strict mode ${secrets.strictMode ? "on" : "off"})`,
-      "Agent auth: PAPERCLIP_AGENT_JWT_SECRET configured",
+      "Agent auth: STACY_AGENT_JWT_SECRET configured",
     ].join("\n"),
     "Configuration saved",
   );
 
   p.note(
     [
-      `Run: ${pc.cyan("paperclipai run")}`,
-      `Reconfigure later: ${pc.cyan("paperclipai configure")}`,
-      `Diagnose setup: ${pc.cyan("paperclipai doctor")}`,
+      `Run: ${pc.cyan("pnpm stacy run")}`,
+      `Reconfigure later: ${pc.cyan("pnpm stacy configure")}`,
+      `Diagnose setup: ${pc.cyan("pnpm stacy doctor")}`,
     ].join("\n"),
     "Next commands",
   );
@@ -663,7 +663,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   let shouldRunNow = opts.run === true || opts.yes === true;
   if (!shouldRunNow && !opts.invokedByRun && process.stdin.isTTY && process.stdout.isTTY) {
     const answer = await p.confirm({
-      message: "Start Paperclip now?",
+      message: "Start Stacy now?",
       initialValue: true,
     });
     if (!p.isCancel(answer)) {
@@ -682,8 +682,8 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     p.log.info(
       [
         "Bootstrap CEO invite will be created after the server starts.",
-        `Next: ${pc.cyan("paperclipai run")}`,
-        `Then: ${pc.cyan("paperclipai auth bootstrap-ceo")}`,
+        `Next: ${pc.cyan("pnpm stacy run")}`,
+        `Then: ${pc.cyan("pnpm stacy auth bootstrap-ceo")}`,
       ].join("\n"),
     );
   }

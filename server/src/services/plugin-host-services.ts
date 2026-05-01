@@ -51,6 +51,7 @@ import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import { logger } from "../middleware/logger.js";
 import { getTelemetryClient } from "../telemetry.js";
+import { isTerminalHeartbeatRunStatus } from "./execution-kernel/status.js";
 
 // ---------------------------------------------------------------------------
 // SSRF protection for plugin HTTP fetch
@@ -1779,8 +1780,6 @@ export function buildHostServices(
         // Track the subscription so it can be cleaned up on dispose() if the run
         // never reaches a terminal status (hang, crash, network partition).
         if (notifyWorker) {
-          const TERMINAL_STATUSES = new Set(["succeeded", "failed", "cancelled", "timed_out"]);
-
           const cleanup = () => {
             unsubscribe();
             clearTimeout(timeoutTimer);
@@ -1803,7 +1802,7 @@ export function buildHostServices(
               });
             } else if (event.type === "heartbeat.run.status") {
               const status = payload.status as string;
-              if (TERMINAL_STATUSES.has(status)) {
+              if (isTerminalHeartbeatRunStatus(status)) {
                 notifyWorker("agents.sessions.event", {
                   sessionId: params.sessionId,
                   runId: run.id,

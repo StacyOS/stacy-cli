@@ -4,6 +4,7 @@
 
 import type { SshRemoteExecutionSpec } from "./ssh.js";
 import type { AdapterExecutionTarget } from "./execution-target.js";
+import type { AdapterExecutionErrorFamily } from "./failure-taxonomy.js";
 
 export interface AdapterAgent {
   id: string;
@@ -63,8 +64,6 @@ export interface AdapterRuntimeServiceReport {
   stopPolicy?: Record<string, unknown> | null;
   healthStatus?: "unknown" | "healthy" | "unhealthy";
 }
-
-export type AdapterExecutionErrorFamily = "transient_upstream";
 
 export interface AdapterExecutionResult {
   exitCode: number | null;

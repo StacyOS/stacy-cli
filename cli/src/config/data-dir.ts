@@ -26,13 +26,16 @@ export function applyDataDirOverride(
   if (!rawDataDir) return null;
 
   const resolvedDataDir = path.resolve(expandHomePrefix(rawDataDir));
+  process.env.STACY_HOME = resolvedDataDir;
   process.env.PAPERCLIP_HOME = resolvedDataDir;
 
   if (support.hasConfigOption) {
     const hasConfigOverride = Boolean(options.config?.trim()) || Boolean(process.env.PAPERCLIP_CONFIG?.trim());
     if (!hasConfigOverride) {
       const instanceId = resolvePaperclipInstanceId(options.instance);
+      process.env.STACY_INSTANCE_ID = instanceId;
       process.env.PAPERCLIP_INSTANCE_ID = instanceId;
+      process.env.STACY_CONFIG = resolveDefaultConfigPath(instanceId);
       process.env.PAPERCLIP_CONFIG = resolveDefaultConfigPath(instanceId);
     }
   }
@@ -40,6 +43,7 @@ export function applyDataDirOverride(
   if (support.hasContextOption) {
     const hasContextOverride = Boolean(options.context?.trim()) || Boolean(process.env.PAPERCLIP_CONTEXT?.trim());
     if (!hasContextOverride) {
+      process.env.STACY_CONTEXT = resolveDefaultContextPath();
       process.env.PAPERCLIP_CONTEXT = resolveDefaultContextPath();
     }
   }

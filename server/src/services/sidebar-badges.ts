@@ -2,9 +2,9 @@ import { and, desc, eq, inArray, not } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, approvals, heartbeatRuns } from "@paperclipai/db";
 import type { SidebarBadges } from "@paperclipai/shared";
+import { isUnsuccessfulHeartbeatRunTerminalStatus } from "./execution-kernel/status.js";
 
 const ACTIONABLE_APPROVAL_STATUSES = ["pending", "revision_requested"];
-const FAILED_HEARTBEAT_STATUSES = ["failed", "timed_out"];
 
 function normalizeTimestamp(value: Date | string | null | undefined): number {
   if (!value) return 0;
@@ -63,7 +63,7 @@ export function sidebarBadgeService(db: Db) {
         .orderBy(heartbeatRuns.agentId, desc(heartbeatRuns.createdAt));
 
       const failedRuns = latestRunByAgent.filter((row) =>
-        FAILED_HEARTBEAT_STATUSES.includes(row.runStatus)
+        isUnsuccessfulHeartbeatRunTerminalStatus(row.runStatus)
         && !isDismissed(extra?.dismissals ?? new Map(), `run:${row.id}`, row.createdAt),
       ).length;
 

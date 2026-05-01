@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companySkills } from "@paperclipai/db";
+import { companies, companySkills } from "@paperclipai/db";
 import { readPaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
 import type { PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
 import type {
@@ -1549,6 +1549,18 @@ export function companySkillService(db: Db) {
   const agents = agentService(db);
   const projects = projectService(db);
 
+  async function assertCompanyExists(companyId: string) {
+    const company = await db
+      .select({ id: companies.id })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+    if (!company) {
+      throw notFound("Company not found");
+    }
+  }
+
   async function ensureBundledSkills(companyId: string) {
     for (const skillsRoot of resolveBundledSkillsRoot()) {
       const stats = await fs.stat(skillsRoot).catch(() => null);
@@ -1603,6 +1615,8 @@ export function companySkillService(db: Db) {
   }
 
   async function ensureSkillInventoryCurrent(companyId: string) {
+    await assertCompanyExists(companyId);
+
     const existingRefresh = skillInventoryRefreshPromises.get(companyId);
     if (existingRefresh) {
       await existingRefresh;
@@ -1825,6 +1839,8 @@ export function companySkillService(db: Db) {
   }
 
   async function createLocalSkill(companyId: string, input: CompanySkillCreateRequest): Promise<CompanySkill> {
+    await assertCompanyExists(companyId);
+
     const slug = normalizeSkillSlug(input.slug ?? input.name) ?? "skill";
     const managedRoot = resolveManagedSkillsRoot(companyId);
     const skillDir = path.resolve(managedRoot, slug);
@@ -2310,6 +2326,9 @@ export function companySkillService(db: Db) {
   }
 
   async function upsertImportedSkills(companyId: string, imported: ImportedSkill[]): Promise<CompanySkill[]> {
+    if (imported.length === 0) return [];
+    await assertCompanyExists(companyId);
+
     const out: CompanySkill[] = [];
     for (const skill of imported) {
       const existing = await getByKey(companyId, skill.key);

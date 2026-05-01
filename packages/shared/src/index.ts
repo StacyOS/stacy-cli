@@ -409,6 +409,8 @@ export type {
   AgentWakeupRequest,
   InstanceSchedulerHeartbeatAgent,
   LiveEvent,
+  DashboardControlPlaneSummary,
+  DashboardDispatchQueueSummary,
   DashboardRunActivityDay,
   DashboardSummary,
   ActivityEvent,

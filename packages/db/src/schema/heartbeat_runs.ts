@@ -31,6 +31,10 @@ export const heartbeatRuns = pgTable(
     stderrExcerpt: text("stderr_excerpt"),
     errorCode: text("error_code"),
     externalRunId: text("external_run_id"),
+    claimToken: text("claim_token"),
+    claimOwner: text("claim_owner"),
+    claimLeasedAt: timestamp("claim_leased_at", { withTimezone: true }),
+    claimLeaseExpiresAt: timestamp("claim_lease_expires_at", { withTimezone: true }),
     processPid: integer("process_pid"),
     processGroupId: integer("process_group_id"),
     processStartedAt: timestamp("process_started_at", { withTimezone: true }),
@@ -77,6 +81,11 @@ export const heartbeatRuns = pgTable(
       table.companyId,
       table.status,
       table.processStartedAt,
+    ),
+    companyStatusClaimLeaseIdx: index("heartbeat_runs_company_status_claim_lease_idx").on(
+      table.companyId,
+      table.status,
+      table.claimLeaseExpiresAt,
     ),
   }),
 );

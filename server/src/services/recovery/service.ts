@@ -42,9 +42,12 @@ import {
   type IssueLivenessFinding,
 } from "./issue-graph-liveness.js";
 import { isAutomaticRecoverySuppressedByPauseHold } from "./pause-hold-guard.js";
+import {
+  EXECUTION_PATH_HEARTBEAT_RUN_STATUSES,
+  PENDING_WAKEUP_REQUEST_STATUSES,
+  isUnsuccessfulHeartbeatRunTerminalStatus,
+} from "../execution-kernel/status.js";
 
-const EXECUTION_PATH_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"] as const;
-const UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES = ["failed", "cancelled", "timed_out"] as const;
 export const ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS = 60 * 60 * 1000;
 export const ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 export const ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS = 30 * 60 * 1000;
@@ -129,9 +132,7 @@ function didAutomaticRecoveryFail(
   const latestContext = parseObject(latestRun.contextSnapshot);
   const latestRetryReason = readNonEmptyString(latestContext.retryReason);
   return latestRetryReason === expectedRetryReason &&
-    UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES.includes(
-      latestRun.status as (typeof UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES)[number],
-    );
+    isUnsuccessfulHeartbeatRunTerminalStatus(latestRun.status);
 }
 
 function issueIdFromRunContext(contextSnapshot: unknown) {
@@ -1462,6 +1463,10 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
           result.skipped += 1;
           continue;
         }
+        if (latestRun.status === "cancelled") {
+          result.skipped += 1;
+          continue;
+        }
 
         if (didAutomaticRecoveryFail(latestRun, "assignment_recovery")) {
           const failureSummary = summarizeRunFailureForIssueComment(latestRun);
@@ -1501,6 +1506,10 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       }
 
       if (!latestRun && !issue.checkoutRunId && !issue.executionRunId) {
+        result.skipped += 1;
+        continue;
+      }
+      if (latestRun?.status === "cancelled") {
         result.skipped += 1;
         continue;
       }
@@ -1635,7 +1644,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
           payload: agentWakeupRequests.payload,
         })
         .from(agentWakeupRequests)
-        .where(inArray(agentWakeupRequests.status, ["queued", "deferred_issue_execution"])),
+        .where(inArray(agentWakeupRequests.status, PENDING_WAKEUP_REQUEST_STATUSES)),
       db
         .select({
           companyId: issueThreadInteractions.companyId,
