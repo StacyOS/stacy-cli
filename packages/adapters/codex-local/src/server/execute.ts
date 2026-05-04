@@ -51,6 +51,7 @@ const CODEX_TRUST_SURFACE_NOISE_RES = [
   /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core_plugins::loader:\s+failed to load plugin:\s+plugin is not installed\s+plugin=.+$/i,
   /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core_plugins::manifest:\s+ignoring interface\.defaultPrompt.+$/i,
   /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core::plugins::manager:\s+ignoring remote plugins missing from local marketplace.+$/i,
+  /^\d{4}-\d{2}-\d{2}T[^\s]+\s+WARN\s+codex_core_skills::loader:\s+ignoring interface\.icon_(?:small|large): icon path must not contain '\.\.'$/i,
   /^\d{4}-\d{2}-\d{2}T[^\s]+\s+ERROR\s+codex_core::session:\s+failed to record rollout items:\s+thread\s+[a-z0-9-]+\s+not found$/i,
 ] as const;
 

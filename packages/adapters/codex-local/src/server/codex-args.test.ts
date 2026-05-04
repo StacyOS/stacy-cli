@@ -16,6 +16,7 @@ describe("buildCodexExecArgs", () => {
       "--search",
       "exec",
       "--json",
+      "--skip-git-repo-check",
       "--model",
       "gpt-5.4",
       "-c",
@@ -38,6 +39,7 @@ describe("buildCodexExecArgs", () => {
     expect(result.args).toEqual([
       "exec",
       "--json",
+      "--skip-git-repo-check",
       "--model",
       "gpt-5.5",
       "-c",
@@ -62,8 +64,21 @@ describe("buildCodexExecArgs", () => {
     expect(result.args).toEqual([
       "exec",
       "--json",
+      "--skip-git-repo-check",
       "--model",
       "gpt-5.3-codex",
+      "-",
+    ]);
+  });
+
+  it("lets advanced users opt back into Codex git repo trust checks", () => {
+    const result = buildCodexExecArgs({
+      skipGitRepoCheck: false,
+    });
+
+    expect(result.args).toEqual([
+      "exec",
+      "--json",
       "-",
     ]);
   });

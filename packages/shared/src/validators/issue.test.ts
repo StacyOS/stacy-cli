@@ -44,6 +44,15 @@ describe("issue validators", () => {
     expect(parsed.comment).toBe("Done\n\n- Verified the route");
   });
 
+  it("accepts agent issue update comment objects", () => {
+    const parsed = updateIssueSchema.parse({
+      status: "done",
+      comment: { body: "Done\\n\\nBuilt and verified the app." },
+    });
+
+    expect(parsed.comment).toBe("Done\n\nBuilt and verified the app.");
+  });
+
   it("normalizes escaped line breaks in issue comment bodies", () => {
     const parsed = addIssueCommentSchema.parse({
       body: "Progress update\\r\\n\\r\\nNext action.",

@@ -45,11 +45,15 @@ export function buildCodexExecArgs(
     record.dangerouslyBypassApprovalsAndSandbox,
     asBoolean(record.dangerouslyBypassSandbox, false),
   );
+  const skipGitRepoCheck = asBoolean(record.skipGitRepoCheck, true);
   const extraArgs = readExtraArgs(record);
 
   const args = ["exec", "--json"];
   if (search) args.unshift("--search");
   if (bypass) args.push("--dangerously-bypass-approvals-and-sandbox");
+  if (skipGitRepoCheck && !extraArgs.includes("--skip-git-repo-check")) {
+    args.push("--skip-git-repo-check");
+  }
   if (model) args.push("--model", model);
   if (modelReasoningEffort) {
     args.push("-c", `model_reasoning_effort=${JSON.stringify(modelReasoningEffort)}`);

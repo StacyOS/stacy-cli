@@ -167,9 +167,16 @@ export const createIssueLabelSchema = z.object({
 
 export type CreateIssueLabel = z.infer<typeof createIssueLabelSchema>;
 
+const issueUpdateCommentSchema = z.preprocess((value) => {
+  if (value && typeof value === "object" && !Array.isArray(value) && "body" in value) {
+    return (value as { body?: unknown }).body;
+  }
+  return value;
+}, multilineTextSchema.pipe(z.string().min(1)));
+
 export const updateIssueSchema = createIssueSchema.partial().extend({
   assigneeAgentId: z.string().trim().min(1).optional().nullable(),
-  comment: multilineTextSchema.pipe(z.string().min(1)).optional(),
+  comment: issueUpdateCommentSchema.optional(),
   reviewRequest: issueReviewRequestSchema.optional().nullable(),
   reopen: z.boolean().optional(),
   resume: z.boolean().optional(),
