@@ -361,6 +361,12 @@ require_npm_package_publish_access() {
       node - "$current_user" "$maintainers_json" <<'NODE'
 const currentUser = process.argv[2];
 const maintainers = JSON.parse(process.argv[3]);
+
+if (maintainers?.error?.code === "E404") {
+  process.stdout.write("missing");
+  process.exit(0);
+}
+
 const entries = Array.isArray(maintainers) ? maintainers : [maintainers];
 const names = entries
   .map((entry) => {
@@ -372,6 +378,10 @@ const names = entries
 process.stdout.write(names.includes(currentUser) ? "yes" : "no");
 NODE
     )"
+
+    if [ "$can_publish" = "missing" ]; then
+      continue
+    fi
 
     if [ "$can_publish" != "yes" ]; then
       missing_access+=("$package_name")
