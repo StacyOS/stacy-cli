@@ -55,6 +55,7 @@
     "smoke:claude-local-preflight": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts --preflight claude",
     "smoke:phase4-local-adapters-preflight": "node cli/node_modules/tsx/dist/cli.mjs scripts/smoke/local-adapter-real-smoke.ts --preflight codex claude",
     "qa:todo-app-e2e": "node scripts/qa/todo-app-e2e.mjs",
+    "qa:complex-app-e2e": "node scripts/qa/complex-app-e2e.mjs",
     "test:e2e": "npx playwright test --config tests/e2e/playwright.config.ts",
     "test:e2e:headed": "npx playwright test --config tests/e2e/playwright.config.ts --headed",
     "test:e2e:multiuser-authenticated": "npx playwright test --config tests/e2e/playwright-multiuser-authenticated.config.ts",
