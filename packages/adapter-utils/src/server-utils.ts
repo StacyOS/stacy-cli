@@ -1484,7 +1484,7 @@ export async function runChildProcess(
     // Strip Claude Code nesting-guard env vars so spawned `claude` processes
     // don't refuse to start with "cannot be launched inside another session".
     // These vars leak in when the Stacy server itself is started from
-    // within a Claude Code session (e.g. `npx stacy-cli run` in a terminal
+    // within a Claude Code session (e.g. `npx stacy-cli@latest run` in a terminal
     // owned by Claude Code) or when cron inherits a contaminated shell env.
     const CLAUDE_CODE_NESTING_VARS = [
       "CLAUDECODE",

@@ -9,7 +9,7 @@ restore it, and upgrade it without spelunking through source code.
 A fresh operator can:
 
 - run Stacy locally with `pnpm stacy onboard --yes` or the public
-  `npx stacy-cli onboard`
+  `npx stacy-cli@latest onboard`
 - run `pnpm stacy doctor --repair --yes` and understand what is unsafe
 - run non-billable Codex/Claude adapter preflights before real agent work
 - create and restore a database backup through documented CLI commands
@@ -244,30 +244,25 @@ stacy
 The package-name decision is documented in
 `docs/stacy/PUBLIC-CLI-PACKAGING.md`. The safe Phase 5 bridge is to publish the
 Stacy core under `@arpanstacy/stacy` and publish the `stacy-cli` wrapper package
-for `npx stacy-cli onboard`.
+for `npx stacy-cli@latest onboard`.
 
 The current registry check shows `stacy` is already taken, so the exact
 `npx stacy onboard` vanity package must not be published unless ownership is
 transferred or an owner-approved wrapper plan exists.
 
-## Remaining Phase 5 Targets
+## Public Release Status
 
-- Publish the next stable core package first, then publish the matching
-  `stacy-cli` wrapper. For the May 1, 2026 cleanup branch, the next stable
-  version computed by `./scripts/release.sh stable --date 2026-05-01 --print-version`
-  is `2026.501.0`.
-- The already prepared reserved-name correction remains unpublished. The final
-  public cleanup release should use the next stable core version and a matching
-  `stacy-cli` wrapper.
-- The reserved `stacy-cli@0.3.1` package points at the old core package and
-  should not be announced. Deprecate it after the corrected wrapper is live.
-- Run `pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-core 2026.501.0`
-  after the May 1 stable release.
-- The May 1 stable workspace release is now blocked only on publishing the
-  Stacy-owned package graph under `@arpanstacy/*`, then publishing/deprecating
-  the wrapper with npm auth via OTP or a granular publish token with 2FA bypass.
-- Keep `stacy` as a future vanity-package migration only if ownership is
-  transferred or approved.
+- Published the Stacy-owned package graph under `@arpanstacy/*` at
+  `2026.501.0`.
+- Published the matching public wrapper, `stacy-cli@2026.501.0`.
+- Confirmed the wrapper with
+  `pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-core 2026.501.0`.
+- Deprecated the old reserved package version, `stacy-cli@0.3.1`.
+- Created the local release tag `v2026.501.0`.
 
-Before a public release, repeat `pnpm smoke:docker-quickstart` from a fresh
-clone or clean host when cutting the final release artifact.
+Keep `stacy` as a future vanity-package migration only if ownership is
+transferred or approved. The public install path for this release is
+`npx stacy-cli@latest onboard`.
+
+Before the next public release, repeat `pnpm smoke:docker-quickstart` from a
+fresh clone or clean host when cutting the final release artifact.

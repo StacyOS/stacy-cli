@@ -203,7 +203,7 @@ These are deferred until the execution kernel earns trust.
 
 Stacy needs a clean install path before it is a product:
 
-- `npx stacy onboard`
+- `npx stacy-cli@latest onboard`
 - Docker image with persistent `/stacy`
 - Docker quickstart smoke:
   - `pnpm smoke:docker-quickstart`
