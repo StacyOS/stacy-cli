@@ -16,7 +16,7 @@ binary:  stacy
 This means an installed package exposes the Stacy command:
 
 ```bash
-npx stacy-cli onboard
+npx stacy-cli@latest onboard
 stacy onboard
 ```
 
@@ -36,13 +36,13 @@ binary:  stacy
 That gives new users:
 
 ```bash
-npx stacy-cli onboard
+npx stacy-cli@latest onboard
 ```
 
-The package name is now reserved by the `arpanstacy` npm account. The first
-published version, `stacy-cli@0.3.1`, should not be announced because it pointed
-at the old core package. The corrected release target should wrap the matching
-published `@arpanstacy/stacy` version.
+The package name is now owned by the `arpanstacy` npm account. The first
+published version, `stacy-cli@0.3.1`, was deprecated because it pointed at the
+old core package. The corrected public release is `stacy-cli@2026.501.0`, which
+wraps the matching `@arpanstacy/stacy@2026.501.0` core package.
 
 As of May 4, 2026, the old package namespace is no longer part of the release
 plan. The full workspace stable release publishes under the `@arpanstacy/*`
@@ -61,9 +61,9 @@ public registry at version `2.0.0` and is owned by `levahim`. That means Stacy
 cannot safely publish the main CLI under `stacy` unless ownership is transferred
 or an approved wrapper/package-name plan is made.
 
-As of April 30, 2026, the npm package names `stacy-cli` and `stacycli` are
-available. We are using `stacy-cli` because it is more readable and matches npm
-package naming conventions.
+As of April 30, 2026, the npm package names `stacy-cli` and `stacycli` were
+available. We reserved and published `stacy-cli` because it is more readable and
+matches npm package naming conventions.
 
 There are now two package lanes:
 
@@ -85,6 +85,7 @@ Before shipping a public `stacy-cli` package:
 - keep only the `stacy` binary in the public CLI bundle
 - include the package-name decision in `releases/v<version>.md`
 - run the release notes, upgrade preflight, and Docker quickstart smoke gates
+- run `pnpm smoke:stacy-cli-npm -- --version <version> --expected-core <version>`
 
 Do not publish a new package name from local assumptions alone. The npm
 namespace check must happen during release prep.

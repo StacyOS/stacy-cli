@@ -3,13 +3,13 @@
   "version": "0.3.1",
   "description": "Prebuilt Stacy board UI assets.",
   "license": "MIT",
-  "homepage": "https://github.com/arpanstacy/stacy",
+  "homepage": "https://github.com/StacyOS/stacy-cli",
   "bugs": {
-    "url": "https://github.com/arpanstacy/stacy/issues"
+    "url": "https://github.com/StacyOS/stacy-cli/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/arpanstacy/stacy",
+    "url": "https://github.com/StacyOS/stacy-cli",
     "directory": "ui"
   },
   "type": "module",

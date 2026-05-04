@@ -1,15 +1,22 @@
 # stacy-cli
 
-Public Stacy CLI wrapper.
+Public npm entrypoint for Stacy.
 
-This package provides the `stacy` binary for the published Stacy core package.
-It exists so new operators can start Stacy with a short public npm command.
+`stacy-cli` installs the `stacy` binary and wraps the matching
+`@arpanstacy/stacy` core package. Use it when you want to start Stacy from npm
+without cloning the repository.
 
 ```bash
-npx stacy-cli onboard
+npx stacy-cli@latest onboard --yes
+npx stacy-cli@latest run
 ```
 
-The wrapper version should match the wrapped `@arpanstacy/stacy` version after
-it is published. Inside the monorepo the dependency uses `workspace:*`; the
-release helper stages the npm payload with the matching released Stacy core
-version.
+Useful checks:
+
+```bash
+npx stacy-cli@latest --version
+npx stacy-cli@latest doctor --repair --yes
+```
+
+Inside the monorepo, the dependency uses `workspace:*`. The release helper
+stages the npm payload with the matching released Stacy core version.

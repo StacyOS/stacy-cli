@@ -1,134 +1,88 @@
 # Stacy
 
-Stacy is a trust-first AI company control plane built from the MIT-licensed
-Stacy codebase.
+Stacy is a trust-first control plane for assigning, supervising, and auditing
+AI agents.
 
-The product direction is deliberately narrower than the upstream project:
-Stacy should feel like Linear plus GitHub Actions plus an agent runtime console.
-The goal is not maximum autonomy on day one. The goal is that an operator can
-leave agents running overnight and still answer:
+It is built for operators who need more than a chat box: every agent has an
+owner, a budget, a workspace, a run history, logs, approvals, and a visible stop
+button. The first product promise is simple: you should know what each agent is
+doing, what it changed, what it cost, and whether it touched anything risky.
 
-- What is every agent doing?
-- What changed?
-- What did it cost?
-- Can I stop it?
-- Did it touch secrets or risky systems?
+![Stacy product cockpit](docs/images/stacy-product-screenshot-dark.png)
 
-## Product Principles
+## Quick Start
 
-1. Reliability before breadth.
-2. Safe execution before more adapters.
-3. Clear task ownership before fancy org charts.
-4. Auditability before autonomy.
-5. Fast local setup before cloud complexity.
-
-## What Stacy Keeps
-
-Stacy keeps the useful control-plane foundation:
-
-```text
-React UI + CLI
-      |
-Node/TypeScript API
-      |
-Postgres domain model
-      |
-Heartbeat/run queue
-      |
-Agent adapter layer
-      |
-Codex / Claude / HTTP / process runtimes
-```
-
-The durable product concepts remain: companies, agents, goals, issues,
-workspaces, runs, logs, costs, approvals, and live updates.
-
-## What Stacy Changes
-
-Stacy narrows the product around a safer execution kernel:
-
-```text
-Stacy UI / CLI
-      |
-API Gateway + Auth
-      |
-Domain API
-      |
-Postgres
-      |
-Outbox + Job Queue
-      |
-Run Orchestrator
-      |
-Sandboxed Worker
-      |
-Agent Adapter
-      |
-Codex / Claude / HTTP
-```
-
-The first version prioritizes:
-
-- Company dashboard
-- Agents with roles, budgets, permissions, and adapter config
-- Projects connected to repos/workspaces
-- Issues/tasks with parent-child structure
-- One-click assignment to an agent
-- Run timeline with live logs
-- Cost tracking per agent/task/project
-- Approval gates before risky actions
-- Pause/cancel/kill switch everywhere
-- Local Codex and Claude adapters
-- Git worktree isolation per task
-- Secrets broker with redaction
-- Docker/local sandbox mode by default
-
-## Deferred On Purpose
-
-These are intentionally not v1:
-
-- Full plugin marketplace
-- Dozens of adapters
-- Complex autonomous org self-restructuring
-- CEO chat
-- Mobile app
-- Cloud multi-region deployment
-- Sophisticated company template marketplace
-
-## Development
-
-This repository is past the first fork-and-stabilize pass and is now hardening
-the execution kernel. The public package graph is Stacy-owned under the
-`@arpanstacy/*` npm scope and no longer depends on the Stacy package names.
+Run Stacy from npm:
 
 ```bash
-pnpm install
-pnpm dev
+npx stacy-cli@latest onboard --yes
+npx stacy-cli@latest run
 ```
 
-The Stacy CLI is available locally through the workspace script:
+The npm package is `stacy-cli`; it exposes the `stacy` command when installed.
+Inside a cloned repository, use the workspace shortcut:
 
 ```bash
 pnpm stacy onboard --yes
 pnpm stacy run
 ```
 
-For published installs, use the public wrapper package:
+Stacy starts the local UI and API at
+[http://localhost:3100](http://localhost:3100).
+
+## What You Get
+
+- Company dashboard for agents, tasks, runs, approvals, spend, and risk
+- Agents with roles, budgets, permissions, and adapter configuration
+- Projects connected to local repos and workspaces
+- Issues and tasks with parent-child structure
+- One-click assignment to Codex, Claude, and other local adapters
+- Live run timeline with logs, status, retries, and cancellation
+- Cost tracking per agent, task, project, and run
+- Approval gates before risky actions
+- Git worktree isolation per task
+- Secrets redaction and local sandbox defaults
+- Backup, restore, upgrade, and Docker self-hosting guides
+
+## Core Workflow
+
+1. Create a company.
+2. Connect a project or workspace.
+3. Add a Codex or Claude agent with budgets and permissions.
+4. Assign a task.
+5. Watch the live run, inspect logs, and cancel when needed.
+6. Review cost, risk, and output before marking the task done.
+
+The product should feel like Linear plus GitHub Actions plus an agent runtime
+console. Stacy keeps autonomy visible, interruptible, and auditable.
+
+## Local Development
+
+Prerequisites: Node.js 20+ and pnpm 9+.
 
 ```bash
-npx stacy-cli onboard
+pnpm install
+pnpm dev
 ```
 
-## Architecture
+Useful local commands:
 
-Read `docs/stacy/ARCHITECTURE.md` for the Stacy system design and
-`docs/stacy/PHASE-1.md`, `docs/stacy/PHASE-2.md`,
-`docs/stacy/PHASE-3.md`, `docs/stacy/PHASE-4.md`, and
-`docs/stacy/PHASE-5.md` for implementation closeouts.
-Self-hosted backup, restore, Docker smoke, and upgrade steps are in
-`docs/stacy/SELF-HOSTED-OPERATIONS.md`.
+```bash
+pnpm stacy onboard --yes
+pnpm stacy doctor --repair --yes
+pnpm stacy db:backup
+pnpm stacy upgrade:check
+```
 
-## Attribution
+## Documentation
 
-Stacy is an MIT-licensed fork. The original license and copyright notice are
-preserved in `LICENSE`.
+- [Quickstart](docs/start/quickstart.md)
+- [What is Stacy?](docs/start/what-is-stacy.md)
+- [Architecture](docs/stacy/ARCHITECTURE.md)
+- [Self-hosted operations](docs/stacy/SELF-HOSTED-OPERATIONS.md)
+- [Public CLI packaging](docs/stacy/PUBLIC-CLI-PACKAGING.md)
+- [Phase 5 release notes](docs/stacy/PHASE-5.md)
+
+## License
+
+Stacy is released under the MIT license. See [LICENSE](LICENSE).

@@ -20,6 +20,14 @@ const config: StorybookConfig = {
   viteFinal: async (baseConfig) =>
     mergeConfig(baseConfig, {
       plugins: [tailwindcss()],
+      build: {
+        target: "es2022",
+      },
+      optimizeDeps: {
+        esbuildOptions: {
+          target: "es2022",
+        },
+      },
       resolve: {
         alias: {
           "@": path.resolve(storybookConfigDir, "../../src"),
