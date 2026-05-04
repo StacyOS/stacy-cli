@@ -32,6 +32,11 @@ configure_npm_token_auth() {
   local userconfig_path
 
   [ -n "$token" ] || return 0
+  case "$token" in
+    \<*|\>*|*\<*|*\>*)
+      release_fail "NPM_TOKEN/NODE_AUTH_TOKEN must be the raw npm token value, without angle brackets."
+      ;;
+  esac
   [ -z "$userconfig" ] || return 0
 
   RELEASE_TEMP_NPM_USERCONFIG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/stacy-npm-userconfig.XXXXXX")"
@@ -326,6 +331,62 @@ require_npm_publish_auth() {
   fi
 
   release_fail "npm publish auth is not available. Use 'npm login' locally or run from GitHub Actions with trusted publishing."
+}
+
+npm_current_user() {
+  npm whoami 2>/dev/null | tr -d '[:space:]'
+}
+
+require_npm_package_publish_access() {
+  local dry_run="$1"
+  shift
+
+  local current_user package_name maintainers_json can_publish missing_access
+
+  if [ "$dry_run" = true ]; then
+    return
+  fi
+
+  current_user="$(npm_current_user)"
+  if [ -z "$current_user" ]; then
+    return
+  fi
+
+  missing_access=()
+  for package_name in "$@"; do
+    maintainers_json="$(npm view "$package_name" maintainers --json 2>/dev/null || true)"
+    [ -n "$maintainers_json" ] || continue
+
+    can_publish="$(
+      node - "$current_user" "$maintainers_json" <<'NODE'
+const currentUser = process.argv[2];
+const maintainers = JSON.parse(process.argv[3]);
+const entries = Array.isArray(maintainers) ? maintainers : [maintainers];
+const names = entries
+  .map((entry) => {
+    if (typeof entry === "string") return entry.split(/\s+/)[0];
+    if (entry && typeof entry === "object") return entry.name;
+    return "";
+  })
+  .filter(Boolean);
+process.stdout.write(names.includes(currentUser) ? "yes" : "no");
+NODE
+    )"
+
+    if [ "$can_publish" != "yes" ]; then
+      missing_access+=("$package_name")
+    fi
+  done
+
+  if [ "${#missing_access[@]}" -gt 0 ]; then
+    {
+      echo "Error: npm user $current_user does not appear to have publish access to:"
+      printf '  - %s\n' "${missing_access[@]}"
+      echo
+      echo "Ask an existing npm package owner to add $current_user as a maintainer, or run this release with a token/user that has write access to the paperclipai packages."
+    } >&2
+    exit 1
+  fi
 }
 
 list_public_package_info() {

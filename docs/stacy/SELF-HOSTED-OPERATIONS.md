@@ -97,6 +97,9 @@ Before tagging a Stacy release:
   bypass for the stable release script; the script writes only an
   environment-variable reference to a temporary npm userconfig and removes it on
   exit
+- The npm user or token must have write access to every package in the release,
+  including `paperclipai` and the publishable `@paperclipai/*` packages. The
+  stable release script preflights package maintainership before publishing.
 - `pnpm release:phase5-gate` to run the distribution gate and show whether the
   wrapper publish is complete or still npm-auth gated
 - `pnpm release:package-name` to confirm the `stacy-cli` package target

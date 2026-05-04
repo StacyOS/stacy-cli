@@ -123,6 +123,11 @@ A fresh operator can:
   `pnpm release:stacy-cli -- --publish --deprecate-old 0.3.1`; npm stopped the
   publish with `EOTP`, so the corrected package and deprecation remain gated by
   a fresh OTP or granular token with 2FA bypass.
+- Attempted the May 1, 2026 stable workspace release on May 4, 2026 with a
+  granular token. Auth succeeded, but npm rejected the first scoped package with
+  `E404` because `arpanstacy` owns `stacy-cli` but is not a maintainer of
+  `paperclipai` or the `@paperclipai/*` packages. The release script now
+  preflights package maintainership before doing the build/publish work.
 
 ## Operator Backup And Restore
 
@@ -238,8 +243,12 @@ transferred or an owner-approved wrapper plan exists.
   after publishing the `2026.428.0` correction, or use
   `pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-paperclip 2026.501.0`
   after the May 1 stable release.
-- The live wrapper publish and `0.3.1` deprecation are currently blocked only on
-  npm OTP or a granular publish token with 2FA bypass.
+- The May 1 stable workspace release is blocked on npm package ownership:
+  `arpanstacy` must be added as a maintainer for `paperclipai` and the
+  publishable `@paperclipai/*` packages, or the release must run under an owner
+  token with write access. After the core package is live, the wrapper publish
+  and `0.3.1` deprecation still need npm auth via OTP or a granular publish
+  token with 2FA bypass.
 - Keep `stacy` as a future vanity-package migration only if ownership is
   transferred or approved.
 

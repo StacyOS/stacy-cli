@@ -92,6 +92,9 @@ function commandEnv() {
 
   const hasUserConfig = Boolean(env.npm_config_userconfig || env.NPM_CONFIG_USERCONFIG);
   const token = env.NPM_TOKEN || env.NODE_AUTH_TOKEN || "";
+  if (/[<>]/.test(token)) {
+    throw new Error("NPM_TOKEN/NODE_AUTH_TOKEN must be the raw npm token value, without angle brackets.");
+  }
   if (token && !hasUserConfig) {
     tempNpmUserConfigDir ||= mkdtempSync(path.join(os.tmpdir(), "stacy-npm-userconfig-"));
     const userConfigPath = path.join(tempNpmUserConfigDir, ".npmrc");

@@ -158,6 +158,7 @@ NOTES_FILE="$(release_notes_file "$TARGET_STABLE_VERSION")"
 require_clean_worktree
 configure_npm_token_auth
 require_npm_publish_auth "$dry_run"
+require_npm_package_publish_access "$dry_run" "${PUBLIC_PACKAGE_NAMES[@]}"
 
 if [ "$channel" = "stable" ] && [ ! -f "$NOTES_FILE" ]; then
   release_fail "stable release notes file is required at $NOTES_FILE before publishing stable. Create it with: pnpm release:notes -- --version $TARGET_STABLE_VERSION"

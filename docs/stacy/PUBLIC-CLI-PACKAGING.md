@@ -48,6 +48,12 @@ the old `paperclipai@0.3.1` package. The corrected release target is
 newer public-readiness changes, cut the next stable `paperclipai` release first,
 then publish the same version of `stacy-cli`.
 
+As of May 4, 2026, `arpanstacy` owns `stacy-cli` but does not have publish
+access to `paperclipai` or the `@paperclipai/*` packages. A full workspace
+stable release needs the existing npm package owner to add `arpanstacy` as a
+maintainer, or it must run with an owner token that has write access to those
+packages.
+
 ## Target End State
 
 The ideal public vanity command remains:
@@ -130,6 +136,7 @@ pnpm release:stacy-cli:publish -- --otp <code>
 
 `pnpm release:stacy-cli` is a dry-run and can run without npm auth. Real publish
 and deprecation still require a fresh OTP or a granular token with 2FA bypass.
+Pass the raw token value only; do not wrap it in angle brackets.
 
 When the stable release script publishes the wrapper as part of the full
 workspace release, deprecate the reserved wrapper separately:
