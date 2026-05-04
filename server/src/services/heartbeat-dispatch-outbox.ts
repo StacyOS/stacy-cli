@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
-import { heartbeatDispatchOutbox } from "@paperclipai/db";
-import type { DashboardDispatchQueueSummary } from "@paperclipai/shared";
+import type { Db } from "@arpanstacy/stacy-db";
+import { heartbeatDispatchOutbox } from "@arpanstacy/stacy-db";
+import type { DashboardDispatchQueueSummary } from "@arpanstacy/stacy-shared";
 
 export type HeartbeatDispatchOutboxRow = typeof heartbeatDispatchOutbox.$inferSelect;
 

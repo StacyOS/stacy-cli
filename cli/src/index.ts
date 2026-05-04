@@ -20,7 +20,7 @@ import { registerDashboardCommands } from "./commands/client/dashboard.js";
 import { registerRoutineCommands } from "./commands/routines.js";
 import { registerFeedbackCommands } from "./commands/client/feedback.js";
 import { applyDataDirOverride, type DataDirOptionLike } from "./config/data-dir.js";
-import { loadPaperclipEnvFile } from "./config/env.js";
+import { loadStacyEnvFile } from "./config/env.js";
 import { initTelemetryFromConfigFile, flushTelemetry } from "./telemetry.js";
 import { registerWorktreeCommands } from "./commands/worktree.js";
 import { registerPluginCommands } from "./commands/client/plugin.js";
@@ -31,7 +31,7 @@ import { applyStacyEnvAliases } from "./config/env-aliases.js";
 const program = new Command();
 applyStacyEnvAliases();
 const DATA_DIR_OPTION_HELP =
-  "Stacy data directory root (isolates state from ~/.paperclip)";
+  "Stacy data directory root (isolates state from ~/.stacy)";
 
 program
   .name("stacy")
@@ -45,7 +45,7 @@ program.hook("preAction", (_thisCommand, actionCommand) => {
     hasConfigOption: optionNames.has("config"),
     hasContextOption: optionNames.has("context"),
   });
-  loadPaperclipEnvFile(options.config);
+  loadStacyEnvFile(options.config);
   initTelemetryFromConfigFile(options.config);
 });
 

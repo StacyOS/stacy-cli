@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Agent } from "@paperclipai/shared";
+import type { Agent } from "@arpanstacy/stacy-shared";
 import {
   buildAssistantPartsFromTranscript,
   buildIssueChatMessages,
@@ -173,7 +173,7 @@ describe("buildAssistantPartsFromTranscript", () => {
         ts: "2026-04-06T12:00:01.000Z",
         name: "search",
         toolUseId: "tool-1",
-        input: { query: "paperclip" },
+        input: { query: "stacy" },
       },
       {
         kind: "tool_result",

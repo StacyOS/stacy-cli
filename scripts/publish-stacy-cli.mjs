@@ -9,6 +9,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const packageDir = path.join(repoRoot, "packages", "stacy-cli");
 const packagePath = path.join(packageDir, "package.json");
 const npmCache = process.env.npm_config_cache || path.join(os.tmpdir(), "stacy-npm-cache");
+const CORE_PACKAGE_NAME = "@arpanstacy/stacy";
 let tempNpmUserConfigDir = "";
 let tempPublishDir = "";
 
@@ -182,53 +183,59 @@ function packageDeprecatedMessage(packageName, version) {
   }
 }
 
-function printStatus(pkg, paperclipVersion) {
+function printStatus(pkg, coreVersion, coreIsLive) {
   const live = npmJson(
     ["view", "stacy-cli", "versions", "dist-tags", "dependencies", "--json"],
     "stacy-cli registry status",
   );
   const versions = Array.isArray(live?.versions) ? live.versions : [];
   const latest = live?.["dist-tags"]?.latest ?? "unknown";
-  const latestPaperclip = live?.dependencies?.paperclipai ?? "unknown";
+  const latestCore = live?.dependencies?.[CORE_PACKAGE_NAME] ?? "unknown";
   const targetIsLive = versions.includes(pkg.version);
   const oldVersion = "0.3.1";
   const oldIsLive = versions.includes(oldVersion);
   const oldDeprecated = oldIsLive ? packageDeprecatedMessage("stacy-cli", oldVersion) : "";
 
-  console.log(`local wrapper: stacy-cli@${pkg.version} -> paperclipai@${paperclipVersion}`);
-  console.log(`npm latest:    stacy-cli@${latest} -> paperclipai@${latestPaperclip}`);
+  console.log(`local wrapper: stacy-cli@${pkg.version} -> ${CORE_PACKAGE_NAME}@${coreVersion}`);
+  console.log(`local core:    ${CORE_PACKAGE_NAME}@${coreVersion} ${coreIsLive ? "live" : "not live yet"}`);
+  console.log(`npm latest:    stacy-cli@${latest} -> ${CORE_PACKAGE_NAME}@${latestCore}`);
   console.log(`target live:   ${targetIsLive ? "yes" : "no"}`);
   if (oldIsLive) {
     console.log(`old wrapper:   stacy-cli@${oldVersion} ${oldDeprecated ? "deprecated" : "active"}`);
   }
 
   if (targetIsLive) {
-    console.log(`next smoke:    pnpm smoke:stacy-cli-npm -- --version ${pkg.version} --expected-paperclip ${paperclipVersion}`);
+    console.log(`next smoke:    pnpm smoke:stacy-cli-npm -- --version ${pkg.version} --expected-core ${coreVersion}`);
     if (!oldDeprecated && oldVersion !== pkg.version) {
       console.log(`next deprecate: pnpm release:stacy-cli:deprecate-old -- --replacement-version ${pkg.version} --otp <code>`);
       console.log("token path:    set NPM_TOKEN or NODE_AUTH_TOKEN, then run pnpm release:stacy-cli:deprecate-old");
     }
   } else {
-    console.log("next publish:  pnpm release:stacy-cli:publish -- --otp <code>");
-    console.log("token path:    set NPM_TOKEN or NODE_AUTH_TOKEN, then run pnpm release:stacy-cli:publish");
+    if (coreIsLive) {
+      console.log("next publish:  pnpm release:stacy-cli:publish -- --otp <code>");
+      console.log("token path:    set NPM_TOKEN or NODE_AUTH_TOKEN, then run pnpm release:stacy-cli:publish");
+    } else {
+      console.log(`next core:     publish ${CORE_PACKAGE_NAME}@${coreVersion} first`);
+      console.log("next publish:  run the wrapper publish after the matching core is live");
+    }
   }
 }
 
-function resolvePaperclipPublishVersion(pkg) {
-  const paperclipVersion = pkg.dependencies?.paperclipai;
-  if (!paperclipVersion || typeof paperclipVersion !== "string") {
-    throw new Error("stacy-cli must depend on paperclipai.");
+function resolveCorePublishVersion(pkg) {
+  const coreVersion = pkg.dependencies?.[CORE_PACKAGE_NAME];
+  if (!coreVersion || typeof coreVersion !== "string") {
+    throw new Error(`stacy-cli must depend on ${CORE_PACKAGE_NAME}.`);
   }
-  if (paperclipVersion.startsWith("workspace:")) {
+  if (coreVersion.startsWith("workspace:")) {
     return pkg.version;
   }
-  if (paperclipVersion !== pkg.version) {
-    throw new Error(`stacy-cli@${pkg.version} must wrap matching paperclipai@${pkg.version}; found ${paperclipVersion}.`);
+  if (coreVersion !== pkg.version) {
+    throw new Error(`stacy-cli@${pkg.version} must wrap matching ${CORE_PACKAGE_NAME}@${pkg.version}; found ${coreVersion}.`);
   }
-  return paperclipVersion;
+  return coreVersion;
 }
 
-function stagePublishPackage(pkg, paperclipVersion) {
+function stagePublishPackage(pkg, coreVersion) {
   tempPublishDir ||= mkdtempSync(path.join(os.tmpdir(), "stacy-cli-publish-"));
   cpSync(path.join(packageDir, "bin"), path.join(tempPublishDir, "bin"), { recursive: true });
   cpSync(path.join(packageDir, "README.md"), path.join(tempPublishDir, "README.md"));
@@ -237,7 +244,7 @@ function stagePublishPackage(pkg, paperclipVersion) {
     ...pkg,
     dependencies: {
       ...(pkg.dependencies ?? {}),
-      paperclipai: paperclipVersion,
+      [CORE_PACKAGE_NAME]: coreVersion,
     },
   };
   writeFileSync(path.join(tempPublishDir, "package.json"), `${JSON.stringify(publishPkg, null, 2)}\n`);
@@ -287,18 +294,11 @@ try {
   if (!pkg.version || typeof pkg.version !== "string") {
     throw new Error("packages/stacy-cli/package.json must define a string version.");
   }
-  const paperclipVersion = resolvePaperclipPublishVersion(pkg);
-
-  const paperclipResolved = npmJson(
-    ["view", `paperclipai@${paperclipVersion}`, "version", "--json"],
-    `paperclipai@${paperclipVersion}`,
-  );
-  if (paperclipResolved !== paperclipVersion) {
-    throw new Error(`paperclipai@${paperclipVersion} is not available on npm.`);
-  }
+  const coreVersion = resolveCorePublishVersion(pkg);
+  const coreIsLive = packageVersionExists(CORE_PACKAGE_NAME, coreVersion);
 
   if (options.status) {
-    printStatus(pkg, paperclipVersion);
+    printStatus(pkg, coreVersion, coreIsLive);
     console.log("PASS: stacy-cli release status checked.");
   } else {
     const requiresAuth = options.publish || Boolean(options.deprecateOld);
@@ -326,11 +326,17 @@ try {
       if (alreadyPublished) {
         console.log(`stacy-cli@${pkg.version} is already published; skipping publish.`);
       } else {
-        const publishDir = stagePublishPackage(pkg, paperclipVersion);
+        const publishDir = stagePublishPackage(pkg, coreVersion);
+        if (!coreIsLive) {
+          console.log(`NOTE: ${CORE_PACKAGE_NAME}@${coreVersion} is not live yet; dry-run can continue, but real publish is blocked until the matching core is available.`);
+        }
         console.log(`==> Dry-running stacy-cli@${pkg.version}`);
         run("npm", publishArgs(options, true), { cwd: publishDir, inherit: true, timeout: 120_000 });
 
         if (options.publish) {
+          if (!coreIsLive) {
+            throw new Error(`${CORE_PACKAGE_NAME}@${coreVersion} is not available on npm. Publish the matching core package before publishing stacy-cli@${pkg.version}.`);
+          }
           console.log(`==> Publishing stacy-cli@${pkg.version}`);
           try {
             run("npm", publishArgs(options, false), { cwd: publishDir, inherit: true, timeout: 120_000 });
@@ -352,8 +358,8 @@ try {
           "--",
           "--version",
           pkg.version,
-          "--expected-paperclip",
-          paperclipVersion,
+          "--expected-core",
+          coreVersion,
         ],
         { inherit: true, timeout: 240_000 },
       );

@@ -8,7 +8,7 @@ import {
   createDb,
   heartbeatDispatchOutbox,
   heartbeatRuns,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -32,7 +32,7 @@ describeEmbeddedPostgres("heartbeat dispatch outbox", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
 
   beforeAll(async () => {
-    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-dispatch-outbox-");
+    tempDb = await startEmbeddedPostgresTestDatabase("stacy-heartbeat-dispatch-outbox-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
 

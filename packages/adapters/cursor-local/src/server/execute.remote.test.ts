@@ -37,9 +37,9 @@ const {
   syncDirectoryToSsh: vi.fn(async () => undefined),
 }));
 
-vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/server-utils")>(
-    "@paperclipai/adapter-utils/server-utils",
+vi.mock("@arpanstacy/stacy-adapter-utils/server-utils", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/server-utils")>(
+    "@arpanstacy/stacy-adapter-utils/server-utils",
   );
   return {
     ...actual,
@@ -49,9 +49,9 @@ vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
   };
 });
 
-vi.mock("@paperclipai/adapter-utils/ssh", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/ssh")>(
-    "@paperclipai/adapter-utils/ssh",
+vi.mock("@arpanstacy/stacy-adapter-utils/ssh", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/ssh")>(
+    "@arpanstacy/stacy-adapter-utils/ssh",
   );
   return {
     ...actual,
@@ -77,7 +77,7 @@ describe("cursor remote execution", () => {
   });
 
   it("prepares the workspace, syncs Cursor skills, and restores workspace changes for remote SSH execution", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-cursor-remote-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -101,7 +101,7 @@ describe("cursor remote execution", () => {
         command: "agent",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -116,7 +116,7 @@ describe("cursor remote execution", () => {
           privateKey: "PRIVATE KEY",
           knownHosts: "[127.0.0.1]:2222 ssh-ed25519 AAAA",
           strictHostKeyChecking: true,
-          paperclipApiUrl: "http://198.51.100.10:3102",
+          stacyApiUrl: "http://198.51.100.10:3102",
         },
       },
       onLog: async () => {},
@@ -131,13 +131,13 @@ describe("cursor remote execution", () => {
         port: 2222,
         username: "fixture",
         remoteCwd: "/remote/workspace",
-        paperclipApiUrl: "http://198.51.100.10:3102",
+        stacyApiUrl: "http://198.51.100.10:3102",
       },
     });
     expect(prepareWorkspaceForSshExecution).toHaveBeenCalledTimes(1);
     expect(syncDirectoryToSsh).toHaveBeenCalledTimes(1);
     expect(syncDirectoryToSsh).toHaveBeenCalledWith(expect.objectContaining({
-      remoteDir: "/remote/workspace/.paperclip-runtime/cursor/skills",
+      remoteDir: "/remote/workspace/.stacy-runtime/cursor/skills",
       followSymlinks: true,
     }));
     expect(runSshCommand).toHaveBeenCalledWith(
@@ -150,13 +150,13 @@ describe("cursor remote execution", () => {
       | undefined;
     expect(call?.[2]).toContain("--workspace");
     expect(call?.[2]).toContain("/remote/workspace");
-    expect(call?.[3].env.PAPERCLIP_API_URL).toBe("http://198.51.100.10:3102");
+    expect(call?.[3].env.STACY_API_URL).toBe("http://198.51.100.10:3102");
     expect(call?.[3].remoteExecution?.remoteCwd).toBe("/remote/workspace");
     expect(restoreWorkspaceFromSshExecution).toHaveBeenCalledTimes(1);
   });
 
   it("resumes saved Cursor sessions for remote SSH execution only when the identity matches", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-resume-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-cursor-remote-resume-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -190,7 +190,7 @@ describe("cursor remote execution", () => {
         command: "agent",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -216,7 +216,7 @@ describe("cursor remote execution", () => {
   });
 
   it("restores the remote workspace if skills sync fails after workspace prep", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-cursor-remote-sync-fail-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-cursor-remote-sync-fail-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -241,7 +241,7 @@ describe("cursor remote execution", () => {
         command: "agent",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },

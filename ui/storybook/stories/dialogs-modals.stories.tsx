@@ -5,7 +5,7 @@ import type {
   ExecutionWorkspaceCloseReadiness,
   Goal,
   IssueAttachment,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { DocumentDiffModal } from "@/components/DocumentDiffModal";
@@ -28,17 +28,17 @@ import {
   storybookIssueLabels,
   storybookIssues,
   storybookProjects,
-} from "../fixtures/paperclipData";
+} from "../fixtures/stacyData";
 
 const COMPANY_ID = "company-storybook";
-const SELECTED_COMPANY_STORAGE_KEY = "paperclip.selectedCompanyId";
-const ISSUE_DRAFT_STORAGE_KEY = "paperclip:issue-draft";
+const SELECTED_COMPANY_STORAGE_KEY = "stacy.selectedCompanyId";
+const ISSUE_DRAFT_STORAGE_KEY = "stacy:issue-draft";
 
 const storybookGoals: Goal[] = [
   {
     id: "goal-company",
     companyId: COMPANY_ID,
-    title: "Build Paperclip",
+    title: "Build Stacy",
     description: "Make autonomous companies easier to run and govern.",
     level: "company",
     status: "active",
@@ -169,7 +169,7 @@ const closeReadinessReady: ExecutionWorkspaceCloseReadiness = {
       kind: "git_worktree_remove",
       label: "Remove git worktree",
       description: "Removes the issue worktree from the local worktree parent directory.",
-      command: "git worktree remove .paperclip/worktrees/PAP-1641-create-super-detailed-storybooks-for-our-project",
+      command: "git worktree remove .stacy/worktrees/PAP-1641-create-super-detailed-storybooks-for-our-project",
     },
     {
       kind: "archive_record",
@@ -182,8 +182,8 @@ const closeReadinessReady: ExecutionWorkspaceCloseReadiness = {
   isSharedWorkspace: false,
   isProjectPrimaryWorkspace: false,
   git: {
-    repoRoot: "/Users/dotta/paperclip",
-    workspacePath: "/Users/dotta/paperclip/.paperclip/worktrees/PAP-1641-create-super-detailed-storybooks-for-our-project",
+    repoRoot: "/Users/dotta/stacy",
+    workspacePath: "/Users/dotta/stacy/.stacy/worktrees/PAP-1641-create-super-detailed-storybooks-for-our-project",
     branchName: "PAP-1641-create-super-detailed-storybooks-for-our-project",
     baseRef: "master",
     hasDirtyTrackedFiles: true,
@@ -262,9 +262,9 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="paperclip-story__frame overflow-hidden">
+    <section className="stacy-story__frame overflow-hidden">
       <div className="border-b border-border px-5 py-4">
-        <div className="paperclip-story__label">{eyebrow}</div>
+        <div className="stacy-story__label">{eyebrow}</div>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold">{title}</h2>
@@ -281,8 +281,8 @@ function Section({
 
 function StoryShell({ children }: { children: ReactNode }) {
   return (
-    <div className="paperclip-story">
-      <main className="paperclip-story__inner space-y-6">{children}</main>
+    <div className="stacy-story">
+      <main className="stacy-story__inner space-y-6">{children}</main>
     </div>
   );
 }
@@ -358,7 +358,7 @@ function hydrateDialogQueries(queryClient: ReturnType<typeof useQueryClient>) {
         status: "active",
         user: {
           id: "user-board",
-          email: "riley@paperclip.local",
+          email: "riley@stacy.local",
           name: "Riley Board",
           image: null,
         },
@@ -572,8 +572,8 @@ function ProjectDialogOpener({ populated }: { populated?: boolean }) {
     if (!populated) return undefined;
     const timer = window.setTimeout(() => {
       fillFirstField("input[placeholder='Project name']", "Storybook review workspace");
-      fillFirstField("input[placeholder='https://github.com/org/repo']", "https://github.com/paperclipai/paperclip");
-      fillFirstField("input[placeholder='/absolute/path/to/workspace']", "/Users/dotta/paperclip/ui");
+      fillFirstField("input[placeholder='https://github.com/org/repo']", "https://github.com/arpanstacy/stacy");
+      fillFirstField("input[placeholder='/absolute/path/to/workspace']", "/Users/dotta/stacy/ui");
       fillFirstField("input[type='date']", "2026-04-30");
     }, 250);
     return () => window.clearTimeout(timer);
@@ -674,7 +674,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Open-state stories for Paperclip creation dialogs, workspace confirmations, document diffing, image attachments, and path helper modals.",
+          "Open-state stories for Stacy creation dialogs, workspace confirmations, document diffing, image attachments, and path helper modals.",
       },
     },
   },

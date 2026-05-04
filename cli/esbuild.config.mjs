@@ -1,7 +1,7 @@
 /**
- * esbuild configuration for building the paperclipai CLI for npm.
+ * esbuild configuration for building the Stacy CLI for npm.
  *
- * Bundles all workspace packages (@paperclipai/*) into a single file.
+ * Bundles all internal Stacy workspace packages into a single file.
  * External npm packages remain as regular dependencies.
  */
 
@@ -25,9 +25,9 @@ const workspacePaths = [
 ];
 
 // Workspace packages that should NOT be bundled — they'll be published
-// to npm and resolved at runtime (e.g. @paperclipai/server uses dynamic import).
+// to npm and resolved at runtime (e.g. @arpanstacy/stacy-server uses dynamic import).
 const externalWorkspacePackages = new Set([
-  "@paperclipai/server",
+  "@arpanstacy/stacy-server",
 ]);
 
 // Collect all external (non-workspace) npm package names
@@ -37,7 +37,7 @@ for (const p of workspacePaths) {
   for (const name of Object.keys(pkg.dependencies || {})) {
     if (externalWorkspacePackages.has(name)) {
       externals.add(name);
-    } else if (!name.startsWith("@paperclipai/")) {
+    } else if (!name.startsWith("@arpanstacy/stacy-")) {
       externals.add(name);
     }
   }

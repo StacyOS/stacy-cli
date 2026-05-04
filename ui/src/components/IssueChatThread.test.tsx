@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Agent } from "@paperclipai/shared";
+import type { Agent } from "@arpanstacy/stacy-shared";
 import {
   IssueChatThread,
   canStopIssueChatRun,
@@ -140,8 +140,8 @@ vi.mock("./IssueLinkQuicklook", () => ({
   ),
 }));
 
-vi.mock("../hooks/usePaperclipIssueRuntime", () => ({
-  usePaperclipIssueRuntime: () => ({}),
+vi.mock("../hooks/useStacyIssueRuntime", () => ({
+  useStacyIssueRuntime: () => ({}),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -728,7 +728,7 @@ describe("IssueChatThread", () => {
     });
   });
 
-  it("renders the transcript directly from stable Paperclip messages", () => {
+  it("renders the transcript directly from stable Stacy messages", () => {
     const root = createRoot(container);
 
     act(() => {

@@ -2,14 +2,14 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { getPostgresDataDirectory, inspectMigrations, type MigrationState } from "@paperclipai/db";
+import { getPostgresDataDirectory, inspectMigrations, type MigrationState } from "@arpanstacy/stacy-db";
 import {
   expandHomePrefix,
   resolveDefaultBackupDir,
-  resolvePaperclipInstanceId,
+  resolveStacyInstanceId,
 } from "../config/home.js";
 import { readConfig, resolveConfigPath } from "../config/store.js";
-import { printPaperclipCliBanner } from "../utils/banner.js";
+import { printStacyCliBanner } from "../utils/banner.js";
 import { cliVersion } from "../version.js";
 
 type UpgradeCheckOptions = {
@@ -55,7 +55,7 @@ function resolveConnectionString(configPath?: string): { value: string; source: 
 
   const port = config?.database.embeddedPostgresPort ?? 54329;
   return {
-    value: `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`,
+    value: `postgres://stacy:stacy@127.0.0.1:${port}/stacy`,
     source: `embedded-postgres@${port}`,
   };
 }
@@ -110,14 +110,14 @@ function formatAge(hours: number | null): string {
 }
 
 export async function upgradeCheckCommand(opts: UpgradeCheckOptions): Promise<UpgradeCheckResult> {
-  printPaperclipCliBanner();
+  printStacyCliBanner();
   p.intro(pc.bgCyan(pc.black(" stacy upgrade:check ")));
 
   const configPath = resolveConfigPath(opts.config);
   const config = readConfig(opts.config);
   const connection = resolveConnectionString(opts.config);
   const backupDir = resolveBackupDir(
-    config?.database.backup.dir || resolveDefaultBackupDir(resolvePaperclipInstanceId()),
+    config?.database.backup.dir || resolveDefaultBackupDir(resolveStacyInstanceId()),
   );
   const maxBackupAgeHours = normalizeMaxBackupAgeHours(opts.maxBackupAgeHours);
 

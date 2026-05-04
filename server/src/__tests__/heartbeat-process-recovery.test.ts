@@ -21,7 +21,7 @@ import {
   issueTreeHoldMembers,
   issueTreeHolds,
   issues,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -45,9 +45,9 @@ vi.mock("../telemetry.ts", () => ({
   getTelemetryClient: () => mockTelemetryClient,
 }));
 
-vi.mock("@paperclipai/shared/telemetry", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/shared/telemetry")>(
-    "@paperclipai/shared/telemetry",
+vi.mock("@arpanstacy/stacy-shared/telemetry", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-shared/telemetry")>(
+    "@arpanstacy/stacy-shared/telemetry",
   );
   return {
     ...actual,
@@ -131,19 +131,19 @@ async function waitForValue<T>(
 
 async function installSkipCancelUpdateTrigger(db: ReturnType<typeof createDb>, runId: string) {
   await db.execute(sql`
-    create table if not exists paperclip_test_skip_cancel_run_ids (
+    create table if not exists stacy_test_skip_cancel_run_ids (
       id text primary key
     )
   `);
-  await db.execute(sql`delete from paperclip_test_skip_cancel_run_ids`);
-  await db.execute(sql`insert into paperclip_test_skip_cancel_run_ids (id) values (${runId})`);
+  await db.execute(sql`delete from stacy_test_skip_cancel_run_ids`);
+  await db.execute(sql`insert into stacy_test_skip_cancel_run_ids (id) values (${runId})`);
   await db.execute(sql`
-    create or replace function paperclip_test_skip_cancel_update()
+    create or replace function stacy_test_skip_cancel_update()
     returns trigger as $$
     begin
       if NEW.status = 'cancelled'
         and exists (
-          select 1 from paperclip_test_skip_cancel_run_ids where id = OLD.id::text
+          select 1 from stacy_test_skip_cancel_run_ids where id = OLD.id::text
         )
       then
         return null;
@@ -152,18 +152,18 @@ async function installSkipCancelUpdateTrigger(db: ReturnType<typeof createDb>, r
     end;
     $$ language plpgsql
   `);
-  await db.execute(sql`drop trigger if exists paperclip_test_skip_cancel on heartbeat_runs`);
+  await db.execute(sql`drop trigger if exists stacy_test_skip_cancel on heartbeat_runs`);
   await db.execute(sql`
-    create trigger paperclip_test_skip_cancel
+    create trigger stacy_test_skip_cancel
     before update on heartbeat_runs
-    for each row execute function paperclip_test_skip_cancel_update()
+    for each row execute function stacy_test_skip_cancel_update()
   `);
 }
 
 async function uninstallSkipCancelUpdateTrigger(db: ReturnType<typeof createDb>) {
-  await db.execute(sql`drop trigger if exists paperclip_test_skip_cancel on heartbeat_runs`);
-  await db.execute(sql`drop function if exists paperclip_test_skip_cancel_update()`);
-  await db.execute(sql`drop table if exists paperclip_test_skip_cancel_run_ids`);
+  await db.execute(sql`drop trigger if exists stacy_test_skip_cancel on heartbeat_runs`);
+  await db.execute(sql`drop function if exists stacy_test_skip_cancel_update()`);
+  await db.execute(sql`drop table if exists stacy_test_skip_cancel_run_ids`);
 }
 
 async function waitForHeartbeatIdle(
@@ -286,7 +286,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   const cleanupPids = new Set<number>();
 
   beforeAll(async () => {
-    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-recovery-");
+    tempDb = await startEmbeddedPostgresTestDatabase("stacy-heartbeat-recovery-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
 
@@ -440,7 +440,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
 
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
@@ -528,7 +528,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
 
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
@@ -718,7 +718,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
 
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
@@ -1343,7 +1343,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
@@ -1469,7 +1469,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });

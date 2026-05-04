@@ -1,4 +1,4 @@
-# @paperclipai/adapter-utils
+# @arpanstacy/stacy-adapter-utils
 
 ## 0.3.1
 

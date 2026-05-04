@@ -38,7 +38,7 @@ worker-owned path, and trust the run record without opening adapter code:
   result metadata into the adapter result.
 - Added stale-session execute contracts proving Codex and Claude retry a dead
   saved session with a fresh session and return the fresh result.
-- Added a shared adapter failure taxonomy in `@paperclipai/adapter-utils` for:
+- Added a shared adapter failure taxonomy in `@arpanstacy/stacy-adapter-utils` for:
   transient upstream, auth required, unknown session, max turns, validation,
   timeout, and cancelled.
 - Wired shared `errorFamily` values into Codex and Claude execution results for
@@ -48,7 +48,7 @@ worker-owned path, and trust the run record without opening adapter code:
 - Wired identifiable Codex validation/configuration failures to
   `errorCode=codex_validation` and `errorFamily=validation`.
 - Isolated Claude execute tests from the developer home directory by forcing
-  the managed prompt cache under a temporary `PAPERCLIP_HOME`.
+  the managed prompt cache under a temporary `STACY_HOME`.
 - Added opt-in real local smoke profiles:
   - `pnpm smoke:codex-local-preflight`
   - `pnpm smoke:claude-local-preflight`

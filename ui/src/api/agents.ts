@@ -12,8 +12,8 @@ import type {
   HeartbeatRun,
   Approval,
   AgentConfigRevision,
-} from "@paperclipai/shared";
-import { isUuidLike, normalizeAgentUrlKey } from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
+import { isUuidLike, normalizeAgentUrlKey } from "@arpanstacy/stacy-shared";
 import { ApiError, api } from "./client";
 
 export interface AgentKey {
@@ -202,5 +202,5 @@ export const agentsApi = {
 export interface AvailableSkill {
   name: string;
   description: string;
-  isPaperclipManaged: boolean;
+  isStacyManaged: boolean;
 }

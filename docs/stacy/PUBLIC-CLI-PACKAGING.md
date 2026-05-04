@@ -1,25 +1,23 @@
 # Stacy Public CLI Packaging
 
-Phase 5 decision: publish a small `stacy-cli` wrapper package and keep the
-existing `paperclipai` npm package as the compatibility package. Do not rename
-the existing package in place.
+Phase 5 decision: publish Stacy-owned packages. The public operator entrypoint
+is the existing `stacy-cli` package, and the wrapped core package is
+`@arpanstacy/stacy`.
 
 ## Current Bridge
 
-The main publishable CLI package still uses:
+The main publishable CLI package now uses:
 
 ```text
-package: paperclipai
-binary:  paperclipai
+package: @arpanstacy/stacy
 binary:  stacy
 ```
 
-This means an installed package can expose both commands:
+This means an installed package exposes the Stacy command:
 
 ```bash
-npx paperclipai onboard
+npx stacy-cli onboard
 stacy onboard
-paperclipai onboard
 ```
 
 Inside the repo, the preferred local command is:
@@ -42,17 +40,13 @@ npx stacy-cli onboard
 ```
 
 The package name is now reserved by the `arpanstacy` npm account. The first
-published version, `stacy-cli@0.3.1`, should not be announced because it wraps
-the old `paperclipai@0.3.1` package. The corrected release target is
-`stacy-cli@2026.428.0`, which wraps `paperclipai@2026.428.0`. If the source has
-newer public-readiness changes, cut the next stable `paperclipai` release first,
-then publish the same version of `stacy-cli`.
+published version, `stacy-cli@0.3.1`, should not be announced because it pointed
+at the old core package. The corrected release target should wrap the matching
+published `@arpanstacy/stacy` version.
 
-As of May 4, 2026, `arpanstacy` owns `stacy-cli` but does not have publish
-access to `paperclipai` or the `@paperclipai/*` packages. A full workspace
-stable release needs the existing npm package owner to add `arpanstacy` as a
-maintainer, or it must run with an owner token that has write access to those
-packages.
+As of May 4, 2026, the old package namespace is no longer part of the release
+plan. The full workspace stable release publishes under the `@arpanstacy/*`
+scope, which `arpanstacy` can own directly.
 
 ## Target End State
 
@@ -73,22 +67,22 @@ package naming conventions.
 
 There are now two package lanes:
 
-1. Phase 5 public package: publish `stacy-cli`, which depends on `paperclipai`
-   and exposes the `stacy` binary.
+1. Phase 5 public package: publish `stacy-cli`, which depends on
+   `@arpanstacy/stacy` and exposes the `stacy` binary.
 2. Future vanity package: publish `stacy` only if npm ownership is transferred
    or an explicit owner-approved wrapper plan exists.
 
-This keeps existing `paperclipai` installs working while giving Stacy a
-branded install path.
+This gives Stacy a branded install path without depending on legacy package
+ownership.
 
 ## Release Rule
 
 Before shipping a public `stacy-cli` package:
 
 - confirm npm package availability or ownership for `stacy-cli`
-- confirm `stacy-cli` depends on the matching released `paperclipai` version
-- keep `paperclipai` as a compatibility package for at least one stable release
-- keep both `paperclipai` and `stacy` binaries in the main CLI bundle
+- confirm `stacy-cli` depends on the matching released `@arpanstacy/stacy`
+  version
+- keep only the `stacy` binary in the public CLI bundle
 - include the package-name decision in `releases/v<version>.md`
 - run the release notes, upgrade preflight, and Docker quickstart smoke gates
 
@@ -111,7 +105,7 @@ STACY_NPM_EXPECTED_OWNER=<npm-user> pnpm release:package-name
 After publishing the wrapper, run the npm smoke:
 
 ```bash
-pnpm smoke:stacy-cli-npm -- --version <version> --expected-paperclip <version>
+pnpm smoke:stacy-cli-npm -- --version <version> --expected-core <version>
 ```
 
 Run the full read-only Phase 5 distribution gate with:
@@ -155,14 +149,12 @@ pnpm release:stacy-cli:publish
 unset NPM_TOKEN
 ```
 
-If `stacy-cli@2026.428.0` is already live and only the reserved `0.3.1`
-wrapper still needs deprecation:
+If using a granular npm access token with 2FA bypass enabled for deprecation:
 
 ```bash
-pnpm release:stacy-cli:deprecate-old -- --replacement-version 2026.428.0 --otp <code>
 read -r -s NPM_TOKEN
 export NPM_TOKEN
-pnpm release:stacy-cli:deprecate-old -- --replacement-version 2026.428.0
+pnpm release:stacy-cli:deprecate-old -- --replacement-version 2026.501.0
 unset NPM_TOKEN
 ```
 

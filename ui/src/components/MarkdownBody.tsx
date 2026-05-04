@@ -49,7 +49,7 @@ function MarkdownIssueLink({
     <Link
       to={`/issues/${identifier}`}
       data-mention-kind="issue"
-      className="paperclip-markdown-issue-ref"
+      className="stacy-markdown-issue-ref"
       title={title}
       aria-label={issueLabel}
     >
@@ -202,7 +202,7 @@ function MermaidDiagramBlock({ source, darkMode }: { source: string; darkMode: b
           fontFamily: "inherit",
           suppressErrorRendering: true,
         });
-        const rendered = await mermaid.render(`paperclip-mermaid-${renderId}`, source);
+        const rendered = await mermaid.render(`stacy-mermaid-${renderId}`, source);
         if (!active) return;
         setSvg(rendered.svg);
       })
@@ -221,15 +221,15 @@ function MermaidDiagramBlock({ source, darkMode }: { source: string; darkMode: b
   }, [darkMode, renderId, source]);
 
   return (
-    <div className="paperclip-mermaid">
+    <div className="stacy-mermaid">
       {svg ? (
         <div dangerouslySetInnerHTML={{ __html: svg }} />
       ) : (
         <>
-          <p className={cn("paperclip-mermaid-status", error && "paperclip-mermaid-status-error")}>
+          <p className={cn("stacy-mermaid-status", error && "stacy-mermaid-status-error")}>
             {error ? `Unable to render Mermaid diagram: ${error}` : "Rendering Mermaid diagram..."}
           </p>
-          <pre className="paperclip-mermaid-source">
+          <pre className="stacy-mermaid-source">
             <code className="language-mermaid">{source}</code>
           </pre>
         </>
@@ -318,9 +318,9 @@ export function MarkdownBody({
           <a
             href={targetHref}
             className={cn(
-              "paperclip-mention-chip",
-              `paperclip-mention-chip--${parsed.kind}`,
-              parsed.kind === "project" && "paperclip-project-mention-chip",
+              "stacy-mention-chip",
+              `stacy-mention-chip--${parsed.kind}`,
+              parsed.kind === "project" && "stacy-project-mention-chip",
             )}
             data-mention-kind={parsed.kind}
             style={{ ...mergeWrapStyle(linkStyle as React.CSSProperties | undefined), ...mentionChipInlineStyle(parsed) }}
@@ -369,7 +369,7 @@ export function MarkdownBody({
   return (
     <div
       className={cn(
-        "paperclip-markdown prose prose-sm min-w-0 max-w-full break-words overflow-hidden",
+        "stacy-markdown prose prose-sm min-w-0 max-w-full break-words overflow-hidden",
         theme === "dark" && "prose-invert",
         className,
       )}

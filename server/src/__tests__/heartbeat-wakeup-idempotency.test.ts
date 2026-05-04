@@ -11,7 +11,7 @@ import {
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -90,7 +90,7 @@ describeEmbeddedPostgres("heartbeat wakeup idempotency", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
 
   beforeAll(async () => {
-    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-wakeup-idempotency-");
+    tempDb = await startEmbeddedPostgresTestDatabase("stacy-heartbeat-wakeup-idempotency-");
     db = createDb(tempDb.connectionString);
     heartbeat = heartbeatService(db);
   }, 20_000);

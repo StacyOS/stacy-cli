@@ -96,7 +96,7 @@ function replaceWorkspaceDeps(deps, version, publicPackageNames) {
       next[name] = version;
       continue;
     }
-    if (!name.startsWith("@paperclipai/")) continue;
+    if (!name.startsWith("@arpanstacy/stacy-") && !name.startsWith("@arpanstacy/create-stacy-")) continue;
     if (typeof value !== "string" || !value.startsWith("workspace:")) continue;
     next[name] = version;
   }

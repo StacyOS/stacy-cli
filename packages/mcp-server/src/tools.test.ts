@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PaperclipApiClient } from "./client.js";
+import { StacyApiClient } from "./client.js";
 import { createToolDefinitions } from "./tools.js";
 
 function makeClient() {
-  return new PaperclipApiClient({
+  return new StacyApiClient({
     apiUrl: "http://localhost:3100/api",
     apiKey: "token-123",
     companyId: "11111111-1111-1111-1111-111111111111",
@@ -25,7 +25,7 @@ function mockJsonResponse(body: unknown, status = 200) {
   });
 }
 
-describe("paperclip MCP tools", () => {
+describe("stacy MCP tools", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -36,7 +36,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipUpdateIssue");
+    const tool = getTool("stacyUpdateIssue");
     await tool.execute({
       issueId: "PAP-1135",
       status: "done",
@@ -47,7 +47,7 @@ describe("paperclip MCP tools", () => {
     expect(String(url)).toBe("http://localhost:3100/api/issues/PAP-1135");
     expect(init.method).toBe("PATCH");
     expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer token-123");
-    expect((init.headers as Record<string, string>)["X-Paperclip-Run-Id"]).toBe(
+    expect((init.headers as Record<string, string>)["X-Stacy-Run-Id"]).toBe(
       "33333333-3333-3333-3333-333333333333",
     );
   });
@@ -58,7 +58,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipListIssues");
+    const tool = getTool("stacyListIssues");
     const response = await tool.execute({});
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -75,7 +75,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipCheckoutIssue");
+    const tool = getTool("stacyCheckoutIssue");
     await tool.execute({
       issueId: "PAP-1135",
     });
@@ -93,7 +93,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipUpsertIssueDocument");
+    const tool = getTool("stacyUpsertIssueDocument");
     await tool.execute({
       issueId: "PAP-1135",
       key: "plan",
@@ -131,7 +131,7 @@ describe("paperclip MCP tools", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipControlIssueWorkspaceServices");
+    const tool = getTool("stacyControlIssueWorkspaceServices");
     await tool.execute({
       issueId: "PAP-1135",
       action: "restart",
@@ -171,7 +171,7 @@ describe("paperclip MCP tools", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipWaitForIssueWorkspaceService");
+    const tool = getTool("stacyWaitForIssueWorkspaceService");
     const response = await tool.execute({
       issueId: "PAP-1135",
       serviceName: "web",
@@ -188,7 +188,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipSuggestTasks");
+    const tool = getTool("stacySuggestTasks");
     await tool.execute({
       issueId: "PAP-1135",
       idempotencyKey: "run-1:suggest",
@@ -218,7 +218,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipRequestConfirmation");
+    const tool = getTool("stacyRequestConfirmation");
     await tool.execute({
       issueId: "PAP-1135",
       idempotencyKey: "confirmation:PAP-1135:plan:33333333-3333-4333-8333-333333333333",
@@ -272,7 +272,7 @@ describe("paperclip MCP tools", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const tool = getTool("paperclipCreateApproval");
+    const tool = getTool("stacyCreateApproval");
     await tool.execute({
       type: "hire_agent",
       payload: { branch: "pap-1167" },
@@ -295,7 +295,7 @@ describe("paperclip MCP tools", () => {
   it("rejects invalid generic request paths", async () => {
     vi.stubGlobal("fetch", vi.fn());
 
-    const tool = getTool("paperclipApiRequest");
+    const tool = getTool("stacyApiRequest");
     const response = await tool.execute({
       method: "GET",
       path: "issues",
@@ -307,7 +307,7 @@ describe("paperclip MCP tools", () => {
   it("rejects generic request paths that escape /api", async () => {
     vi.stubGlobal("fetch", vi.fn());
 
-    const tool = getTool("paperclipApiRequest");
+    const tool = getTool("stacyApiRequest");
     const response = await tool.execute({
       method: "GET",
       path: "/../../secret",

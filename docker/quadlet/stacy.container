@@ -1,0 +1,23 @@
+[Unit]
+Description=Stacy AI Agent Orchestrator
+Requires=stacy-db.service
+After=stacy-db.service
+
+[Container]
+Image=stacy-local
+ContainerName=stacy
+Pod=stacy.pod
+Volume=%h/.local/share/stacy:/stacy:Z
+Environment=HOST=0.0.0.0
+Environment=STACY_HOME=/stacy
+Environment=STACY_DEPLOYMENT_MODE=authenticated
+Environment=STACY_DEPLOYMENT_EXPOSURE=private
+Environment=STACY_PUBLIC_URL=http://localhost:3100
+EnvironmentFile=%h/.config/containers/systemd/stacy.env
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

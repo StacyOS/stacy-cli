@@ -120,8 +120,8 @@ queue submissions instead of immediate execution.
 - Hide plugin marketplace-style surfaces by default for Stacy. Keep them
   reachable only through advanced/admin surfaces until the cockpit and kernel
   are dependable.
-- Keep internal `@paperclipai/*` package names during kernel work. Rename only
-  after the Stacy behavior is stable and the distribution story is ready.
+- Keep behavior stable during kernel work. The package graph now moves under
+  Stacy-owned npm names because the public distribution story requires it.
 - Keep Codex local, Claude local, HTTP, and process as the adapter focus. Treat
   process as advanced/risky. Leave Cursor, Gemini, OpenCode, OpenClaw, and
   plugin adapters available only as advanced/experimental surfaces.
@@ -133,7 +133,7 @@ Latest Phase 2 verification:
 ```bash
 pnpm exec vitest run server/src/__tests__/execution-kernel-status.test.ts
 pnpm exec vitest run server/src/__tests__/heartbeat-wakeup-idempotency.test.ts server/src/__tests__/heartbeat-process-recovery.test.ts server/src/__tests__/heartbeat-run-claim-leases.test.ts server/src/__tests__/heartbeat-retry-scheduling.test.ts server/src/__tests__/agent-live-run-routes.test.ts
-pnpm --filter @paperclipai/server typecheck
+pnpm --filter @arpanstacy/stacy-server typecheck
 git diff --check
 ```
 

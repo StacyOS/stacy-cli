@@ -5,12 +5,12 @@ describe("runtime API discovery", () => {
   it("prefers the explicit public base URL for the primary runtime URL", () => {
     expect(
       choosePrimaryRuntimeApiUrl({
-        authPublicBaseUrl: "https://paperclip.example.com/base/path",
+        authPublicBaseUrl: "https://stacy.example.com/base/path",
         allowedHostnames: ["198.51.100.10"],
         bindHost: "0.0.0.0",
         port: 3102,
       }),
-    ).toBe("https://paperclip.example.com");
+    ).toBe("https://stacy.example.com");
   });
 
   it("builds ordered callback candidates from explicit, allowed, bind, and interface hosts", () => {

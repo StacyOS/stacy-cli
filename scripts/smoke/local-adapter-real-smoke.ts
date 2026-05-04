@@ -86,8 +86,8 @@ function readTimeoutSec(): number {
 
 function resolveAdapterCommand(adapter: AdapterKey): string {
   return adapter === "codex"
-    ? process.env.STACY_CODEX_COMMAND ?? process.env.PAPERCLIP_CODEX_COMMAND ?? "codex"
-    : process.env.STACY_CLAUDE_COMMAND ?? process.env.PAPERCLIP_CLAUDE_COMMAND ?? "claude";
+    ? process.env.STACY_CODEX_COMMAND ?? process.env.STACY_CODEX_COMMAND ?? "codex"
+    : process.env.STACY_CLAUDE_COMMAND ?? process.env.STACY_CLAUDE_COMMAND ?? "claude";
 }
 
 function resolveAdapterModel(adapter: AdapterKey): string | undefined {
@@ -161,9 +161,9 @@ function formatCost(result: AdapterExecutionResult): string {
 async function runAdapterSmoke(adapter: AdapterKey) {
   const testRoot = mkdtempSync(path.join(os.tmpdir(), `stacy-${adapter}-real-smoke-`));
   const workspace = path.join(testRoot, "workspace");
-  const paperclipHome = path.join(testRoot, "paperclip-home");
+  const stacyHome = path.join(testRoot, "stacy-home");
   mkdirSync(workspace, { recursive: true });
-  mkdirSync(paperclipHome, { recursive: true });
+  mkdirSync(stacyHome, { recursive: true });
   writeFileSync(
     path.join(workspace, "README.md"),
     [
@@ -176,10 +176,10 @@ async function runAdapterSmoke(adapter: AdapterKey) {
     "utf8",
   );
 
-  const previousPaperclipHome = process.env.PAPERCLIP_HOME;
-  const previousPaperclipInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
-  process.env.PAPERCLIP_HOME = paperclipHome;
-  process.env.PAPERCLIP_INSTANCE_ID = `phase4-${adapter}-real-smoke-${process.pid}`;
+  const previousStacyHome = process.env.STACY_HOME;
+  const previousStacyInstanceId = process.env.STACY_INSTANCE_ID;
+  process.env.STACY_HOME = stacyHome;
+  process.env.STACY_INSTANCE_ID = `phase4-${adapter}-real-smoke-${process.pid}`;
 
   const marker = adapter === "codex" ? "STACY_CODEX_REAL_SMOKE_OK" : "STACY_CLAUDE_REAL_SMOKE_OK";
   const command = resolveAdapterCommand(adapter);
@@ -243,15 +243,15 @@ async function runAdapterSmoke(adapter: AdapterKey) {
       process.exitCode = 1;
     }
   } finally {
-    if (previousPaperclipHome === undefined) {
-      delete process.env.PAPERCLIP_HOME;
+    if (previousStacyHome === undefined) {
+      delete process.env.STACY_HOME;
     } else {
-      process.env.PAPERCLIP_HOME = previousPaperclipHome;
+      process.env.STACY_HOME = previousStacyHome;
     }
-    if (previousPaperclipInstanceId === undefined) {
-      delete process.env.PAPERCLIP_INSTANCE_ID;
+    if (previousStacyInstanceId === undefined) {
+      delete process.env.STACY_INSTANCE_ID;
     } else {
-      process.env.PAPERCLIP_INSTANCE_ID = previousPaperclipInstanceId;
+      process.env.STACY_INSTANCE_ID = previousStacyInstanceId;
     }
   }
 }

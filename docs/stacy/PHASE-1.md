@@ -1,12 +1,12 @@
 # Stacy Phase 1
 
 Phase 1 is fork-and-stabilize. The goal is to create a Stacy base that still
-builds like upstream Paperclip while clearly pointing engineering effort toward
+builds like upstream Stacy while clearly pointing engineering effort toward
 the trust-first product.
 
 ## Completed In This Slice
 
-- Cloned the upstream Paperclip repository into a separate `stacy/` checkout.
+- Cloned the upstream Stacy repository into a separate `stacy/` checkout.
 - Created `codex/stacy-foundation` for Stacy-specific work.
 - Replaced the top-level README with Stacy product direction.
 - Added this Stacy architecture source of truth.
@@ -25,7 +25,7 @@ the trust-first product.
 - Fixed cancellation recovery behavior so a cancelled run does not automatically
   create continuation or stranded-work recovery tasks.
 - Added `STACY_*` environment aliases across CLI, server startup, and adapter
-  runtime injection while preserving `PAPERCLIP_*` compatibility.
+  runtime injection while preserving `STACY_*` compatibility.
 - Cleaned known Codex local plugin/rollout warning noise from live run logs
   without hiding real adapter failures.
 - Added zero-dollar subscription-included cost events so local Codex runs are
@@ -73,21 +73,22 @@ Phase 2:
 
 - Decide whether Stacey should hide plugin marketplace surfaces by default in
   Phase 2 or keep them visible under an "advanced" affordance.
-- Keep the internal `@paperclipai/*` package graph stable until the execution
-  kernel hardening is complete.
+- Rename the public npm package graph to Stacy-owned packages before the public
+  registry flip.
 
 ## Keep Stable For Now
 
-Do not mechanically rename all internal packages yet:
+The original fork-stabilization decision was to avoid package renaming during
+Phase 1. That changed during Phase 5 when npm ownership made the rename
+necessary.
 
-- `@paperclipai/server`
-- `@paperclipai/ui`
-- `@paperclipai/db`
-- `@paperclipai/shared`
-- `@paperclipai/*` adapter packages
+- `@arpanstacy/stacy-server`
+- `@arpanstacy/stacy-ui`
+- `@arpanstacy/stacy-db`
+- `@arpanstacy/stacy-shared`
+- `@arpanstacy/stacy-*` adapter packages
 
-That rename is mostly churn and creates a wide test burden before we have
-changed the product behavior. Keep the internal graph stable until the kernel
+The rename creates churn, so keep the behavioral surface stable until the kernel
 and cockpit changes land.
 
 ## Phase 1 Build Tasks
@@ -134,7 +135,7 @@ and cockpit changes land.
    - Command: `stacy`
    - Docker volume: `/stacy`
    - Config home: `~/.stacy`
-   - Environment aliases: keep `PAPERCLIP_*` compatibility for at least one
+   - Environment aliases: keep `STACY_*` compatibility for at least one
      release while introducing `STACY_*`.
 
 ## Definition Of Done

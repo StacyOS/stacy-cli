@@ -1,7 +1,7 @@
 # Stacy
 
 Stacy is a trust-first AI company control plane built from the MIT-licensed
-Paperclip codebase.
+Stacy codebase.
 
 The product direction is deliberately narrower than the upstream project:
 Stacy should feel like Linear plus GitHub Actions plus an agent runtime console.
@@ -98,9 +98,8 @@ These are intentionally not v1:
 ## Development
 
 This repository is past the first fork-and-stabilize pass and is now hardening
-the execution kernel. The internal workspace package names remain
-`@paperclipai/*` for now to avoid a risky mechanical rename before the product
-surface is stable.
+the execution kernel. The public package graph is Stacy-owned under the
+`@arpanstacy/*` npm scope and no longer depends on the Stacy package names.
 
 ```bash
 pnpm install
@@ -120,9 +119,6 @@ For published installs, use the public wrapper package:
 npx stacy-cli onboard
 ```
 
-The upstream-compatible `paperclipai` command remains available as a
-compatibility bridge during the transition.
-
 ## Architecture
 
 Read `docs/stacy/ARCHITECTURE.md` for the Stacy system design and
@@ -134,6 +130,5 @@ Self-hosted backup, restore, Docker smoke, and upgrade steps are in
 
 ## Attribution
 
-Stacy is derived from [paperclipai/paperclip](https://github.com/paperclipai/paperclip),
-which is licensed under MIT. The original license and copyright notice are
+Stacy is an MIT-licensed fork. The original license and copyright notice are
 preserved in `LICENSE`.

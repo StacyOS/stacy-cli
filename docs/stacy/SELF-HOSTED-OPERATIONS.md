@@ -98,8 +98,9 @@ Before tagging a Stacy release:
   environment-variable reference to a temporary npm userconfig and removes it on
   exit
 - The npm user or token must have write access to every package in the release,
-  including `paperclipai` and the publishable `@paperclipai/*` packages. The
-  stable release script preflights package maintainership before publishing.
+  including `@arpanstacy/stacy` and the publishable `@arpanstacy/stacy-*`
+  packages. The stable release script preflights package maintainership before
+  publishing existing packages.
 - `pnpm release:phase5-gate` to run the distribution gate and show whether the
   wrapper publish is complete or still npm-auth gated
 - `pnpm release:package-name` to confirm the `stacy-cli` package target
@@ -112,12 +113,12 @@ Before tagging a Stacy release:
   2FA
 - `pnpm release:stacy-cli:deprecate-old -- --replacement-version <version> --otp <code>`
   after the corrected wrapper version is live
-- `pnpm --filter paperclipai typecheck`
+- `pnpm --filter @arpanstacy/stacy typecheck`
 - `pnpm exec vitest run cli/src/__tests__/db-restore.test.ts cli/src/__tests__/upgrade-check.test.ts`
 - `pnpm smoke:codex-local-preflight`
 - `pnpm smoke:claude-local-preflight`
 - `pnpm smoke:docker-quickstart`
-- `pnpm smoke:stacy-cli-npm -- --version <version> --expected-paperclip <version>` after publishing `stacy-cli`
+- `pnpm smoke:stacy-cli-npm -- --version <version> --expected-core <version>` after publishing `stacy-cli`
 - document any manual migration, backup, or restore notes in the release notes
 - remove or update `> Status: Draft` before creating the GitHub release
 

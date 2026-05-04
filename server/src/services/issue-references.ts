@@ -1,14 +1,14 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
-import { documents, issueComments, issueDocuments, issueReferenceMentions, issues } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
+import { documents, issueComments, issueDocuments, issueReferenceMentions, issues } from "@arpanstacy/stacy-db";
 import type {
   IssueReferenceSource,
   IssueReferenceSourceKind,
   IssueRelatedWorkItem,
   IssueRelatedWorkSummary,
   IssueRelationIssueSummary,
-} from "@paperclipai/shared";
-import { extractIssueReferenceMatches } from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
+import { extractIssueReferenceMatches } from "@arpanstacy/stacy-shared";
 import { notFound } from "../errors.js";
 
 const SOURCE_KIND_ORDER: Record<IssueReferenceSourceKind, number> = {

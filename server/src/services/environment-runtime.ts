@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
-import { environmentLeases } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
+import { environmentLeases } from "@arpanstacy/stacy-db";
 import type {
   Environment,
   EnvironmentLease,
@@ -8,13 +8,13 @@ import type {
   ExecutionWorkspace,
   PluginEnvironmentConfig,
   SandboxEnvironmentConfig,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import type {
   PluginEnvironmentExecuteResult,
   PluginEnvironmentLease,
   PluginEnvironmentRealizeWorkspaceResult,
-} from "@paperclipai/plugin-sdk";
-import { ensureSshWorkspaceReady, findReachablePaperclipApiUrlOverSsh } from "@paperclipai/adapter-utils/ssh";
+} from "@arpanstacy/stacy-plugin-sdk";
+import { ensureSshWorkspaceReady, findReachableStacyApiUrlOverSsh } from "@arpanstacy/stacy-adapter-utils/ssh";
 import { environmentService } from "./environments.js";
 import {
   parseEnvironmentDriverConfig,
@@ -220,7 +220,7 @@ function createSshEnvironmentDriver(db: Db): EnvironmentRuntimeDriver {
 
       const { remoteCwd } = await ensureSshWorkspaceReady(parsed.config);
       const candidateUrls = (() => {
-        const raw = process.env.PAPERCLIP_RUNTIME_API_CANDIDATES_JSON;
+        const raw = process.env.STACY_RUNTIME_API_CANDIDATES_JSON;
         if (!raw) return [];
         try {
           const parsed = JSON.parse(raw);
@@ -231,13 +231,13 @@ function createSshEnvironmentDriver(db: Db): EnvironmentRuntimeDriver {
           return [];
         }
       })();
-      const paperclipApiUrl = await findReachablePaperclipApiUrlOverSsh({
+      const stacyApiUrl = await findReachableStacyApiUrlOverSsh({
         config: parsed.config,
         candidates: candidateUrls,
       });
-      if (!paperclipApiUrl) {
+      if (!stacyApiUrl) {
         throw new Error(
-          `SSH environment ${parsed.config.username}@${parsed.config.host} could not reach any Paperclip API candidates.`,
+          `SSH environment ${parsed.config.username}@${parsed.config.host} could not reach any Stacy API candidates.`,
         );
       }
       return await environmentsSvc.acquireLease({
@@ -257,7 +257,7 @@ function createSshEnvironmentDriver(db: Db): EnvironmentRuntimeDriver {
           username: parsed.config.username,
           remoteWorkspacePath: parsed.config.remoteWorkspacePath,
           remoteCwd,
-          paperclipApiUrl,
+          stacyApiUrl,
         },
       });
     },

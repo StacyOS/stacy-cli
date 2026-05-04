@@ -5,8 +5,7 @@ import { config as loadDotenv, parse as parseEnvFileContents } from "dotenv";
 import { resolveConfigPath } from "./store.js";
 import { applyStacyEnvAliases } from "./env-aliases.js";
 
-const JWT_SECRET_ENV_KEY = "PAPERCLIP_AGENT_JWT_SECRET";
-const STACY_JWT_SECRET_ENV_KEY = "STACY_AGENT_JWT_SECRET";
+const JWT_SECRET_ENV_KEY = "STACY_AGENT_JWT_SECRET";
 
 applyStacyEnvAliases();
 function resolveEnvFilePath(configPath?: string) {
@@ -43,7 +42,7 @@ function renderEnvFile(entries: Record<string, string>) {
   return lines.join("\n");
 }
 
-export function resolvePaperclipEnvFile(configPath?: string): string {
+export function resolveStacyEnvFile(configPath?: string): string {
   return resolveEnvFilePath(configPath);
 }
 
@@ -51,7 +50,7 @@ export function resolveAgentJwtEnvFile(configPath?: string): string {
   return resolveEnvFilePath(configPath);
 }
 
-export function loadPaperclipEnvFile(configPath?: string): void {
+export function loadStacyEnvFile(configPath?: string): void {
   loadAgentJwtEnvFile(resolveEnvFilePath(configPath));
 }
 
@@ -76,7 +75,7 @@ export function readAgentJwtSecretFromEnvFile(filePath = resolveEnvFilePath()): 
 
   const raw = fs.readFileSync(filePath, "utf-8");
   const values = parseEnvFile(raw);
-  const value = values[JWT_SECRET_ENV_KEY] ?? values[STACY_JWT_SECRET_ENV_KEY];
+  const value = values[JWT_SECRET_ENV_KEY];
   return isNonEmpty(value) ? value!.trim() : null;
 }
 
@@ -99,15 +98,15 @@ export function ensureAgentJwtSecret(configPath?: string): { secret: string; cre
 }
 
 export function writeAgentJwtEnv(secret: string, filePath = resolveEnvFilePath()): void {
-  mergePaperclipEnvEntries({ [STACY_JWT_SECRET_ENV_KEY]: secret, [JWT_SECRET_ENV_KEY]: secret }, filePath);
+  mergeStacyEnvEntries({ [JWT_SECRET_ENV_KEY]: secret }, filePath);
 }
 
-export function readPaperclipEnvEntries(filePath = resolveEnvFilePath()): Record<string, string> {
+export function readStacyEnvEntries(filePath = resolveEnvFilePath()): Record<string, string> {
   if (!fs.existsSync(filePath)) return {};
   return parseEnvFile(fs.readFileSync(filePath, "utf-8"));
 }
 
-export function writePaperclipEnvEntries(entries: Record<string, string>, filePath = resolveEnvFilePath()): void {
+export function writeStacyEnvEntries(entries: Record<string, string>, filePath = resolveEnvFilePath()): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, renderEnvFile(entries), {
@@ -115,17 +114,17 @@ export function writePaperclipEnvEntries(entries: Record<string, string>, filePa
   });
 }
 
-export function mergePaperclipEnvEntries(
+export function mergeStacyEnvEntries(
   entries: Record<string, string>,
   filePath = resolveEnvFilePath(),
 ): Record<string, string> {
-  const current = readPaperclipEnvEntries(filePath);
+  const current = readStacyEnvEntries(filePath);
   const next = {
     ...current,
     ...Object.fromEntries(
       Object.entries(entries).filter(([, value]) => typeof value === "string" && value.trim().length > 0),
     ),
   };
-  writePaperclipEnvEntries(next, filePath);
+  writeStacyEnvEntries(next, filePath);
   return next;
 }

@@ -1,5 +1,5 @@
 import { and, count, eq, gte, inArray, lt, sql } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
 import {
   companies,
   companyLogos,
@@ -28,7 +28,7 @@ import {
   companyMemberships,
   companySkills,
   documents,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import { notFound, unprocessable } from "../errors.js";
 import { environmentService } from "./environments.js";
 

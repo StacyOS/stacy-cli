@@ -57,21 +57,21 @@ function buildTestConfig(overrides: Record<string, unknown> = {}) {
     authPublicBaseUrl: undefined,
     authDisableSignUp: false,
     databaseMode: "postgres",
-    databaseUrl: "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip",
-    embeddedPostgresDataDir: "/tmp/paperclip-test-db",
+    databaseUrl: "postgres://stacy:stacy@127.0.0.1:5432/stacy",
+    embeddedPostgresDataDir: "/tmp/stacy-test-db",
     embeddedPostgresPort: 54329,
     databaseBackupEnabled: false,
     databaseBackupIntervalMinutes: 60,
     databaseBackupRetentionDays: 30,
-    databaseBackupDir: "/tmp/paperclip-test-backups",
+    databaseBackupDir: "/tmp/stacy-test-backups",
     serveUi: false,
     uiDevMiddleware: false,
     secretsProvider: "local_encrypted",
     secretsStrictMode: false,
-    secretsMasterKeyFilePath: "/tmp/paperclip-master.key",
+    secretsMasterKeyFilePath: "/tmp/stacy-master.key",
     storageProvider: "local_disk",
-    storageLocalDiskBaseDir: "/tmp/paperclip-storage",
-    storageS3Bucket: "paperclip-test",
+    storageLocalDiskBaseDir: "/tmp/stacy-storage",
+    storageS3Bucket: "stacy-test",
     storageS3Region: "us-east-1",
     storageS3Endpoint: undefined,
     storageS3Prefix: "",
@@ -93,7 +93,7 @@ vi.mock("detect-port", () => ({
   default: detectPortMock,
 }));
 
-vi.mock("@paperclipai/db", () => ({
+vi.mock("@arpanstacy/stacy-db", () => ({
   createDb: createDbMock,
   ensurePostgresDatabase: vi.fn(),
   getPostgresDataDirectory: vi.fn(),
@@ -257,28 +257,28 @@ describe("startServer authenticated auth origin setup", () => {
   });
 });
 
-describe("startServer PAPERCLIP_API_URL handling", () => {
+describe("startServer STACY_API_URL handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loadConfigMock.mockReturnValue(buildTestConfig());
     process.env.BETTER_AUTH_SECRET = "test-secret";
-    delete process.env.PAPERCLIP_API_URL;
+    delete process.env.STACY_API_URL;
   });
 
-  it("uses the externally set PAPERCLIP_API_URL when provided", async () => {
-    process.env.PAPERCLIP_API_URL = "http://custom-api:3100";
+  it("uses the externally set STACY_API_URL when provided", async () => {
+    process.env.STACY_API_URL = "http://custom-api:3100";
 
     const started = await startServer();
 
     expect(started.apiUrl).toBe("http://custom-api:3100");
-    expect(process.env.PAPERCLIP_API_URL).toBe("http://custom-api:3100");
+    expect(process.env.STACY_API_URL).toBe("http://custom-api:3100");
   });
 
-  it("falls back to host-based URL when PAPERCLIP_API_URL is not set", async () => {
+  it("falls back to host-based URL when STACY_API_URL is not set", async () => {
     const started = await startServer();
 
     expect(started.apiUrl).toBe("http://127.0.0.1:3210");
-    expect(process.env.PAPERCLIP_API_URL).toBe("http://127.0.0.1:3210");
+    expect(process.env.STACY_API_URL).toBe("http://127.0.0.1:3210");
   });
 
   it("rewrites explicit-port auth public URLs when detect-port selects a new port", async () => {
@@ -293,21 +293,21 @@ describe("startServer PAPERCLIP_API_URL handling", () => {
 
     expect(started.listenPort).toBe(3110);
     expect(started.apiUrl).toBe("http://my-host.ts.net:3110");
-    expect(process.env.PAPERCLIP_RUNTIME_API_URL).toBe("http://my-host.ts.net:3110");
+    expect(process.env.STACY_RUNTIME_API_URL).toBe("http://my-host.ts.net:3110");
   });
 
   it("keeps no-port auth public URLs stable when detect-port selects a new port", async () => {
     loadConfigMock.mockReturnValueOnce(buildTestConfig({
       port: 3100,
       authBaseUrlMode: "explicit",
-      authPublicBaseUrl: "https://paperclip.example",
+      authPublicBaseUrl: "https://stacy.example",
     }));
     detectPortMock.mockResolvedValueOnce(3110);
 
     const started = await startServer();
 
     expect(started.listenPort).toBe(3110);
-    expect(started.apiUrl).toBe("https://paperclip.example");
-    expect(process.env.PAPERCLIP_RUNTIME_API_URL).toBe("https://paperclip.example");
+    expect(started.apiUrl).toBe("https://stacy.example");
+    expect(process.env.STACY_RUNTIME_API_URL).toBe("https://stacy.example");
   });
 });

@@ -36,12 +36,12 @@
  * @see PLUGIN_SPEC.md §12.5 — Graceful Shutdown Policy
  */
 import { EventEmitter } from "node:events";
-import type { Db } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
 import type {
   PluginStatus,
   PluginRecord,
-  PaperclipPluginManifestV1,
-} from "@paperclipai/shared";
+  StacyPluginManifestV1,
+} from "@arpanstacy/stacy-shared";
 import { pluginRegistryService } from "./plugin-registry.js";
 import { pluginLoader, type PluginLoader } from "./plugin-loader.js";
 import type { PluginWorkerManager, WorkerStartOptions } from "./plugin-worker-manager.js";

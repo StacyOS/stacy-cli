@@ -4,7 +4,7 @@ import type {
   ExecutionWorkspaceCloseReadiness,
   WorkspaceOperation,
   WorkspaceRuntimeControlTarget,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { api } from "./client";
 import { sanitizeWorkspaceRuntimeControlTarget } from "./workspace-runtime-control";
 

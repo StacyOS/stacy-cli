@@ -3,8 +3,8 @@ import path from "node:path";
 import { applyStacyEnvAliases } from "./env-aliases.js";
 import { resolveDefaultConfigPath } from "./home-paths.js";
 
-const PAPERCLIP_CONFIG_BASENAME = "config.json";
-const PAPERCLIP_ENV_FILENAME = ".env";
+const STACY_CONFIG_BASENAME = "config.json";
+const STACY_ENV_FILENAME = ".env";
 
 applyStacyEnvAliases();
 
@@ -13,7 +13,7 @@ function findConfigFileFromAncestors(startDir: string): string | null {
   let currentDir = absoluteStartDir;
 
   while (true) {
-    const candidate = path.resolve(currentDir, ".paperclip", PAPERCLIP_CONFIG_BASENAME);
+    const candidate = path.resolve(currentDir, ".stacy", STACY_CONFIG_BASENAME);
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -26,12 +26,12 @@ function findConfigFileFromAncestors(startDir: string): string | null {
   return null;
 }
 
-export function resolvePaperclipConfigPath(overridePath?: string): string {
+export function resolveStacyConfigPath(overridePath?: string): string {
   if (overridePath) return path.resolve(overridePath);
-  if (process.env.PAPERCLIP_CONFIG) return path.resolve(process.env.PAPERCLIP_CONFIG);
+  if (process.env.STACY_CONFIG) return path.resolve(process.env.STACY_CONFIG);
   return findConfigFileFromAncestors(process.cwd()) ?? resolveDefaultConfigPath();
 }
 
-export function resolvePaperclipEnvPath(overrideConfigPath?: string): string {
-  return path.resolve(path.dirname(resolvePaperclipConfigPath(overrideConfigPath)), PAPERCLIP_ENV_FILENAME);
+export function resolveStacyEnvPath(overrideConfigPath?: string): string {
+  return path.resolve(path.dirname(resolveStacyConfigPath(overrideConfigPath)), STACY_ENV_FILENAME);
 }

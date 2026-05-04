@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packagePath = path.join(repoRoot, "packages", "stacy-cli", "package.json");
 const npmCache = process.env.npm_config_cache || path.join(os.tmpdir(), "stacy-npm-cache");
+const CORE_PACKAGE_NAME = "@arpanstacy/stacy";
 
 function usage() {
   console.log([
@@ -113,32 +114,37 @@ function registryState(targetVersion) {
   );
   const versions = Array.isArray(live?.versions) ? live.versions : [];
   const latest = live?.["dist-tags"]?.latest ?? "unknown";
-  const latestPaperclip = live?.dependencies?.paperclipai ?? "unknown";
+  const latestCore = live?.dependencies?.[CORE_PACKAGE_NAME] ?? "unknown";
   const oldDeprecated = npmMaybeJson(
     ["view", "stacy-cli@0.3.1", "deprecated", "--json"],
     "read stacy-cli@0.3.1 deprecation state",
   );
+  const targetCoreVersion = npmMaybeJson(
+    ["view", `${CORE_PACKAGE_NAME}@${targetVersion}`, "version", "--json"],
+    `read ${CORE_PACKAGE_NAME}@${targetVersion} state`,
+  );
 
   return {
     latest,
-    latestPaperclip,
+    latestCore,
     oldActive: versions.includes("0.3.1") && typeof oldDeprecated !== "string",
+    targetCoreLive: targetCoreVersion === targetVersion,
     targetLive: versions.includes(targetVersion),
   };
 }
 
-function resolvePaperclipPublishVersion(pkg) {
-  const paperclipVersion = pkg.dependencies?.paperclipai;
-  if (!paperclipVersion || typeof paperclipVersion !== "string") {
-    throw new Error("stacy-cli must depend on paperclipai.");
+function resolveCorePublishVersion(pkg) {
+  const coreVersion = pkg.dependencies?.[CORE_PACKAGE_NAME];
+  if (!coreVersion || typeof coreVersion !== "string") {
+    throw new Error(`stacy-cli must depend on ${CORE_PACKAGE_NAME}.`);
   }
-  if (paperclipVersion.startsWith("workspace:")) {
+  if (coreVersion.startsWith("workspace:")) {
     return pkg.version;
   }
-  if (paperclipVersion !== pkg.version) {
-    throw new Error(`stacy-cli@${pkg.version} must wrap matching paperclipai@${pkg.version}; found ${paperclipVersion}.`);
+  if (coreVersion !== pkg.version) {
+    throw new Error(`stacy-cli@${pkg.version} must wrap matching ${CORE_PACKAGE_NAME}@${pkg.version}; found ${coreVersion}.`);
   }
-  return paperclipVersion;
+  return coreVersion;
 }
 
 try {
@@ -152,10 +158,10 @@ try {
   if (!targetVersion || typeof targetVersion !== "string") {
     throw new Error("packages/stacy-cli/package.json must define a string version.");
   }
-  const paperclipVersion = resolvePaperclipPublishVersion(pkg);
+  const coreVersion = resolveCorePublishVersion(pkg);
 
   console.log("Phase 5 release gate");
-  console.log(`target wrapper: stacy-cli@${targetVersion} -> paperclipai@${paperclipVersion}`);
+  console.log(`target wrapper: stacy-cli@${targetVersion} -> ${CORE_PACKAGE_NAME}@${coreVersion}`);
 
   run("node", ["--check", "scripts/publish-stacy-cli.mjs"], { label: "check stacy-cli publish helper" });
   run("node", ["--check", "scripts/smoke/stacy-cli-npm-smoke.mjs"], { label: "check stacy-cli npm smoke" });
@@ -176,13 +182,22 @@ try {
 
   const state = registryState(targetVersion);
   console.log("==> Phase 5 registry summary");
+  console.log(`target core: ${state.targetCoreLive ? "yes" : "no"}`);
   console.log(`target live: ${state.targetLive ? "yes" : "no"}`);
-  console.log(`npm latest:  stacy-cli@${state.latest} -> paperclipai@${state.latestPaperclip}`);
+  console.log(`npm latest:  stacy-cli@${state.latest} -> ${CORE_PACKAGE_NAME}@${state.latestCore}`);
   console.log(`old 0.3.1:   ${state.oldActive ? "active" : "not active or deprecated"}`);
 
-  if (!state.targetLive || state.oldActive) {
-    console.log("AUTH_GATED: run pnpm release:stacy-cli:publish -- --otp <fresh-code>");
-    console.log("TOKEN_PATH: set NPM_TOKEN or NODE_AUTH_TOKEN, then run pnpm release:stacy-cli:publish");
+  if (!state.targetCoreLive || !state.targetLive || state.oldActive) {
+    if (!state.targetCoreLive) {
+      console.log(`CORE_GATED: publish ${CORE_PACKAGE_NAME}@${coreVersion} first.`);
+    }
+    if (!state.targetLive) {
+      console.log("AUTH_GATED: after the matching core is live, run pnpm release:stacy-cli:publish -- --otp <fresh-code>");
+      console.log("TOKEN_PATH: set NPM_TOKEN or NODE_AUTH_TOKEN, then run pnpm release:stacy-cli:publish");
+    }
+    if (state.oldActive) {
+      console.log(`CLEANUP_GATED: after stacy-cli@${targetVersion} is live, deprecate stacy-cli@0.3.1.`);
+    }
     if (options.strictLive) {
       throw new Error("Phase 5 strict-live gate failed because npm still needs publish/deprecate auth.");
     }

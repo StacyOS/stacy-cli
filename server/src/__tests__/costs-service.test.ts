@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createDb, companies, agents, costEvents, financeEvents, projects } from "@paperclipai/db";
+import { createDb, companies, agents, costEvents, financeEvents, projects } from "@arpanstacy/stacy-db";
 import { costService } from "../services/costs.ts";
 import { financeService } from "../services/finance.ts";
 import {
@@ -143,7 +143,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockCompanyService.update.mockResolvedValue({
     id: "company-1",
-    name: "Paperclip",
+    name: "Stacy",
     budgetMonthlyCents: 100,
     spentMonthlyCents: 0,
   });
@@ -342,7 +342,7 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
 
   beforeAll(async () => {
-    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-costs-service-");
+    tempDb = await startEmbeddedPostgresTestDatabase("stacy-costs-service-");
     db = createDb(tempDb.connectionString);
     costs = costService(db);
     finance = financeService(db);
@@ -367,7 +367,7 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
 
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
@@ -440,7 +440,7 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
 
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });

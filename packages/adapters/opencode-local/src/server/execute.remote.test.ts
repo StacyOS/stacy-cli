@@ -41,9 +41,9 @@ const {
   syncDirectoryToSsh: vi.fn(async () => undefined),
 }));
 
-vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/server-utils")>(
-    "@paperclipai/adapter-utils/server-utils",
+vi.mock("@arpanstacy/stacy-adapter-utils/server-utils", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/server-utils")>(
+    "@arpanstacy/stacy-adapter-utils/server-utils",
   );
   return {
     ...actual,
@@ -53,9 +53,9 @@ vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
   };
 });
 
-vi.mock("@paperclipai/adapter-utils/ssh", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/ssh")>(
-    "@paperclipai/adapter-utils/ssh",
+vi.mock("@arpanstacy/stacy-adapter-utils/ssh", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/ssh")>(
+    "@arpanstacy/stacy-adapter-utils/ssh",
   );
   return {
     ...actual,
@@ -81,7 +81,7 @@ describe("opencode remote execution", () => {
   });
 
   it("prepares the workspace, syncs OpenCode skills, and restores workspace changes for remote SSH execution", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-opencode-remote-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-opencode-remote-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -106,7 +106,7 @@ describe("opencode remote execution", () => {
         model: "opencode/gpt-5-nano",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -121,7 +121,7 @@ describe("opencode remote execution", () => {
           privateKey: "PRIVATE KEY",
           knownHosts: "[127.0.0.1]:2222 ssh-ed25519 AAAA",
           strictHostKeyChecking: true,
-          paperclipApiUrl: "http://198.51.100.10:3102",
+          stacyApiUrl: "http://198.51.100.10:3102",
         },
       },
       onLog: async () => {},
@@ -136,16 +136,16 @@ describe("opencode remote execution", () => {
         port: 2222,
         username: "fixture",
         remoteCwd: "/remote/workspace",
-        paperclipApiUrl: "http://198.51.100.10:3102",
+        stacyApiUrl: "http://198.51.100.10:3102",
       },
     });
     expect(prepareWorkspaceForSshExecution).toHaveBeenCalledTimes(1);
     expect(syncDirectoryToSsh).toHaveBeenCalledTimes(2);
     expect(syncDirectoryToSsh).toHaveBeenCalledWith(expect.objectContaining({
-      remoteDir: "/remote/workspace/.paperclip-runtime/opencode/xdgConfig",
+      remoteDir: "/remote/workspace/.stacy-runtime/opencode/xdgConfig",
     }));
     expect(syncDirectoryToSsh).toHaveBeenCalledWith(expect.objectContaining({
-      remoteDir: "/remote/workspace/.paperclip-runtime/opencode/skills",
+      remoteDir: "/remote/workspace/.stacy-runtime/opencode/skills",
       followSymlinks: true,
     }));
     expect(runSshCommand).toHaveBeenCalledWith(
@@ -156,14 +156,14 @@ describe("opencode remote execution", () => {
     const call = runChildProcess.mock.calls[0] as unknown as
       | [string, string, string[], { env: Record<string, string>; remoteExecution?: { remoteCwd: string } | null }]
       | undefined;
-    expect(call?.[3].env.PAPERCLIP_API_URL).toBe("http://198.51.100.10:3102");
-    expect(call?.[3].env.XDG_CONFIG_HOME).toBe("/remote/workspace/.paperclip-runtime/opencode/xdgConfig");
+    expect(call?.[3].env.STACY_API_URL).toBe("http://198.51.100.10:3102");
+    expect(call?.[3].env.XDG_CONFIG_HOME).toBe("/remote/workspace/.stacy-runtime/opencode/xdgConfig");
     expect(call?.[3].remoteExecution?.remoteCwd).toBe("/remote/workspace");
     expect(restoreWorkspaceFromSshExecution).toHaveBeenCalledTimes(1);
   });
 
   it("resumes saved OpenCode sessions for remote SSH execution only when the identity matches", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-opencode-remote-resume-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-opencode-remote-resume-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -198,7 +198,7 @@ describe("opencode remote execution", () => {
         model: "opencode/gpt-5-nano",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },

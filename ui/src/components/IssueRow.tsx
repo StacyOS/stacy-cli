@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Issue } from "@paperclipai/shared";
+import type { Issue } from "@arpanstacy/stacy-shared";
 import { Link } from "@/lib/router";
 import { X } from "lucide-react";
 import {

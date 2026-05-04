@@ -10,7 +10,7 @@ dispatch rows without changing the default local developer path.
 
 - Added `heartbeat_dispatch_outbox`.
 - Added migration `0072_heartbeat_dispatch_outbox`.
-- Exported the table from `@paperclipai/db`.
+- Exported the table from `@arpanstacy/stacy-db`.
 - Added `heartbeatDispatchOutboxService`.
 - Added idempotent dispatch request creation keyed by run id.
 - Added pending-dispatch listing for the future worker.
@@ -42,11 +42,11 @@ dispatch rows without changing the default local developer path.
   - `worker_owned` queues runs through the outbox and lets the worker claim
     them.
 - Added dispatch worker env flags:
-  - `PAPERCLIP_HEARTBEAT_DISPATCH_MODE=direct|shadow_worker|worker_owned`
-  - `PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_ENABLED=true`
-  - `PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS`
-  - `PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE`
-  - `PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_LEASE_MS`
+  - `STACY_HEARTBEAT_DISPATCH_MODE=direct|shadow_worker|worker_owned`
+  - `STACY_HEARTBEAT_DISPATCH_WORKER_ENABLED=true`
+  - `STACY_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS`
+  - `STACY_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE`
+  - `STACY_HEARTBEAT_DISPATCH_WORKER_LEASE_MS`
 - Wired heartbeat queue creation paths to record dispatch requests:
   - normal wakeup enqueue
   - missing issue-comment retry
@@ -90,11 +90,11 @@ pnpm smoke:heartbeat-worker-owned
 The profile sets:
 
 ```text
-PAPERCLIP_HEARTBEAT_DISPATCH_MODE=worker_owned
-PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_ENABLED=true
-PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS=1000
-PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE=10
-PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_LEASE_MS=60000
+STACY_HEARTBEAT_DISPATCH_MODE=worker_owned
+STACY_HEARTBEAT_DISPATCH_WORKER_ENABLED=true
+STACY_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS=1000
+STACY_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE=10
+STACY_HEARTBEAT_DISPATCH_WORKER_LEASE_MS=60000
 ```
 
 ## Queue Dependency Decision

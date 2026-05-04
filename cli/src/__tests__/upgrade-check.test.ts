@@ -2,12 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getPostgresDataDirectory, inspectMigrations } from "@paperclipai/db";
+import { getPostgresDataDirectory, inspectMigrations } from "@arpanstacy/stacy-db";
 import { upgradeCheckCommand } from "../commands/upgrade-check.js";
 import { writeConfig } from "../config/store.js";
-import type { PaperclipConfig } from "../config/schema.js";
+import type { StacyConfig } from "../config/schema.js";
 
-vi.mock("@paperclipai/db", () => ({
+vi.mock("@arpanstacy/stacy-db", () => ({
   getPostgresDataDirectory: vi.fn(),
   inspectMigrations: vi.fn(),
 }));
@@ -17,9 +17,9 @@ const ORIGINAL_ENV = { ...process.env };
 function createConfigFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "stacy-upgrade-check-"));
   const runtimeRoot = path.join(root, "runtime");
-  const configPath = path.join(root, ".paperclip", "config.json");
+  const configPath = path.join(root, ".stacy", "config.json");
   const backupDir = path.join(runtimeRoot, "backups");
-  const config: PaperclipConfig = {
+  const config: StacyConfig = {
     $meta: {
       version: 1,
       updatedAt: "2026-04-30T00:00:00.000Z",
@@ -61,7 +61,7 @@ function createConfigFixture() {
         baseDir: path.join(runtimeRoot, "storage"),
       },
       s3: {
-        bucket: "paperclip",
+        bucket: "stacy",
         region: "us-east-1",
         prefix: "",
         forcePathStyle: false,

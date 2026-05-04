@@ -43,9 +43,9 @@ const {
   syncDirectoryToSsh: vi.fn(async () => undefined),
 }));
 
-vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/server-utils")>(
-    "@paperclipai/adapter-utils/server-utils",
+vi.mock("@arpanstacy/stacy-adapter-utils/server-utils", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/server-utils")>(
+    "@arpanstacy/stacy-adapter-utils/server-utils",
   );
   return {
     ...actual,
@@ -55,9 +55,9 @@ vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
   };
 });
 
-vi.mock("@paperclipai/adapter-utils/ssh", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/ssh")>(
-    "@paperclipai/adapter-utils/ssh",
+vi.mock("@arpanstacy/stacy-adapter-utils/ssh", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/ssh")>(
+    "@arpanstacy/stacy-adapter-utils/ssh",
   );
   return {
     ...actual,
@@ -83,7 +83,7 @@ describe("gemini remote execution", () => {
   });
 
   it("prepares the workspace, syncs Gemini skills, and restores workspace changes for remote SSH execution", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-gemini-remote-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-gemini-remote-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -107,7 +107,7 @@ describe("gemini remote execution", () => {
         command: "gemini",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -122,7 +122,7 @@ describe("gemini remote execution", () => {
           privateKey: "PRIVATE KEY",
           knownHosts: "[127.0.0.1]:2222 ssh-ed25519 AAAA",
           strictHostKeyChecking: true,
-          paperclipApiUrl: "http://198.51.100.10:3102",
+          stacyApiUrl: "http://198.51.100.10:3102",
         },
       },
       onLog: async () => {},
@@ -137,13 +137,13 @@ describe("gemini remote execution", () => {
         port: 2222,
         username: "fixture",
         remoteCwd: "/remote/workspace",
-        paperclipApiUrl: "http://198.51.100.10:3102",
+        stacyApiUrl: "http://198.51.100.10:3102",
       },
     });
     expect(prepareWorkspaceForSshExecution).toHaveBeenCalledTimes(1);
     expect(syncDirectoryToSsh).toHaveBeenCalledTimes(1);
     expect(syncDirectoryToSsh).toHaveBeenCalledWith(expect.objectContaining({
-      remoteDir: "/remote/workspace/.paperclip-runtime/gemini/skills",
+      remoteDir: "/remote/workspace/.stacy-runtime/gemini/skills",
       followSymlinks: true,
     }));
     expect(runSshCommand).toHaveBeenCalledWith(
@@ -154,13 +154,13 @@ describe("gemini remote execution", () => {
     const call = runChildProcess.mock.calls[0] as unknown as
       | [string, string, string[], { env: Record<string, string>; remoteExecution?: { remoteCwd: string } | null }]
       | undefined;
-    expect(call?.[3].env.PAPERCLIP_API_URL).toBe("http://198.51.100.10:3102");
+    expect(call?.[3].env.STACY_API_URL).toBe("http://198.51.100.10:3102");
     expect(call?.[3].remoteExecution?.remoteCwd).toBe("/remote/workspace");
     expect(restoreWorkspaceFromSshExecution).toHaveBeenCalledTimes(1);
   });
 
   it("resumes saved Gemini sessions for remote SSH execution only when the identity matches", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-gemini-remote-resume-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-gemini-remote-resume-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -194,7 +194,7 @@ describe("gemini remote execution", () => {
         command: "gemini",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -220,7 +220,7 @@ describe("gemini remote execution", () => {
   });
 
   it("restores the remote workspace if skills sync fails after workspace prep", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-gemini-remote-sync-fail-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-gemini-remote-sync-fail-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -245,7 +245,7 @@ describe("gemini remote execution", () => {
         command: "gemini",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },

@@ -31,7 +31,7 @@ export interface AdapterSshExecutionTarget {
   environmentId?: string | null;
   leaseId?: string | null;
   remoteCwd: string;
-  paperclipApiUrl?: string | null;
+  stacyApiUrl?: string | null;
   spec: SshRemoteExecutionSpec;
 }
 
@@ -42,7 +42,7 @@ export interface AdapterSandboxExecutionTarget {
   environmentId?: string | null;
   leaseId?: string | null;
   remoteCwd: string;
-  paperclipApiUrl?: string | null;
+  stacyApiUrl?: string | null;
   timeoutMs?: number | null;
   runner?: CommandManagedRuntimeRunner;
 }
@@ -130,12 +130,12 @@ export function adapterExecutionTargetRemoteCwd(
   return target?.kind === "remote" ? target.remoteCwd : localCwd;
 }
 
-export function adapterExecutionTargetPaperclipApiUrl(
+export function adapterExecutionTargetStacyApiUrl(
   target: AdapterExecutionTarget | null | undefined,
 ): string | null {
   if (target?.kind !== "remote") return null;
-  if (target.transport === "ssh") return target.paperclipApiUrl ?? target.spec.paperclipApiUrl ?? null;
-  return target.paperclipApiUrl ?? null;
+  if (target.transport === "ssh") return target.stacyApiUrl ?? target.spec.stacyApiUrl ?? null;
+  return target.stacyApiUrl ?? null;
 }
 
 export function describeAdapterExecutionTarget(
@@ -347,7 +347,7 @@ export function adapterExecutionTargetSessionIdentity(
     environmentId: target.environmentId ?? null,
     leaseId: target.leaseId ?? null,
     remoteCwd: target.remoteCwd,
-    ...(target.paperclipApiUrl ? { paperclipApiUrl: target.paperclipApiUrl } : {}),
+    ...(target.stacyApiUrl ? { stacyApiUrl: target.stacyApiUrl } : {}),
   };
 }
 
@@ -367,7 +367,7 @@ export function adapterExecutionTargetSessionMatches(
     readStringMeta(parsedSaved, "environmentId") === current?.environmentId &&
     readStringMeta(parsedSaved, "leaseId") === current?.leaseId &&
     readStringMeta(parsedSaved, "remoteCwd") === current?.remoteCwd &&
-    readStringMeta(parsedSaved, "paperclipApiUrl") === (current?.paperclipApiUrl ?? null)
+    readStringMeta(parsedSaved, "stacyApiUrl") === (current?.stacyApiUrl ?? null)
   );
 }
 
@@ -392,7 +392,7 @@ export function parseAdapterExecutionTarget(value: unknown): AdapterExecutionTar
       environmentId: readStringMeta(parsed, "environmentId"),
       leaseId: readStringMeta(parsed, "leaseId"),
       remoteCwd: spec.remoteCwd,
-      paperclipApiUrl: readStringMeta(parsed, "paperclipApiUrl") ?? spec.paperclipApiUrl ?? null,
+      stacyApiUrl: readStringMeta(parsed, "stacyApiUrl") ?? spec.stacyApiUrl ?? null,
       spec,
     };
   }
@@ -407,7 +407,7 @@ export function parseAdapterExecutionTarget(value: unknown): AdapterExecutionTar
       environmentId: readStringMeta(parsed, "environmentId"),
       leaseId: readStringMeta(parsed, "leaseId"),
       remoteCwd,
-      paperclipApiUrl: readStringMeta(parsed, "paperclipApiUrl"),
+      stacyApiUrl: readStringMeta(parsed, "stacyApiUrl"),
       timeoutMs: typeof parsed.timeoutMs === "number" ? parsed.timeoutMs : null,
     };
   }
@@ -428,7 +428,7 @@ export function adapterExecutionTargetFromRemoteExecution(
       environmentId: metadata.environmentId ?? null,
       leaseId: metadata.leaseId ?? null,
       remoteCwd: ssh.remoteCwd,
-      paperclipApiUrl: ssh.paperclipApiUrl ?? null,
+      stacyApiUrl: ssh.stacyApiUrl ?? null,
       spec: ssh,
     };
   }
@@ -490,7 +490,7 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
       leaseId: target.leaseId,
       remoteCwd: target.remoteCwd,
       timeoutMs: target.timeoutMs,
-      paperclipApiUrl: target.paperclipApiUrl,
+      stacyApiUrl: target.stacyApiUrl,
     },
     adapterKey: input.adapterKey,
     workspaceLocalDir: input.workspaceLocalDir,
@@ -512,5 +512,5 @@ export function runtimeAssetDir(
   key: string,
   fallbackRemoteCwd: string,
 ): string {
-  return prepared.assetDirs[key] ?? path.posix.join(fallbackRemoteCwd, ".paperclip-runtime", key);
+  return prepared.assetDirs[key] ?? path.posix.join(fallbackRemoteCwd, ".stacy-runtime", key);
 }

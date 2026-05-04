@@ -1,6 +1,6 @@
 import path from "node:path";
 import { CommandExitError, Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
-import { definePlugin } from "@paperclipai/plugin-sdk";
+import { definePlugin } from "@arpanstacy/stacy-plugin-sdk";
 import type {
   PluginEnvironmentAcquireLeaseParams,
   PluginEnvironmentDestroyLeaseParams,
@@ -15,7 +15,7 @@ import type {
   PluginEnvironmentResumeLeaseParams,
   PluginEnvironmentValidateConfigParams,
   PluginEnvironmentValidationResult,
-} from "@paperclipai/plugin-sdk";
+} from "@arpanstacy/stacy-plugin-sdk";
 
 interface E2bDriverConfig {
   template: string;
@@ -53,7 +53,7 @@ async function createSandbox(config: E2bDriverConfig): Promise<Sandbox> {
     apiKey: resolveApiKey(config),
     timeoutMs: config.timeoutMs,
     metadata: {
-      paperclipProvider: "e2b",
+      stacyProvider: "e2b",
     },
   };
   return await Sandbox.create(config.template, options);
@@ -70,7 +70,7 @@ async function ensureSandboxWorkspace(sandbox: Sandbox, remoteCwd: string): Prom
 async function resolveSandboxWorkingDirectory(sandbox: Sandbox): Promise<string> {
   const result = await sandbox.commands.run("pwd");
   const cwd = result.stdout.trim();
-  const remoteCwd = path.posix.join(cwd.length > 0 ? cwd : "/", "paperclip-workspace");
+  const remoteCwd = path.posix.join(cwd.length > 0 ? cwd : "/", "stacy-workspace");
   await ensureSandboxWorkspace(sandbox, remoteCwd);
   return remoteCwd;
 }
@@ -286,7 +286,7 @@ const plugin = definePlugin({
       typeof params.lease.metadata?.remoteCwd === "string" &&
       params.lease.metadata.remoteCwd.trim().length > 0
         ? params.lease.metadata.remoteCwd.trim()
-        : params.workspace.remotePath ?? params.workspace.localPath ?? "/paperclip-workspace";
+        : params.workspace.remotePath ?? params.workspace.localPath ?? "/stacy-workspace";
 
     if (params.lease.providerLeaseId) {
       const sandbox = await connectSandbox(config, params.lease.providerLeaseId);

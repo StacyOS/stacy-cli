@@ -2,14 +2,14 @@ import path from "node:path";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { formatDatabaseBackupResult, runDatabaseBackup, runDatabaseRestore } from "@paperclipai/db";
+import { formatDatabaseBackupResult, runDatabaseBackup, runDatabaseRestore } from "@arpanstacy/stacy-db";
 import {
   expandHomePrefix,
   resolveDefaultBackupDir,
-  resolvePaperclipInstanceId,
+  resolveStacyInstanceId,
 } from "../config/home.js";
 import { readConfig, resolveConfigPath } from "../config/store.js";
-import { printPaperclipCliBanner } from "../utils/banner.js";
+import { printStacyCliBanner } from "../utils/banner.js";
 
 type DbBackupOptions = {
   config?: string;
@@ -39,7 +39,7 @@ function resolveConnectionString(configPath?: string): { value: string; source: 
 
   const port = config?.database.embeddedPostgresPort ?? 54329;
   return {
-    value: `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`,
+    value: `postgres://stacy:stacy@127.0.0.1:${port}/stacy`,
     source: `embedded-postgres@${port}`,
   };
 }
@@ -90,13 +90,13 @@ function validateBackupFile(backupFile: string): { backupFile: string; sizeBytes
 }
 
 export async function dbBackupCommand(opts: DbBackupOptions): Promise<void> {
-  printPaperclipCliBanner();
+  printStacyCliBanner();
   p.intro(pc.bgCyan(pc.black(" stacy db:backup ")));
 
   const configPath = resolveConfigPath(opts.config);
   const config = readConfig(opts.config);
   const connection = resolveConnectionString(opts.config);
-  const defaultDir = resolveDefaultBackupDir(resolvePaperclipInstanceId());
+  const defaultDir = resolveDefaultBackupDir(resolveStacyInstanceId());
   const configuredDir = opts.dir?.trim() || config?.database.backup.dir || defaultDir;
   const backupDir = resolveBackupDir(configuredDir);
   const retentionDays = normalizeRetentionDays(
@@ -148,7 +148,7 @@ export async function dbRestoreCommand(
   backupFileArg: string | undefined,
   opts: DbRestoreOptions,
 ): Promise<void> {
-  printPaperclipCliBanner();
+  printStacyCliBanner();
   p.intro(pc.bgCyan(pc.black(" stacy db:restore ")));
 
   if (backupFileArg && opts.latest) {
@@ -158,7 +158,7 @@ export async function dbRestoreCommand(
   const configPath = resolveConfigPath(opts.config);
   const config = readConfig(opts.config);
   const connection = resolveConnectionString(opts.config);
-  const defaultDir = resolveDefaultBackupDir(resolvePaperclipInstanceId());
+  const defaultDir = resolveDefaultBackupDir(resolveStacyInstanceId());
   const configuredDir = config?.database.backup.dir || defaultDir;
   const backupDir = resolveBackupDir(configuredDir);
   const rawBackupFile =

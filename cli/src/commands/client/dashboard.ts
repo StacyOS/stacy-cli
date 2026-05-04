@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import type { DashboardSummary } from "@paperclipai/shared";
+import type { DashboardSummary } from "@arpanstacy/stacy-shared";
 import {
   addCommonClientOptions,
   handleCommandError,

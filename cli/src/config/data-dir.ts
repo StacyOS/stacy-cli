@@ -3,7 +3,7 @@ import {
   expandHomePrefix,
   resolveDefaultConfigPath,
   resolveDefaultContextPath,
-  resolvePaperclipInstanceId,
+  resolveStacyInstanceId,
 } from "./home.js";
 
 export interface DataDirOptionLike {
@@ -27,24 +27,24 @@ export function applyDataDirOverride(
 
   const resolvedDataDir = path.resolve(expandHomePrefix(rawDataDir));
   process.env.STACY_HOME = resolvedDataDir;
-  process.env.PAPERCLIP_HOME = resolvedDataDir;
+  process.env.STACY_HOME = resolvedDataDir;
 
   if (support.hasConfigOption) {
-    const hasConfigOverride = Boolean(options.config?.trim()) || Boolean(process.env.PAPERCLIP_CONFIG?.trim());
+    const hasConfigOverride = Boolean(options.config?.trim()) || Boolean(process.env.STACY_CONFIG?.trim());
     if (!hasConfigOverride) {
-      const instanceId = resolvePaperclipInstanceId(options.instance);
+      const instanceId = resolveStacyInstanceId(options.instance);
       process.env.STACY_INSTANCE_ID = instanceId;
-      process.env.PAPERCLIP_INSTANCE_ID = instanceId;
+      process.env.STACY_INSTANCE_ID = instanceId;
       process.env.STACY_CONFIG = resolveDefaultConfigPath(instanceId);
-      process.env.PAPERCLIP_CONFIG = resolveDefaultConfigPath(instanceId);
+      process.env.STACY_CONFIG = resolveDefaultConfigPath(instanceId);
     }
   }
 
   if (support.hasContextOption) {
-    const hasContextOverride = Boolean(options.context?.trim()) || Boolean(process.env.PAPERCLIP_CONTEXT?.trim());
+    const hasContextOverride = Boolean(options.context?.trim()) || Boolean(process.env.STACY_CONTEXT?.trim());
     if (!hasContextOverride) {
       process.env.STACY_CONTEXT = resolveDefaultContextPath();
-      process.env.PAPERCLIP_CONTEXT = resolveDefaultContextPath();
+      process.env.STACY_CONTEXT = resolveDefaultContextPath();
     }
   }
 

@@ -22,11 +22,11 @@ Defaults:
 Override with environment variables:
 
 ```sh
-PAPERCLIP_PORT=3200 PAPERCLIP_DATA_DIR=../data/stacy BETTER_AUTH_SECRET=change-me \
+STACY_PORT=3200 STACY_DATA_DIR=../data/stacy BETTER_AUTH_SECRET=change-me \
   docker compose -f docker/docker-compose.quickstart.yml up --build
 ```
 
-**Note:** `PAPERCLIP_DATA_DIR` is resolved relative to the compose file (`docker/`), so `../data/stacy` maps to `data/stacy` in the project root.
+**Note:** `STACY_DATA_DIR` is resolved relative to the compose file (`docker/`), so `../data/stacy` maps to `data/stacy` in the project root.
 
 Validate the quickstart from a checkout with:
 
@@ -42,13 +42,13 @@ Docker is not installed or not running.
 ## Manual Docker Build
 
 ```sh
-docker build -t paperclip-local .
-docker run --name paperclip \
+docker build -t stacy-local .
+docker run --name stacy \
   -p 3100:3100 \
   -e HOST=0.0.0.0 \
-  -e PAPERCLIP_HOME=/paperclip \
-  -v "$(pwd)/data/docker-stacy:/paperclip" \
-  paperclip-local
+  -e STACY_HOME=/stacy \
+  -v "$(pwd)/data/docker-stacy:/stacy" \
+  stacy-local
 ```
 
 ## Data Persistence
@@ -94,14 +94,14 @@ The Docker image pre-installs:
 Pass API keys to enable local adapter runs inside the container:
 
 ```sh
-docker run --name paperclip \
+docker run --name stacy \
   -p 3100:3100 \
   -e HOST=0.0.0.0 \
-  -e PAPERCLIP_HOME=/paperclip \
+  -e STACY_HOME=/stacy \
   -e OPENAI_API_KEY=sk-... \
   -e ANTHROPIC_API_KEY=sk-... \
-  -v "$(pwd)/data/docker-stacy:/paperclip" \
-  paperclip-local
+  -v "$(pwd)/data/docker-stacy:/stacy" \
+  stacy-local
 ```
 
 Without API keys, the app runs normally — adapter environment checks will surface missing prerequisites.

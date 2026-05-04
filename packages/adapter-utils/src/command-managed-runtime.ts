@@ -26,7 +26,7 @@ export interface CommandManagedRuntimeSpec {
   leaseId?: string | null;
   remoteCwd: string;
   timeoutMs?: number | null;
-  paperclipApiUrl?: string | null;
+  stacyApiUrl?: string | null;
 }
 
 export type CommandManagedRuntimeAsset = SandboxManagedRuntimeAsset;
@@ -121,7 +121,7 @@ export async function prepareCommandManagedRuntime(input: {
     remoteCwd: workspaceRemoteDir,
     timeoutMs,
     apiKey: null,
-    paperclipApiUrl: input.spec.paperclipApiUrl ?? null,
+    stacyApiUrl: input.spec.stacyApiUrl ?? null,
   };
   const client = createCommandManagedRuntimeClient({
     runner: input.runner,

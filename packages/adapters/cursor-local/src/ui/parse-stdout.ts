@@ -1,4 +1,4 @@
-import type { TranscriptEntry } from "@paperclipai/adapter-utils";
+import type { TranscriptEntry } from "@arpanstacy/stacy-adapter-utils";
 import { normalizeCursorStreamLine } from "../shared/stream.js";
 
 function safeJsonParse(text: string): unknown {

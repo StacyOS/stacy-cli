@@ -1,6 +1,6 @@
 import pc from "picocolors";
 
-const PAPERCLIP_ART = [
+const STACY_ART = [
   "███████╗████████╗ █████╗  ██████╗██╗   ██╗",
   "██╔════╝╚══██╔══╝██╔══██╗██╔════╝╚██╗ ██╔╝",
   "███████╗   ██║   ███████║██║      ╚████╔╝ ",
@@ -11,10 +11,10 @@ const PAPERCLIP_ART = [
 
 const TAGLINE = "Trust-first control plane for AI agent work";
 
-export function printPaperclipCliBanner(): void {
+export function printStacyCliBanner(): void {
   const lines = [
     "",
-    ...PAPERCLIP_ART.map((line) => pc.cyan(line)),
+    ...STACY_ART.map((line) => pc.cyan(line)),
     pc.blue("  ───────────────────────────────────────────────────────"),
     pc.bold(pc.white(`  ${TAGLINE}`)),
     "",

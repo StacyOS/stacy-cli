@@ -6,8 +6,8 @@ import type {
   CompanySecret,
   EnvBinding,
   Environment,
-} from "@paperclipai/shared";
-import { AGENT_DEFAULT_MAX_CONCURRENT_RUNS, supportedEnvironmentDriversForAdapter } from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
+import { AGENT_DEFAULT_MAX_CONCURRENT_RUNS, supportedEnvironmentDriversForAdapter } from "@arpanstacy/stacy-shared";
 import type { AdapterModel } from "../api/agents";
 import { agentsApi } from "../api/agents";
 import { environmentsApi } from "../api/environments";
@@ -17,9 +17,9 @@ import { assetsApi } from "../api/assets";
 import {
   DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX,
   DEFAULT_CODEX_LOCAL_MODEL,
-} from "@paperclipai/adapter-codex-local";
-import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
-import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
+} from "@arpanstacy/stacy-adapter-codex-local";
+import { DEFAULT_CURSOR_LOCAL_MODEL } from "@arpanstacy/stacy-adapter-cursor-local";
+import { DEFAULT_GEMINI_LOCAL_MODEL } from "@arpanstacy/stacy-adapter-gemini-local";
 import {
   Popover,
   PopoverContent,
@@ -58,10 +58,10 @@ import { useAdapterCapabilities } from "../adapters/use-adapter-capabilities";
 
 /* ---- Create mode values ---- */
 
-// Canonical type lives in @paperclipai/adapter-utils; re-exported here
+// Canonical type lives in @arpanstacy/stacy-adapter-utils; re-exported here
 // so existing imports from this file keep working.
-export type { CreateConfigValues } from "@paperclipai/adapter-utils";
-import type { CreateConfigValues } from "@paperclipai/adapter-utils";
+export type { CreateConfigValues } from "@arpanstacy/stacy-adapter-utils";
+import type { CreateConfigValues } from "@arpanstacy/stacy-adapter-utils";
 
 /* ---- Props ---- */
 

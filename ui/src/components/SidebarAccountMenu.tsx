@@ -10,7 +10,7 @@ import {
   Sun,
   UserRoundPen,
 } from "lucide-react";
-import type { DeploymentMode } from "@paperclipai/shared";
+import type { DeploymentMode } from "@arpanstacy/stacy-shared";
 import { Link } from "@/lib/router";
 import { authApi } from "@/api/auth";
 import { queryKeys } from "@/lib/queryKeys";
@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "../lib/utils";
 
 const PROFILE_SETTINGS_PATH = "/instance/settings/profile";
-const DOCS_URL = "https://docs.paperclip.ing/";
+const DOCS_URL = "https://docs.stacy.ing/";
 
 interface SidebarAccountMenuProps {
   deploymentMode?: DeploymentMode;
@@ -162,7 +162,7 @@ export function SidebarAccountMenu({
           sideOffset={10}
           className="w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-t-2xl rounded-b-none border-border p-0 shadow-2xl"
         >
-          <div className="h-24 bg-[linear-gradient(135deg,hsl(var(--primary))_0%,hsl(var(--accent))_55%,hsl(var(--muted))_100%)]" />
+          <div className="h-24 bg-[linear-gradient(135deg,var(--primary)_0%,var(--secondary)_54%,var(--card)_100%)]" />
           <div className="-mt-8 px-4 pb-4">
             <div className="flex items-start gap-3">
               <div className="rounded-2xl border-4 border-popover bg-popover p-0.5 shadow-sm">
@@ -180,7 +180,7 @@ export function SidebarAccountMenu({
                 </div>
                 <p className="truncate text-sm text-muted-foreground">{secondaryLabel}</p>
                 {version ? (
-                  <p className="mt-1 text-xs text-muted-foreground">Paperclip v{version}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Stacy v{version}</p>
                 ) : null}
               </div>
             </div>
@@ -209,7 +209,7 @@ export function SidebarAccountMenu({
               />
               <MenuAction
                 label="Documentation"
-                description="Open Paperclip docs in a new tab."
+                description="Open Stacy docs in a new tab."
                 icon={BookOpen}
                 href={DOCS_URL}
                 external

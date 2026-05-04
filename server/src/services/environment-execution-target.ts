@@ -1,9 +1,9 @@
-import type { Db } from "@paperclipai/db";
-import type { Environment, EnvironmentLease } from "@paperclipai/shared";
+import type { Db } from "@arpanstacy/stacy-db";
+import type { Environment, EnvironmentLease } from "@arpanstacy/stacy-shared";
 import {
   adapterExecutionTargetToRemoteSpec,
   type AdapterExecutionTarget,
-} from "@paperclipai/adapter-utils/execution-target";
+} from "@arpanstacy/stacy-adapter-utils/execution-target";
 import { parseObject } from "../adapters/utils.js";
 import { resolveEnvironmentDriverConfigForRuntime } from "./environment-config.js";
 import type { EnvironmentRuntimeService } from "./environment-runtime.js";
@@ -57,11 +57,11 @@ export async function resolveEnvironmentExecutionTarget(input: {
         ? input.leaseMetadata.remoteCwd.trim()
         : DEFAULT_SANDBOX_REMOTE_CWD;
     const timeoutMs = "timeoutMs" in parsed.config ? parsed.config.timeoutMs : null;
-    const paperclipApiUrl =
-      typeof input.leaseMetadata?.paperclipApiUrl === "string" && input.leaseMetadata.paperclipApiUrl.trim().length > 0
-        ? input.leaseMetadata.paperclipApiUrl.trim()
-        : typeof process.env.PAPERCLIP_RUNTIME_API_URL === "string" && process.env.PAPERCLIP_RUNTIME_API_URL.trim().length > 0
-          ? process.env.PAPERCLIP_RUNTIME_API_URL.trim()
+    const stacyApiUrl =
+      typeof input.leaseMetadata?.stacyApiUrl === "string" && input.leaseMetadata.stacyApiUrl.trim().length > 0
+        ? input.leaseMetadata.stacyApiUrl.trim()
+        : typeof process.env.STACY_RUNTIME_API_URL === "string" && process.env.STACY_RUNTIME_API_URL.trim().length > 0
+          ? process.env.STACY_RUNTIME_API_URL.trim()
           : null;
 
     return {
@@ -71,7 +71,7 @@ export async function resolveEnvironmentExecutionTarget(input: {
       remoteCwd,
       environmentId: input.environment.id ?? null,
       leaseId: input.leaseId ?? null,
-      paperclipApiUrl,
+      stacyApiUrl,
       timeoutMs,
       runner: input.environmentRuntime && input.lease
         ? {
@@ -137,9 +137,9 @@ export async function resolveEnvironmentExecutionTarget(input: {
     environmentId: input.environment.id ?? null,
     leaseId: input.leaseId ?? null,
     remoteCwd,
-    paperclipApiUrl:
-      typeof input.leaseMetadata?.paperclipApiUrl === "string" && input.leaseMetadata.paperclipApiUrl.trim().length > 0
-        ? input.leaseMetadata.paperclipApiUrl.trim()
+    stacyApiUrl:
+      typeof input.leaseMetadata?.stacyApiUrl === "string" && input.leaseMetadata.stacyApiUrl.trim().length > 0
+        ? input.leaseMetadata.stacyApiUrl.trim()
         : null,
     spec: {
       host: parsed.config.host,
@@ -150,9 +150,9 @@ export async function resolveEnvironmentExecutionTarget(input: {
       knownHosts: parsed.config.knownHosts,
       strictHostKeyChecking: parsed.config.strictHostKeyChecking,
       remoteCwd,
-      paperclipApiUrl:
-        typeof input.leaseMetadata?.paperclipApiUrl === "string" && input.leaseMetadata.paperclipApiUrl.trim().length > 0
-          ? input.leaseMetadata.paperclipApiUrl.trim()
+      stacyApiUrl:
+        typeof input.leaseMetadata?.stacyApiUrl === "string" && input.leaseMetadata.stacyApiUrl.trim().length > 0
+          ? input.leaseMetadata.stacyApiUrl.trim()
           : null,
     },
   };

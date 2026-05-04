@@ -2,11 +2,11 @@ import type {
   WorkspaceCommandDefinition,
   WorkspaceRuntimeControlTarget,
   WorkspaceRuntimeService,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import {
   listWorkspaceCommandDefinitions,
   matchWorkspaceRuntimeServiceToCommand,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { Activity, ExternalLink, Loader2, Play, RotateCcw, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -415,7 +415,7 @@ export function WorkspaceRuntimeControls({
 
       <CommandSection
         title="Services"
-        description="Long-running commands that Paperclip can supervise for this workspace."
+        description="Long-running commands that Stacy can supervise for this workspace."
         items={resolvedSections.services}
         emptyMessage={resolvedServiceEmptyMessage}
         disabledHint={visibleDisabledHint}

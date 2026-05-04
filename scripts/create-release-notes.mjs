@@ -163,7 +163,7 @@ function renderTemplate(version, releaseDate) {
     "",
     "## Verification",
     "",
-    "- [ ] `pnpm --filter paperclipai typecheck`",
+    "- [ ] `pnpm --filter @arpanstacy/stacy typecheck`",
     "- [ ] `pnpm test:run`",
     "- [ ] `pnpm build`",
     "- [ ] `pnpm release:phase5-gate`",

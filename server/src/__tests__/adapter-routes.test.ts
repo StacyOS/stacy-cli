@@ -93,7 +93,7 @@ describe("adapter routes", () => {
     mockAdapterPluginStore.addAdapterPlugin.mockResolvedValue(undefined);
     mockAdapterPluginStore.removeAdapterPlugin.mockReturnValue(false);
     mockAdapterPluginStore.getAdapterPluginByType.mockReturnValue(undefined);
-    mockAdapterPluginStore.getAdapterPluginsDir.mockReturnValue("/tmp/paperclip-adapter-routes-test");
+    mockAdapterPluginStore.getAdapterPluginsDir.mockReturnValue("/tmp/stacy-adapter-routes-test");
     mockAdapterPluginStore.getDisabledAdapterTypes.mockReturnValue([]);
     mockAdapterPluginStore.setAdapterDisabled.mockReturnValue(false);
     mockPluginLoader.buildExternalAdapters.mockResolvedValue([]);
@@ -174,16 +174,15 @@ describe("adapter routes", () => {
     expect(cursorAdapter.capabilities.requiresMaterializedRuntimeSkills).toBe(true);
     expect(cursorAdapter.capabilities.supportsInstructionsBundle).toBe(true);
 
-    // hermes_local currently supports skills + local JWT, but not the managed
-    // instructions bundle flow because the bundled adapter does not consume
-    // instructionsFilePath at runtime.
-    const hermesAdapter = res.body.find((a: any) => a.type === "hermes_local");
-    expect(hermesAdapter).toBeDefined();
-    expect(hermesAdapter.capabilities).toMatchObject({
-      supportsInstructionsBundle: false,
+    // gemini_local is one of the Stacy-owned local adapters that requires
+    // materialized runtime skills.
+    const geminiAdapter = res.body.find((a: any) => a.type === "gemini_local");
+    expect(geminiAdapter).toBeDefined();
+    expect(geminiAdapter.capabilities).toMatchObject({
+      supportsInstructionsBundle: true,
       supportsSkills: true,
       supportsLocalAgentJwt: true,
-      requiresMaterializedRuntimeSkills: false,
+      requiresMaterializedRuntimeSkills: true,
     });
   });
 

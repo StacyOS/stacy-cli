@@ -2,9 +2,9 @@ import { createHash, randomBytes } from "node:crypto";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { createDb, instanceUserRoles, invites } from "@paperclipai/db";
-import { inferBindModeFromHost } from "@paperclipai/shared";
-import { loadPaperclipEnvFile } from "../config/env.js";
+import { createDb, instanceUserRoles, invites } from "@arpanstacy/stacy-db";
+import { inferBindModeFromHost } from "@arpanstacy/stacy-shared";
+import { loadStacyEnvFile } from "../config/env.js";
 import { readConfig, resolveConfigPath } from "../config/store.js";
 
 function hashToken(token: string) {
@@ -24,7 +24,7 @@ function resolveDbUrl(configPath?: string, explicitDbUrl?: string) {
   }
   if (config?.database.mode === "embedded-postgres") {
     const port = config.database.embeddedPostgresPort ?? 54329;
-    return `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`;
+    return `postgres://stacy:stacy@127.0.0.1:${port}/stacy`;
   }
   return null;
 }
@@ -34,8 +34,8 @@ function resolveBaseUrl(configPath?: string, explicitBaseUrl?: string) {
   const fromEnv =
     process.env.STACY_PUBLIC_URL ??
     process.env.STACY_AUTH_PUBLIC_BASE_URL ??
-    process.env.PAPERCLIP_PUBLIC_URL ??
-    process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL ??
+    process.env.STACY_PUBLIC_URL ??
+    process.env.STACY_AUTH_PUBLIC_BASE_URL ??
     process.env.BETTER_AUTH_URL ??
     process.env.BETTER_AUTH_BASE_URL;
   if (fromEnv?.trim()) return fromEnv.trim().replace(/\/+$/, "");
@@ -61,7 +61,7 @@ export async function bootstrapCeoInvite(opts: {
   dbUrl?: string;
 }) {
   const configPath = resolveConfigPath(opts.config);
-  loadPaperclipEnvFile(configPath);
+  loadStacyEnvFile(configPath);
   const config = readConfig(configPath);
   if (!config) {
     p.log.error(`No config found at ${configPath}. Run ${pc.cyan("pnpm stacy onboard")} first.`);

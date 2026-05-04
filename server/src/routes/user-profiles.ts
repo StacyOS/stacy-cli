@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
 import {
   activityLog,
   agents,
@@ -9,13 +9,13 @@ import {
   costEvents,
   issueComments,
   issues,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import type {
   UserProfileDailyPoint,
   UserProfileIdentity,
   UserProfileResponse,
   UserProfileWindowStats,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { notFound } from "../errors.js";
 import { assertCompanyAccess } from "./authz.js";
 

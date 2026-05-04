@@ -13,7 +13,7 @@ export interface SandboxRemoteExecutionSpec {
   remoteCwd: string;
   timeoutMs: number;
   apiKey: string | null;
-  paperclipApiUrl?: string | null;
+  stacyApiUrl?: string | null;
 }
 
 export interface SandboxManagedRuntimeAsset {
@@ -84,7 +84,7 @@ export function parseSandboxRemoteExecutionSpec(value: unknown): SandboxRemoteEx
     remoteCwd,
     timeoutMs,
     apiKey: asString(parsed.apiKey).trim() || null,
-    paperclipApiUrl: asString(parsed.paperclipApiUrl).trim() || null,
+    stacyApiUrl: asString(parsed.stacyApiUrl).trim() || null,
   };
 }
 
@@ -95,7 +95,7 @@ export function buildSandboxExecutionSessionIdentity(spec: SandboxRemoteExecutio
     provider: spec.provider,
     sandboxId: spec.sandboxId,
     remoteCwd: spec.remoteCwd,
-    ...(spec.paperclipApiUrl ? { paperclipApiUrl: spec.paperclipApiUrl } : {}),
+    ...(spec.stacyApiUrl ? { stacyApiUrl: spec.stacyApiUrl } : {}),
   } as const;
 }
 
@@ -108,7 +108,7 @@ export function sandboxExecutionSessionMatches(saved: unknown, current: SandboxR
     asString(parsedSaved.provider) === currentIdentity.provider &&
     asString(parsedSaved.sandboxId) === currentIdentity.sandboxId &&
     asString(parsedSaved.remoteCwd) === currentIdentity.remoteCwd &&
-    asString(parsedSaved.paperclipApiUrl) === asString(currentIdentity.paperclipApiUrl)
+    asString(parsedSaved.stacyApiUrl) === asString(currentIdentity.stacyApiUrl)
   );
 }
 
@@ -250,9 +250,9 @@ export async function prepareSandboxManagedRuntime(input: {
   assets?: SandboxManagedRuntimeAsset[];
 }): Promise<PreparedSandboxManagedRuntime> {
   const workspaceRemoteDir = input.workspaceRemoteDir ?? input.spec.remoteCwd;
-  const runtimeRootDir = path.posix.join(workspaceRemoteDir, ".paperclip-runtime", input.adapterKey);
+  const runtimeRootDir = path.posix.join(workspaceRemoteDir, ".stacy-runtime", input.adapterKey);
 
-  await withTempDir("paperclip-sandbox-sync-", async (tempDir) => {
+  await withTempDir("stacy-sandbox-sync-", async (tempDir) => {
     const workspaceTarPath = path.join(tempDir, "workspace.tar");
     await createTarballFromDirectory({
       localDir: input.workspaceLocalDir,
@@ -263,7 +263,7 @@ export async function prepareSandboxManagedRuntime(input: {
     const remoteWorkspaceTar = path.posix.join(runtimeRootDir, "workspace-upload.tar");
     await input.client.makeDir(runtimeRootDir);
     await input.client.writeFile(remoteWorkspaceTar, toArrayBuffer(workspaceTarBytes));
-    const preservedNames = new Set([".paperclip-runtime", ...(input.preserveAbsentOnRestore ?? [])]);
+    const preservedNames = new Set([".stacy-runtime", ...(input.preserveAbsentOnRestore ?? [])]);
     const findPreserveArgs = [...preservedNames].map((entry) => `! -name ${shellQuote(entry)}`).join(" ");
     await input.client.run(
       `sh -lc ${shellQuote(
@@ -310,7 +310,7 @@ export async function prepareSandboxManagedRuntime(input: {
     runtimeRootDir,
     assetDirs,
     restoreWorkspace: async () => {
-      await withTempDir("paperclip-sandbox-restore-", async (tempDir) => {
+      await withTempDir("stacy-sandbox-restore-", async (tempDir) => {
         const remoteWorkspaceTar = path.posix.join(runtimeRootDir, "workspace-download.tar");
         await input.client.run(
           `sh -lc ${shellQuote(
@@ -330,7 +330,7 @@ export async function prepareSandboxManagedRuntime(input: {
           localDir: extractedDir,
         });
         await mirrorDirectory(extractedDir, input.workspaceLocalDir, {
-          preserveAbsent: [".paperclip-runtime", ...(input.preserveAbsentOnRestore ?? [])],
+          preserveAbsent: [".stacy-runtime", ...(input.preserveAbsentOnRestore ?? [])],
         });
       });
     },

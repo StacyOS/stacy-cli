@@ -3,24 +3,26 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 
+const CORE_PACKAGE_NAME = "@arpanstacy/stacy";
+
 function usage() {
   console.log([
     "Usage:",
-    "  node scripts/smoke/stacy-cli-npm-smoke.mjs [--version <version>] [--expected-paperclip <version>] [--skip-runtime]",
+    "  node scripts/smoke/stacy-cli-npm-smoke.mjs [--version <version>] [--expected-core <version>] [--skip-runtime]",
     "",
     "Examples:",
     "  pnpm smoke:stacy-cli-npm",
-    "  pnpm smoke:stacy-cli-npm -- --version 2026.428.0 --expected-paperclip 2026.428.0",
+    "  pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-core 2026.501.0",
     "",
     "Environment:",
-    "  STACY_CLI_EXPECTED_PAPERCLIP_VERSION  Expected paperclipai dependency/runtime version",
+    "  STACY_CLI_EXPECTED_CORE_VERSION  Expected Stacy core dependency/runtime version",
   ].join("\n"));
 }
 
 function parseArgs(args) {
   const options = {
     version: "",
-    expectedPaperclip: process.env.STACY_CLI_EXPECTED_PAPERCLIP_VERSION ?? "",
+    expectedCore: process.env.STACY_CLI_EXPECTED_CORE_VERSION ?? "",
     skipRuntime: false,
   };
 
@@ -32,9 +34,9 @@ function parseArgs(args) {
       if (!options.version) throw new Error("--version requires a package version.");
       continue;
     }
-    if (arg === "--expected-paperclip") {
-      options.expectedPaperclip = args[++index] ?? "";
-      if (!options.expectedPaperclip) throw new Error("--expected-paperclip requires a package version.");
+    if (arg === "--expected-core") {
+      options.expectedCore = args[++index] ?? "";
+      if (!options.expectedCore) throw new Error("--expected-core requires a package version.");
       continue;
     }
     if (arg === "--skip-runtime") {
@@ -105,9 +107,9 @@ try {
     `npm view stacy-cli@${targetVersion}`,
   );
 
-  const dependencyVersion = meta?.dependencies?.paperclipai;
+  const dependencyVersion = meta?.dependencies?.[CORE_PACKAGE_NAME];
   if (!dependencyVersion || typeof dependencyVersion !== "string") {
-    throw new Error(`stacy-cli@${targetVersion} does not declare a paperclipai dependency.`);
+    throw new Error(`stacy-cli@${targetVersion} does not declare a ${CORE_PACKAGE_NAME} dependency.`);
   }
 
   if (dependencyVersion.startsWith("workspace:")) {
@@ -118,19 +120,19 @@ try {
     throw new Error(`stacy-cli@${targetVersion} does not expose the expected stacy binary.`);
   }
 
-  const expectedPaperclip = options.expectedPaperclip || dependencyVersion;
-  if (dependencyVersion !== expectedPaperclip) {
+  const expectedCore = options.expectedCore || dependencyVersion;
+  if (dependencyVersion !== expectedCore) {
     throw new Error(
-      `stacy-cli@${targetVersion} depends on paperclipai@${dependencyVersion}, expected ${expectedPaperclip}.`,
+      `stacy-cli@${targetVersion} depends on ${CORE_PACKAGE_NAME}@${dependencyVersion}, expected ${expectedCore}.`,
     );
   }
 
-  const resolvedPaperclip = npmJson(
-    ["view", `paperclipai@${dependencyVersion}`, "version", "--json"],
-    `npm view paperclipai@${dependencyVersion}`,
+  const resolvedCore = npmJson(
+    ["view", `${CORE_PACKAGE_NAME}@${dependencyVersion}`, "version", "--json"],
+    `npm view ${CORE_PACKAGE_NAME}@${dependencyVersion}`,
   );
-  if (resolvedPaperclip !== dependencyVersion) {
-    throw new Error(`paperclipai@${dependencyVersion} is not resolvable from npm.`);
+  if (resolvedCore !== dependencyVersion) {
+    throw new Error(`${CORE_PACKAGE_NAME}@${dependencyVersion} is not resolvable from npm.`);
   }
 
   if (!options.skipRuntime) {
@@ -141,15 +143,15 @@ try {
     );
     requireOk(runtime, `npm exec stacy-cli@${targetVersion}`);
     const runtimeVersion = normalizeVersionOutput(runtime.stdout);
-    if (runtimeVersion !== expectedPaperclip) {
+    if (runtimeVersion !== expectedCore) {
       throw new Error(
-        `stacy-cli@${targetVersion} runtime printed ${runtimeVersion || "<empty>"}, expected ${expectedPaperclip}.`,
+        `stacy-cli@${targetVersion} runtime printed ${runtimeVersion || "<empty>"}, expected ${expectedCore}.`,
       );
     }
   }
 
   console.log(
-    `PASS: stacy-cli@${targetVersion} wraps paperclipai@${dependencyVersion} and exposes stacy.`,
+    `PASS: stacy-cli@${targetVersion} wraps ${CORE_PACKAGE_NAME}@${dependencyVersion} and exposes stacy.`,
   );
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-$REPO_ROOT/docker/docker-compose.quickstart.yml}"
 PROJECT_NAME="${PROJECT_NAME:-stacy-quickstart-smoke-$$}"
 HOST_PORT="${HOST_PORT:-3132}"
-PAPERCLIP_PUBLIC_URL="${PAPERCLIP_PUBLIC_URL:-http://localhost:${HOST_PORT}}"
+STACY_PUBLIC_URL="${STACY_PUBLIC_URL:-http://localhost:${HOST_PORT}}"
 BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-N0llpQBJ4f4T1zWmWRH1gHiZPzIwKQYKpCQkWuWoLFU=}"
 DATA_DIR="${DATA_DIR:-}"
 PRESERVE_DATA="${PRESERVE_DATA:-false}"
@@ -37,9 +37,9 @@ fi
 mkdir -p "$DATA_DIR"
 
 compose() {
-  PAPERCLIP_PORT="$HOST_PORT" \
-    PAPERCLIP_PUBLIC_URL="$PAPERCLIP_PUBLIC_URL" \
-    PAPERCLIP_DATA_DIR="$DATA_DIR" \
+  STACY_PORT="$HOST_PORT" \
+    STACY_PUBLIC_URL="$STACY_PUBLIC_URL" \
+    STACY_DATA_DIR="$DATA_DIR" \
     BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
@@ -56,7 +56,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 wait_for_health() {
-  local health_url="$PAPERCLIP_PUBLIC_URL/api/health"
+  local health_url="$STACY_PUBLIC_URL/api/health"
   local i
   for ((i = 1; i <= WAIT_ATTEMPTS; i += 1)); do
     if curl -fsS "$health_url" >/dev/null 2>&1; then
@@ -104,7 +104,7 @@ echo "==> Validating Docker quickstart compose config"
 compose config >/dev/null
 
 echo "==> Starting Stacy Docker quickstart"
-echo "    URL: $PAPERCLIP_PUBLIC_URL"
+echo "    URL: $STACY_PUBLIC_URL"
 echo "    Data dir: $DATA_DIR"
 compose up -d --build
 wait_for_health
@@ -118,5 +118,5 @@ wait_for_health
 assert_persisted_instance "restart"
 
 echo "PASS: Docker quickstart smoke succeeded"
-echo "      URL: $PAPERCLIP_PUBLIC_URL"
+echo "      URL: $STACY_PUBLIC_URL"
 echo "      Data dir: $DATA_DIR"

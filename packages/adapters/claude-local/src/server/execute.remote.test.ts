@@ -31,9 +31,9 @@ const {
   syncDirectoryToSsh: vi.fn(async () => undefined),
 }));
 
-vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/server-utils")>(
-    "@paperclipai/adapter-utils/server-utils",
+vi.mock("@arpanstacy/stacy-adapter-utils/server-utils", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/server-utils")>(
+    "@arpanstacy/stacy-adapter-utils/server-utils",
   );
   return {
     ...actual,
@@ -43,9 +43,9 @@ vi.mock("@paperclipai/adapter-utils/server-utils", async () => {
   };
 });
 
-vi.mock("@paperclipai/adapter-utils/ssh", async () => {
-  const actual = await vi.importActual<typeof import("@paperclipai/adapter-utils/ssh")>(
-    "@paperclipai/adapter-utils/ssh",
+vi.mock("@arpanstacy/stacy-adapter-utils/ssh", async () => {
+  const actual = await vi.importActual<typeof import("@arpanstacy/stacy-adapter-utils/ssh")>(
+    "@arpanstacy/stacy-adapter-utils/ssh",
   );
   return {
     ...actual,
@@ -57,30 +57,30 @@ vi.mock("@paperclipai/adapter-utils/ssh", async () => {
 
 import { execute } from "./execute.js";
 
-const ORIGINAL_PAPERCLIP_HOME = process.env.PAPERCLIP_HOME;
-const ORIGINAL_PAPERCLIP_INSTANCE_ID = process.env.PAPERCLIP_INSTANCE_ID;
+const ORIGINAL_STACY_HOME = process.env.STACY_HOME;
+const ORIGINAL_STACY_INSTANCE_ID = process.env.STACY_INSTANCE_ID;
 
 describe("claude remote execution", () => {
   const cleanupDirs: string[] = [];
 
   beforeEach(async () => {
-    const homeDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-test-home-"));
+    const homeDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-test-home-"));
     cleanupDirs.push(homeDir);
-    process.env.PAPERCLIP_HOME = homeDir;
-    process.env.PAPERCLIP_INSTANCE_ID = "adapter-contract-test";
+    process.env.STACY_HOME = homeDir;
+    process.env.STACY_INSTANCE_ID = "adapter-contract-test";
   });
 
   afterEach(async () => {
     vi.clearAllMocks();
-    if (ORIGINAL_PAPERCLIP_HOME === undefined) {
-      delete process.env.PAPERCLIP_HOME;
+    if (ORIGINAL_STACY_HOME === undefined) {
+      delete process.env.STACY_HOME;
     } else {
-      process.env.PAPERCLIP_HOME = ORIGINAL_PAPERCLIP_HOME;
+      process.env.STACY_HOME = ORIGINAL_STACY_HOME;
     }
-    if (ORIGINAL_PAPERCLIP_INSTANCE_ID === undefined) {
-      delete process.env.PAPERCLIP_INSTANCE_ID;
+    if (ORIGINAL_STACY_INSTANCE_ID === undefined) {
+      delete process.env.STACY_INSTANCE_ID;
     } else {
-      process.env.PAPERCLIP_INSTANCE_ID = ORIGINAL_PAPERCLIP_INSTANCE_ID;
+      process.env.STACY_INSTANCE_ID = ORIGINAL_STACY_INSTANCE_ID;
     }
     while (cleanupDirs.length > 0) {
       const dir = cleanupDirs.pop();
@@ -90,7 +90,7 @@ describe("claude remote execution", () => {
   });
 
   it("prepares the workspace, syncs Claude runtime assets, and restores workspace changes for remote SSH execution", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-remote-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-remote-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     const instructionsPath = path.join(rootDir, "instructions.md");
@@ -117,7 +117,7 @@ describe("claude remote execution", () => {
         instructionsFilePath: instructionsPath,
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -132,7 +132,7 @@ describe("claude remote execution", () => {
           privateKey: "PRIVATE KEY",
           knownHosts: "[127.0.0.1]:2222 ssh-ed25519 AAAA",
           strictHostKeyChecking: true,
-          paperclipApiUrl: "http://198.51.100.10:3102",
+          stacyApiUrl: "http://198.51.100.10:3102",
         },
       },
       onLog: async () => {},
@@ -145,7 +145,7 @@ describe("claude remote execution", () => {
     }));
     expect(syncDirectoryToSsh).toHaveBeenCalledTimes(1);
     expect(syncDirectoryToSsh).toHaveBeenCalledWith(expect.objectContaining({
-      remoteDir: "/remote/workspace/.paperclip-runtime/claude/skills",
+      remoteDir: "/remote/workspace/.stacy-runtime/claude/skills",
       followSymlinks: true,
     }));
     expect(runChildProcess).toHaveBeenCalledTimes(1);
@@ -153,10 +153,10 @@ describe("claude remote execution", () => {
       | [string, string, string[], { env: Record<string, string>; remoteExecution?: { remoteCwd: string } | null }]
       | undefined;
     expect(call?.[2]).toContain("--append-system-prompt-file");
-    expect(call?.[2]).toContain("/remote/workspace/.paperclip-runtime/claude/skills/agent-instructions.md");
+    expect(call?.[2]).toContain("/remote/workspace/.stacy-runtime/claude/skills/agent-instructions.md");
     expect(call?.[2]).toContain("--add-dir");
-    expect(call?.[2]).toContain("/remote/workspace/.paperclip-runtime/claude/skills");
-    expect(call?.[3].env.PAPERCLIP_API_URL).toBe("http://198.51.100.10:3102");
+    expect(call?.[2]).toContain("/remote/workspace/.stacy-runtime/claude/skills");
+    expect(call?.[3].env.STACY_API_URL).toBe("http://198.51.100.10:3102");
     expect(call?.[3].remoteExecution?.remoteCwd).toBe("/remote/workspace");
     expect(restoreWorkspaceFromSshExecution).toHaveBeenCalledTimes(1);
     expect(restoreWorkspaceFromSshExecution).toHaveBeenCalledWith(expect.objectContaining({
@@ -166,7 +166,7 @@ describe("claude remote execution", () => {
   });
 
   it("does not resume saved Claude sessions for remote SSH execution without a matching remote identity", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-remote-resume-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-remote-resume-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -193,7 +193,7 @@ describe("claude remote execution", () => {
         command: "claude",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -219,7 +219,7 @@ describe("claude remote execution", () => {
   });
 
   it("resumes saved Claude sessions for remote SSH execution when the remote identity matches", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-remote-resume-match-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-remote-resume-match-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -253,7 +253,7 @@ describe("claude remote execution", () => {
         command: "claude",
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -315,7 +315,7 @@ describe("claude remote execution", () => {
       startedAt: new Date().toISOString(),
     });
 
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-contract-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-contract-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -342,7 +342,7 @@ describe("claude remote execution", () => {
         },
       },
       context: {
-        paperclipWorkspace: {
+        stacyWorkspace: {
           cwd: workspaceDir,
           source: "project_primary",
         },
@@ -412,7 +412,7 @@ describe("claude remote execution", () => {
         startedAt: new Date().toISOString(),
       });
 
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-stale-session-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-stale-session-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });
@@ -469,7 +469,7 @@ describe("claude remote execution", () => {
   });
 
   it("uses shared failure families for Claude auth, unknown-session, max-turns, and timeout failures", async () => {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "paperclip-claude-failure-family-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "stacy-claude-failure-family-"));
     cleanupDirs.push(rootDir);
     const workspaceDir = path.join(rootDir, "workspace");
     await mkdir(workspaceDir, { recursive: true });

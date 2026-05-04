@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { Issue } from "@paperclipai/shared";
+import type { Issue } from "@arpanstacy/stacy-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IssuesList } from "./IssuesList";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -287,7 +287,7 @@ describe("IssuesList", () => {
         issues={[localIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialSearch="server"
         onUpdateIssue={() => undefined}
       />,
@@ -320,7 +320,7 @@ describe("IssuesList", () => {
         issues={[localIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialSearch="server"
         searchFilters={{ parentId: "parent-1" }}
         onUpdateIssue={() => undefined}
@@ -350,7 +350,7 @@ describe("IssuesList", () => {
         issues={[createIssue()]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         baseCreateIssueDefaults={{ parentId: "parent-1", projectId: "project-1" }}
         createIssueLabel="Sub-issue"
         onUpdateIssue={() => undefined}
@@ -427,7 +427,7 @@ describe("IssuesList", () => {
         issues={[cancelledIssue, blockedIssue, nextIssue, doneIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         showProgressSummary
         onUpdateIssue={() => undefined}
       />,
@@ -483,7 +483,7 @@ describe("IssuesList", () => {
         issues={[issueBlocked, issueActive, issueDone]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         defaultSortField="workflow"
         onUpdateIssue={() => undefined}
       />,
@@ -543,7 +543,7 @@ describe("IssuesList", () => {
         issues={[grandchild, nextRoot, firstRoot, parent]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         defaultSortField="workflow"
         onUpdateIssue={() => undefined}
       />,
@@ -573,7 +573,7 @@ describe("IssuesList", () => {
         issues={[createIssue()]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         showProgressSummary
         onUpdateIssue={() => undefined}
       />,
@@ -610,7 +610,7 @@ describe("IssuesList", () => {
         ]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         showProgressSummary
         onUpdateIssue={() => undefined}
       />,
@@ -639,7 +639,7 @@ describe("IssuesList", () => {
         issues={[localIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onSearchChange={onSearchChange}
         onUpdateIssue={() => undefined}
       />,
@@ -690,7 +690,7 @@ describe("IssuesList", () => {
     );
 
     localStorage.setItem(
-      "paperclip:test-issues:company-1",
+      "stacy:test-issues:company-1",
       JSON.stringify({ statuses: ["done"] }),
     );
     mockIssuesApi.list.mockResolvedValue(serverIssues);
@@ -700,7 +700,7 @@ describe("IssuesList", () => {
         issues={[]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialSearch="server"
         onUpdateIssue={() => undefined}
       />,
@@ -718,7 +718,7 @@ describe("IssuesList", () => {
 
   it("loads board issues with a separate result limit for each status column", async () => {
     localStorage.setItem(
-      "paperclip:test-issues:company-1",
+      "stacy:test-issues:company-1",
       JSON.stringify({ viewMode: "board" }),
     );
 
@@ -749,7 +749,7 @@ describe("IssuesList", () => {
         issues={[parentIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         enableRoutineVisibilityFilter
         onUpdateIssue={() => undefined}
       />,
@@ -785,7 +785,7 @@ describe("IssuesList", () => {
 
   it("shows a refinement hint when a board column hits its server cap", async () => {
     localStorage.setItem(
-      "paperclip:test-issues:company-1",
+      "stacy:test-issues:company-1",
       JSON.stringify({ viewMode: "board" }),
     );
 
@@ -808,7 +808,7 @@ describe("IssuesList", () => {
         issues={[]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,
@@ -837,7 +837,7 @@ describe("IssuesList", () => {
         issues={manyIssues}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,
@@ -871,7 +871,7 @@ describe("IssuesList", () => {
         issues={[parentIssue, childIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,
@@ -895,7 +895,7 @@ describe("IssuesList", () => {
   });
 
   it("uses context-scoped persisted column visibility", async () => {
-    localStorage.setItem("paperclip:test-issues:company-1:issue-columns", JSON.stringify(["id", "assignee"]));
+    localStorage.setItem("stacy:test-issues:company-1:issue-columns", JSON.stringify(["id", "assignee"]));
 
     const assignedIssue = createIssue({
       id: "issue-assigned",
@@ -909,7 +909,7 @@ describe("IssuesList", () => {
         issues={[assignedIssue]}
         agents={[{ id: "agent-1", name: "Agent One" }]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,
@@ -931,7 +931,7 @@ describe("IssuesList", () => {
   });
 
   it("shows human assignee names from company member profiles", async () => {
-    localStorage.setItem("paperclip:test-issues:company-1:issue-columns", JSON.stringify(["id", "assignee"]));
+    localStorage.setItem("stacy:test-issues:company-1:issue-columns", JSON.stringify(["id", "assignee"]));
     mockAccessApi.listUserDirectory.mockResolvedValue({
       users: [
         {
@@ -959,7 +959,7 @@ describe("IssuesList", () => {
         issues={[assignedIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,
@@ -976,7 +976,7 @@ describe("IssuesList", () => {
 
   it("preserves stored grouping across refresh when initial assignees are applied", async () => {
     localStorage.setItem(
-      "paperclip:test-issues:company-1",
+      "stacy:test-issues:company-1",
       JSON.stringify({ groupBy: "status", sortField: "updated", sortDir: "desc" }),
     );
 
@@ -988,7 +988,7 @@ describe("IssuesList", () => {
         issues={[todoIssue, doneIssue]}
         agents={[{ id: "agent-1", name: "Agent One" }]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialAssignees={["agent-1"]}
         onUpdateIssue={() => undefined}
       />,
@@ -1008,7 +1008,7 @@ describe("IssuesList", () => {
   });
 
   it("filters the list to a single workspace when a workspace name is clicked", async () => {
-    localStorage.setItem("paperclip:test-issues:company-1:issue-columns", JSON.stringify(["id", "workspace"]));
+    localStorage.setItem("stacy:test-issues:company-1:issue-columns", JSON.stringify(["id", "workspace"]));
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: true });
     mockExecutionWorkspacesApi.listSummaries.mockResolvedValue([
       {
@@ -1045,7 +1045,7 @@ describe("IssuesList", () => {
         issues={[alphaIssue, betaIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,
@@ -1097,7 +1097,7 @@ describe("IssuesList", () => {
         issues={[alphaIssue, betaIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialWorkspaces={["workspace-alpha"]}
         onUpdateIssue={() => undefined}
       />,
@@ -1133,7 +1133,7 @@ describe("IssuesList", () => {
         issues={[manualIssue, routineIssue]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         enableRoutineVisibilityFilter
         onUpdateIssue={() => undefined}
       />,
@@ -1183,7 +1183,7 @@ describe("IssuesList", () => {
         issues={[createIssue()]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialSearch="bug"
         onUpdateIssue={() => undefined}
       />,
@@ -1219,7 +1219,7 @@ describe("IssuesList", () => {
         issues={[createIssue()]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         initialSearch=""
         onUpdateIssue={() => undefined}
       />,
@@ -1257,7 +1257,7 @@ describe("IssuesList", () => {
         issues={[createIssue()]}
         agents={[]}
         projects={[]}
-        viewStateKey="paperclip:test-issues"
+        viewStateKey="stacy:test-issues"
         onUpdateIssue={() => undefined}
       />,
       container,

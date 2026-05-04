@@ -66,22 +66,21 @@ A fresh operator can:
   - `./scripts/create-github-release.sh <version> --init-notes`
   - GitHub release creation now refuses notes still marked as draft unless
     `--allow-draft-notes` is explicitly passed.
-- Added `stacy` as a published CLI binary alias while keeping the existing
-  `paperclipai` package name and binary as a compatibility bridge.
+- Added `stacy` as the published CLI binary.
 - Documented the public CLI package decision in
   `docs/stacy/PUBLIC-CLI-PACKAGING.md`.
 - Confirmed the public npm package name `stacy` is already taken as of
   April 30, 2026 (`stacy@2.0.0`, owner `levahim`).
 - Confirmed `stacy-cli` and `stacycli` were available on npm as of April 30,
   2026, and selected `stacy-cli` as the Phase 5 public package target.
-- Added a small `stacy-cli` wrapper package that depends on `paperclipai` and
+- Added a small `stacy-cli` wrapper package that depends on `@arpanstacy/stacy` and
   exposes the `stacy` binary.
 - Added an npm package README for the `stacy-cli` wrapper so the public npm page
   explains the Stacy bridge without requiring source-code context.
 - Published `stacy-cli@0.3.1` on April 30, 2026 to reserve the name under the
   `arpanstacy` npm account.
 - Added an npm wrapper smoke that verifies `stacy-cli` metadata, the
-  `paperclipai` dependency, and the runtime `stacy --version` result.
+  Stacy core dependency, and the runtime `stacy --version` result.
 - Added a repeatable package-name preflight:
   - `pnpm release:package-name`
   - `STACY_NPM_EXPECTED_OWNER=<npm-user> pnpm release:package-name`
@@ -109,7 +108,7 @@ A fresh operator can:
 - The stable release script now supports `NPM_TOKEN` or `NODE_AUTH_TOKEN` for a
   granular npm token with 2FA bypass using the same temporary-userconfig pattern
   as the wrapper helper.
-- Verified the corrected `stacy-cli@2026.428.0` wrapper publish path with
+- Verified the corrected `stacy-cli` wrapper publish path with
   `pnpm release:stacy-cli` on May 1, 2026. The dry-run tarball includes
   `README.md`, `bin/stacy.js`, and `package.json`.
 - Verified `pnpm release:stacy-cli -- --status` on May 1, 2026. It reports the
@@ -124,10 +123,35 @@ A fresh operator can:
   publish with `EOTP`, so the corrected package and deprecation remain gated by
   a fresh OTP or granular token with 2FA bypass.
 - Attempted the May 1, 2026 stable workspace release on May 4, 2026 with a
-  granular token. Auth succeeded, but npm rejected the first scoped package with
-  `E404` because `arpanstacy` owns `stacy-cli` but is not a maintainer of
-  `paperclipai` or the `@paperclipai/*` packages. The release script now
-  preflights package maintainership before doing the build/publish work.
+  granular token. Auth succeeded, but npm rejected the first old scoped package
+  with `E404` because `arpanstacy` owns `stacy-cli`, not the legacy package
+  namespace. The release surface now uses Stacy-owned package names instead.
+- Aligned the local `stacy-cli` wrapper target with the May 1 cleanup release
+  slot, `2026.501.0`, so local Phase 5 gates and public cleanup docs point at
+  the same final stable version.
+- Updated the `stacy-cli` publish helper so status and dry-run paths can run
+  before the matching core package is live. Real wrapper publishing remains
+  blocked until `@arpanstacy/stacy@2026.501.0` is available on npm.
+- Verified the corrected `stacy-cli@2026.501.0` wrapper dry-run on May 4, 2026.
+  The tarball includes `README.md`, `bin/stacy.js`, and `package.json`, and it
+  stages a dependency on `@arpanstacy/stacy@2026.501.0`.
+- Re-ran `pnpm release:phase5-gate` with live npm registry access on May 4,
+  2026. It confirms `stacy-cli` is owned by `arpanstacy`, verifies the
+  `2026.501.0` wrapper dry-run, and now reports the exact remaining sequence:
+  publish `@arpanstacy/stacy@2026.501.0`, publish `stacy-cli@2026.501.0`, then
+  deprecate `stacy-cli@0.3.1`.
+- Completed a public-readiness validation pass on May 4, 2026:
+  - `pnpm test:run`
+  - `pnpm build`
+  - `pnpm check:tokens`
+  - `git diff --check`
+  - a repository scan for legacy upstream package/name tokens
+  - `pnpm audit --prod --audit-level moderate`
+- The production audit passes at the moderate threshold. `pnpm audit --prod
+  --json` still reports one low-severity advisory against the workspace importer
+  path `cli@0.3.1`, which is not an installed runtime dependency named `cli`.
+  Re-run the audit after the stable release script performs its temporary
+  `2026.501.0` package-version rewrite.
 
 ## Operator Backup And Restore
 
@@ -211,17 +235,16 @@ or update the draft status, then rerun the GitHub release command.
 
 ## Public CLI Package
 
-The main CLI package currently exposes both binaries:
+The public CLI package exposes the Stacy binary:
 
 ```text
-paperclipai
 stacy
 ```
 
 The package-name decision is documented in
-`docs/stacy/PUBLIC-CLI-PACKAGING.md`. The safe Phase 5 bridge is to keep the
-existing `paperclipai` package while adding the `stacy` binary alias and
-publishing the `stacy-cli` wrapper package for `npx stacy-cli onboard`.
+`docs/stacy/PUBLIC-CLI-PACKAGING.md`. The safe Phase 5 bridge is to publish the
+Stacy core under `@arpanstacy/stacy` and publish the `stacy-cli` wrapper package
+for `npx stacy-cli onboard`.
 
 The current registry check shows `stacy` is already taken, so the exact
 `npx stacy onboard` vanity package must not be published unless ownership is
@@ -233,22 +256,16 @@ transferred or an owner-approved wrapper plan exists.
   `stacy-cli` wrapper. For the May 1, 2026 cleanup branch, the next stable
   version computed by `./scripts/release.sh stable --date 2026-05-01 --print-version`
   is `2026.501.0`.
-- The already prepared reserved-name correction remains
-  `stacy-cli@2026.428.0`, which wraps `paperclipai@2026.428.0`. Do not announce
-  it as the final public cleanup release if a newer core package is being cut.
-- The reserved `stacy-cli@0.3.1` package wraps the old `paperclipai@0.3.1`
-  package and should not be announced. Deprecate it after the corrected wrapper
-  is live.
-- Run `pnpm smoke:stacy-cli-npm -- --version 2026.428.0 --expected-paperclip 2026.428.0`
-  after publishing the `2026.428.0` correction, or use
-  `pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-paperclip 2026.501.0`
+- The already prepared reserved-name correction remains unpublished. The final
+  public cleanup release should use the next stable core version and a matching
+  `stacy-cli` wrapper.
+- The reserved `stacy-cli@0.3.1` package points at the old core package and
+  should not be announced. Deprecate it after the corrected wrapper is live.
+- Run `pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-core 2026.501.0`
   after the May 1 stable release.
-- The May 1 stable workspace release is blocked on npm package ownership:
-  `arpanstacy` must be added as a maintainer for `paperclipai` and the
-  publishable `@paperclipai/*` packages, or the release must run under an owner
-  token with write access. After the core package is live, the wrapper publish
-  and `0.3.1` deprecation still need npm auth via OTP or a granular publish
-  token with 2FA bypass.
+- The May 1 stable workspace release is now blocked only on publishing the
+  Stacy-owned package graph under `@arpanstacy/*`, then publishing/deprecating
+  the wrapper with npm auth via OTP or a granular publish token with 2FA bypass.
 - Keep `stacy` as a future vanity-package migration only if ownership is
   transferred or approved.
 

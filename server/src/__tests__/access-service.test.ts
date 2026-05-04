@@ -8,7 +8,7 @@ import {
   instanceUserRoles,
   issues,
   principalPermissionGrants,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -48,7 +48,7 @@ describeEmbeddedPostgres("access service", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
 
   beforeAll(async () => {
-    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-access-service-");
+    tempDb = await startEmbeddedPostgresTestDatabase("stacy-access-service-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
 

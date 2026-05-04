@@ -1,0 +1,50 @@
+{
+  "name": "@arpanstacy/create-stacy-plugin",
+  "version": "0.1.0",
+  "license": "MIT",
+  "homepage": "https://github.com/StacyOS/stacy-cli",
+  "bugs": {
+    "url": "https://github.com/StacyOS/stacy-cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StacyOS/stacy-cli",
+    "directory": "packages/plugins/create-stacy-plugin"
+  },
+  "type": "module",
+  "bin": {
+    "create-stacy-plugin": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "bin": {
+      "create-stacy-plugin": "./dist/index.js"
+    },
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arpanstacy/stacy-plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.7.3"
+  }
+}

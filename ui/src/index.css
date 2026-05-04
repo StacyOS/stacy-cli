@@ -4,6 +4,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: var(--stacy-font-sans);
+  --font-serif: var(--stacy-font-serif);
+  --font-mono: var(--stacy-font-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -45,6 +48,15 @@
 :root {
   color-scheme: light;
   --radius: 0;
+  --stacy-font-serif: "Untitled Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --stacy-font-sans: "Untitled Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --stacy-font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --stacy-primary-orange: #ff7038;
+  --stacy-cream: #f0e7da;
+  --stacy-sand: #d1c2a5;
+  --stacy-stone: #d0c6b5;
+  --stacy-charcoal: #262626;
+  --stacy-void: #1c1c1c;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -80,38 +92,38 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.637 0.237 25.331);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.145 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  --background: #262626;
+  --foreground: #f0e7da;
+  --card: #1c1c1c;
+  --card-foreground: #f0e7da;
+  --popover: #1c1c1c;
+  --popover-foreground: #f0e7da;
+  --primary: #ff7038;
+  --primary-foreground: #1c1c1c;
+  --secondary: #d1c2a5;
+  --secondary-foreground: #1c1c1c;
+  --muted: #303030;
+  --muted-foreground: #d0c6b5;
+  --accent: #34302a;
+  --accent-foreground: #f0e7da;
+  --destructive: #ff5d57;
+  --destructive-foreground: #1c1c1c;
+  --border: #5d5d51;
+  --input: #34302a;
+  --ring: #ff7038;
+  --chart-1: #ff7038;
+  --chart-2: #d1c2a5;
+  --chart-3: #d0c6b5;
+  --chart-4: #f0e7da;
+  --chart-5: #8d7f69;
+  --sidebar: #1c1c1c;
+  --sidebar-foreground: #f0e7da;
+  --sidebar-primary: #ff7038;
+  --sidebar-primary-foreground: #1c1c1c;
+  --sidebar-accent: #34302a;
+  --sidebar-accent-foreground: #f0e7da;
+  --sidebar-border: #46443d;
+  --sidebar-ring: #ff7038;
 }
 
 @layer base {
@@ -124,13 +136,36 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--stacy-font-sans);
     height: 100%;
     overflow: hidden;
   }
   h1,
   h2,
   h3 {
+    font-family: var(--stacy-font-serif);
+    font-weight: 400;
     text-wrap: balance;
+  }
+  label,
+  [data-slot="button"],
+  [data-slot="tabs-trigger"],
+  [data-slot="card-title"] {
+    letter-spacing: 0;
+  }
+  [data-slot="button"] {
+    font-family: var(--stacy-font-mono);
+  }
+  [data-slot="button"][data-variant="default"] {
+    clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px));
+  }
+  [data-slot="card-title"] {
+    font-family: var(--stacy-font-serif);
+    font-weight: 400;
+  }
+  .dark ::selection {
+    background: color-mix(in oklab, var(--primary) 45%, transparent);
+    color: var(--foreground);
   }
   /* Prevent double-tap-to-zoom on interactive elements for mobile */
   a,
@@ -143,8 +178,8 @@
     touch-action: manipulation;
   }
   /* Let font-mono (utilities layer) override for monospace editors */
-  .paperclip-mdxeditor [class*="_placeholder_"],
-  .paperclip-mdxeditor-content {
+  .stacy-mdxeditor [class*="_placeholder_"],
+  .stacy-mdxeditor-content {
     font-family: inherit;
   }
 }
@@ -175,16 +210,16 @@
 }
 
 .dark *::-webkit-scrollbar-track {
-  background: oklch(0.205 0 0);
+  background: #1c1c1c;
 }
 
 .dark *::-webkit-scrollbar-thumb {
-  background: oklch(0.4 0 0);
+  background: #5d5d51;
   border-radius: 4px;
 }
 
 .dark *::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0);
+  background: #d1c2a5;
 }
 
 /* Auto-hide scrollbar: always reserves space, thumb visible only on hover */
@@ -210,13 +245,13 @@
 }
 /* Dark mode scrollbar on hover */
 .dark .scrollbar-auto-hide:hover::-webkit-scrollbar-track {
-  background: oklch(0.205 0 0) !important;
+  background: #1c1c1c !important;
 }
 .dark .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
-  background: oklch(0.4 0 0) !important;
+  background: #5d5d51 !important;
 }
 .dark .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0) !important;
+  background: #d1c2a5 !important;
 }
 
 /* Expandable dialog transition for max-width changes */
@@ -328,8 +363,8 @@
 }
 
 /* MDXEditor theme integration */
-.paperclip-mdxeditor-scope,
-.paperclip-mdxeditor {
+.stacy-mdxeditor-scope,
+.stacy-mdxeditor {
   --baseBase: var(--background);
   --baseBg: transparent;
   --baseBgSubtle: color-mix(in oklab, var(--accent) 35%, transparent);
@@ -361,83 +396,83 @@
 }
 
 @media (min-width: 768px) {
-  .paperclip-mdxeditor-scope,
-  .paperclip-mdxeditor {
+  .stacy-mdxeditor-scope,
+  .stacy-mdxeditor {
     font-size: 0.875rem;
   }
 }
 
-.paperclip-mdxeditor-scope [class*="_iconButton_"],
-.paperclip-mdxeditor [class*="_iconButton_"] {
+.stacy-mdxeditor-scope [class*="_iconButton_"],
+.stacy-mdxeditor [class*="_iconButton_"] {
   color: var(--baseText);
 }
 
-.paperclip-mdxeditor-scope [class*="_iconButton_"]:hover,
-.paperclip-mdxeditor [class*="_iconButton_"]:hover {
+.stacy-mdxeditor-scope [class*="_iconButton_"]:hover,
+.stacy-mdxeditor [class*="_iconButton_"]:hover {
   color: var(--baseTextContrast);
 }
 
-.paperclip-mdxeditor .mdxeditor-root-contenteditable {
+.stacy-mdxeditor .mdxeditor-root-contenteditable {
   min-height: 2.5rem;
   padding: 0;
   line-height: 1.5;
 }
 
-.paperclip-mdxeditor [class*="_contentEditable_"] {
+.stacy-mdxeditor [class*="_contentEditable_"] {
   padding: 0.375rem 0.625rem !important;
 }
 
-.paperclip-mdxeditor--borderless [class*="_contentEditable_"] {
+.stacy-mdxeditor--borderless [class*="_contentEditable_"] {
   padding: 0 !important;
 }
 
-.paperclip-mdxeditor [class*="_placeholder_"] {
+.stacy-mdxeditor [class*="_placeholder_"] {
   font-size: inherit;
   line-height: 1.5;
   color: var(--muted-foreground);
 }
 
-.paperclip-mdxeditor-content {
+.stacy-mdxeditor-content {
   font-size: inherit;
   line-height: inherit;
   color: inherit;
 }
 
-.paperclip-edit-in-place-content {
+.stacy-edit-in-place-content {
   font-size: 0.9375rem;
   line-height: 1.75rem;
 }
 
-.paperclip-mdxeditor-content > *:first-child {
+.stacy-mdxeditor-content > *:first-child {
   margin-top: 0;
 }
 
-.paperclip-mdxeditor-content > *:last-child {
+.stacy-mdxeditor-content > *:last-child {
   margin-bottom: 0;
 }
 
-.paperclip-mdxeditor-content p {
+.stacy-mdxeditor-content p {
   margin: 0;
   line-height: inherit;
 }
 
-.paperclip-mdxeditor-content p + p {
+.stacy-mdxeditor-content p + p {
   margin-top: 1.1em;
 }
 
-.paperclip-mdxeditor-content a:not(.paperclip-mention-chip):not(.paperclip-project-mention-chip) {
+.stacy-mdxeditor-content a:not(.stacy-mention-chip):not(.stacy-project-mention-chip) {
   color: color-mix(in oklab, var(--foreground) 76%, #0969da 24%);
   text-decoration: underline;
   text-underline-offset: 0.15em;
   cursor: pointer;
 }
 
-.dark .paperclip-mdxeditor-content a:not(.paperclip-mention-chip):not(.paperclip-project-mention-chip) {
+.dark .stacy-mdxeditor-content a:not(.stacy-mention-chip):not(.stacy-project-mention-chip) {
   color: color-mix(in oklab, var(--foreground) 80%, #58a6ff 20%);
 }
 
-.paperclip-mdxeditor-content a.paperclip-mention-chip,
-.paperclip-mdxeditor-content a.paperclip-project-mention-chip {
+.stacy-mdxeditor-content a.stacy-mention-chip,
+.stacy-mdxeditor-content a.stacy-project-mention-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -455,37 +490,37 @@
 
 /* Strip the MDXEditor's default inline-code styling from the text inside chips
    (the link label otherwise picks up a monospace font + gray tint). */
-.paperclip-mdxeditor-content a.paperclip-mention-chip,
-.paperclip-mdxeditor-content a.paperclip-mention-chip code,
-.paperclip-mdxeditor-content a.paperclip-project-mention-chip,
-.paperclip-mdxeditor-content a.paperclip-project-mention-chip code {
+.stacy-mdxeditor-content a.stacy-mention-chip,
+.stacy-mdxeditor-content a.stacy-mention-chip code,
+.stacy-mdxeditor-content a.stacy-project-mention-chip,
+.stacy-mdxeditor-content a.stacy-project-mention-chip code {
   font-family: inherit;
   background: none;
   color: inherit;
   padding: 0;
 }
 
-.paperclip-mdxeditor-content a.paperclip-mention-chip::before,
-a.paperclip-mention-chip::before {
+.stacy-mdxeditor-content a.stacy-mention-chip::before,
+a.stacy-mention-chip::before {
   content: "";
   flex: none;
 }
 
-.paperclip-mdxeditor-content a.paperclip-mention-chip[data-mention-kind="project"]::before,
-a.paperclip-mention-chip[data-mention-kind="project"]::before {
+.stacy-mdxeditor-content a.stacy-mention-chip[data-mention-kind="project"]::before,
+a.stacy-mention-chip[data-mention-kind="project"]::before {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 999px;
-  background-color: var(--paperclip-mention-project-color, currentColor);
+  background-color: var(--stacy-mention-project-color, currentColor);
 }
 
-.paperclip-mdxeditor-content a.paperclip-mention-chip[data-mention-kind="agent"]::before,
-a.paperclip-mention-chip[data-mention-kind="agent"]::before {
+.stacy-mdxeditor-content a.stacy-mention-chip[data-mention-kind="agent"]::before,
+a.stacy-mention-chip[data-mention-kind="agent"]::before {
   width: 0.75rem;
   height: 0.75rem;
   background-color: currentColor;
-  -webkit-mask-image: var(--paperclip-mention-icon-mask);
-  mask-image: var(--paperclip-mention-icon-mask);
+  -webkit-mask-image: var(--stacy-mention-icon-mask);
+  mask-image: var(--stacy-mention-icon-mask);
   -webkit-mask-position: center;
   mask-position: center;
   -webkit-mask-repeat: no-repeat;
@@ -494,57 +529,57 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   mask-size: contain;
 }
 
-.paperclip-mdxeditor-content ul,
-.paperclip-mdxeditor-content ol {
+.stacy-mdxeditor-content ul,
+.stacy-mdxeditor-content ol {
   margin: 1.1em 0;
   padding-left: 1.6em;
 }
 
-.paperclip-mdxeditor-content ul {
+.stacy-mdxeditor-content ul {
   list-style: disc;
 }
 
-.paperclip-mdxeditor-content ol {
+.stacy-mdxeditor-content ol {
   list-style: decimal;
 }
 
-.paperclip-mdxeditor-content li {
+.stacy-mdxeditor-content li {
   display: list-item;
   margin: 0.3em 0;
   line-height: inherit;
 }
 
-.paperclip-mdxeditor-content li::marker {
+.stacy-mdxeditor-content li::marker {
   color: var(--muted-foreground);
 }
 
-.paperclip-mdxeditor-content h1 {
+.stacy-mdxeditor-content h1 {
   margin: 1.4em 0 0.9em;
   font-size: 1.75em;
   font-weight: 700;
   line-height: 1.2;
 }
 
-.paperclip-mdxeditor-content h2 {
+.stacy-mdxeditor-content h2 {
   margin: 1.3em 0 0.85em;
   font-size: 1.35em;
   font-weight: 700;
   line-height: 1.3;
 }
 
-.paperclip-mdxeditor-content h3 {
+.stacy-mdxeditor-content h3 {
   margin: 1.2em 0 0.8em;
   font-size: 1.15em;
   font-weight: 600;
   line-height: 1.35;
 }
 
-.paperclip-mdxeditor-content img {
+.stacy-mdxeditor-content img {
   max-height: 18rem;
   border-radius: calc(var(--radius) - 2px);
 }
 
-.paperclip-mdxeditor-content blockquote {
+.stacy-mdxeditor-content blockquote {
   margin: 1.2em 0;
   padding-left: 1em;
   border-left: 3px solid var(--border);
@@ -552,12 +587,12 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   line-height: inherit;
 }
 
-.paperclip-mdxeditor-content code {
+.stacy-mdxeditor-content code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 1em;
 }
 
-.paperclip-mdxeditor-content pre {
+.stacy-mdxeditor-content pre {
   margin: 0.4rem 0;
   padding: 0;
   border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
@@ -569,50 +604,50 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
 
 /* Dark theme for CodeMirror code blocks inside the MDXEditor.
    Overrides the default cm6-theme-basic-light that MDXEditor bundles. */
-.paperclip-mdxeditor .cm-editor {
+.stacy-mdxeditor .cm-editor {
   background-color: #1e1e2e !important;
   color: #cdd6f4 !important;
   font-size: 1em;
 }
 
-.paperclip-mdxeditor .cm-gutters {
+.stacy-mdxeditor .cm-gutters {
   background-color: #181825 !important;
   color: #585b70 !important;
   border-right: 1px solid #313244 !important;
 }
 
-.paperclip-mdxeditor .cm-activeLineGutter {
+.stacy-mdxeditor .cm-activeLineGutter {
   background-color: #1e1e2e !important;
 }
 
-.paperclip-mdxeditor .cm-activeLine {
+.stacy-mdxeditor .cm-activeLine {
   background-color: color-mix(in oklab, #cdd6f4 5%, transparent) !important;
 }
 
-.paperclip-mdxeditor .cm-cursor,
-.paperclip-mdxeditor .cm-dropCursor {
+.stacy-mdxeditor .cm-cursor,
+.stacy-mdxeditor .cm-dropCursor {
   border-left-color: #cdd6f4 !important;
 }
 
-.paperclip-mdxeditor .cm-selectionBackground {
+.stacy-mdxeditor .cm-selectionBackground {
   background-color: color-mix(in oklab, #89b4fa 25%, transparent) !important;
 }
 
-.paperclip-mdxeditor .cm-focused .cm-selectionBackground {
+.stacy-mdxeditor .cm-focused .cm-selectionBackground {
   background-color: color-mix(in oklab, #89b4fa 30%, transparent) !important;
 }
 
-.paperclip-mdxeditor .cm-content {
+.stacy-mdxeditor .cm-content {
   caret-color: #cdd6f4;
 }
 
 /* MDXEditor code block language selector – show on hover only */
-.paperclip-mdxeditor-content [class*="_codeMirrorWrapper_"] {
+.stacy-mdxeditor-content [class*="_codeMirrorWrapper_"] {
   position: relative;
 }
 
-.paperclip-mdxeditor-content [class*="_codeMirrorToolbar_"],
-.paperclip-mdxeditor-content [class*="_codeBlockToolbar_"] {
+.stacy-mdxeditor-content [class*="_codeMirrorToolbar_"],
+.stacy-mdxeditor-content [class*="_codeBlockToolbar_"] {
   position: absolute;
   top: 0.25rem;
   right: 0.25rem;
@@ -621,31 +656,31 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   transition: opacity 150ms ease;
 }
 
-.paperclip-mdxeditor-content [class*="_codeMirrorToolbar_"] select,
-.paperclip-mdxeditor-content [class*="_codeBlockToolbar_"] select {
+.stacy-mdxeditor-content [class*="_codeMirrorToolbar_"] select,
+.stacy-mdxeditor-content [class*="_codeBlockToolbar_"] select {
   background-color: #313244;
   color: #cdd6f4;
   border-color: #45475a;
 }
 
-.paperclip-mdxeditor-content [class*="_codeMirrorWrapper_"]:hover [class*="_codeMirrorToolbar_"],
-.paperclip-mdxeditor-content [class*="_codeMirrorWrapper_"]:hover [class*="_codeBlockToolbar_"],
-.paperclip-mdxeditor-content [class*="_codeMirrorWrapper_"]:focus-within [class*="_codeMirrorToolbar_"],
-.paperclip-mdxeditor-content [class*="_codeMirrorWrapper_"]:focus-within [class*="_codeBlockToolbar_"] {
+.stacy-mdxeditor-content [class*="_codeMirrorWrapper_"]:hover [class*="_codeMirrorToolbar_"],
+.stacy-mdxeditor-content [class*="_codeMirrorWrapper_"]:hover [class*="_codeBlockToolbar_"],
+.stacy-mdxeditor-content [class*="_codeMirrorWrapper_"]:focus-within [class*="_codeMirrorToolbar_"],
+.stacy-mdxeditor-content [class*="_codeMirrorWrapper_"]:focus-within [class*="_codeBlockToolbar_"] {
   opacity: 1;
 }
 
 /* Rendered markdown code blocks & inline code (prose/MarkdownBody context).
    Dark theme code blocks with compact sizing.
    Override prose CSS variables so prose-invert can't revert to defaults. */
-.paperclip-markdown {
+.stacy-markdown {
   --tw-prose-pre-bg: #1e1e2e;
   --tw-prose-pre-code: #cdd6f4;
   --tw-prose-invert-pre-bg: #1e1e2e;
   --tw-prose-invert-pre-code: #cdd6f4;
 }
 
-.paperclip-markdown pre {
+.stacy-markdown pre {
   border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent) !important;
   border-radius: calc(var(--radius) - 3px) !important;
   background-color: #1e1e2e !important;
@@ -657,12 +692,12 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   white-space: pre;
 }
 
-.paperclip-markdown code {
+.stacy-markdown code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 1em;
 }
 
-.paperclip-markdown pre code {
+.stacy-markdown pre code {
   font-size: inherit;
   color: inherit;
   background: none;
@@ -686,55 +721,55 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   background-color: #ffffff0f;
 }
 
-.paperclip-markdown {
+.stacy-markdown {
   color: var(--foreground);
   font-size: 0.9375rem;
   line-height: 1.6;
 }
 
-.paperclip-markdown > :first-child {
+.stacy-markdown > :first-child {
   margin-top: 0;
 }
 
-.paperclip-markdown > :last-child {
+.stacy-markdown > :last-child {
   margin-bottom: 0;
 }
 
-.paperclip-markdown :where(p, ul, ol, blockquote, pre, table) {
+.stacy-markdown :where(p, ul, ol, blockquote, pre, table) {
   margin-top: 0.7rem;
   margin-bottom: 0.7rem;
 }
 
-.paperclip-markdown :where(ul, ol) {
+.stacy-markdown :where(ul, ol) {
   padding-left: 1.15rem;
 }
 
-.paperclip-markdown ul {
+.stacy-markdown ul {
   list-style-type: disc;
 }
 
-.paperclip-markdown ol {
+.stacy-markdown ol {
   list-style-type: decimal;
 }
 
-.paperclip-markdown li {
+.stacy-markdown li {
   margin: 0.14rem 0;
   padding-left: 0.2rem;
 }
 
-.paperclip-markdown li > :where(p, ul, ol) {
+.stacy-markdown li > :where(p, ul, ol) {
   margin-top: 0.3rem;
   margin-bottom: 0.3rem;
 }
 
-.paperclip-markdown li::marker {
+.stacy-markdown li::marker {
   color: var(--muted-foreground);
 }
 
-.paperclip-markdown h1,
-.paperclip-markdown h2,
-.paperclip-markdown h3,
-.paperclip-markdown h4 {
+.stacy-markdown h1,
+.stacy-markdown h2,
+.stacy-markdown h3,
+.stacy-markdown h4 {
   margin-top: 1.75rem;
   margin-bottom: 0.45rem;
   color: var(--foreground);
@@ -743,81 +778,81 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   line-height: 1.3;
 }
 
-.paperclip-markdown h1 {
+.stacy-markdown h1 {
   font-size: 1.5rem;
 }
 
-.paperclip-markdown h2 {
+.stacy-markdown h2 {
   font-size: 1.25rem;
 }
 
-.paperclip-markdown h3 {
+.stacy-markdown h3 {
   font-size: 1.05rem;
 }
 
-.paperclip-markdown h4 {
+.stacy-markdown h4 {
   font-size: 0.95rem;
 }
 
-.paperclip-markdown :where(strong, b) {
+.stacy-markdown :where(strong, b) {
   color: var(--foreground);
   font-weight: 600;
 }
 
-.paperclip-markdown a {
+.stacy-markdown a {
   color: color-mix(in oklab, var(--foreground) 76%, #0969da 24%);
   text-decoration: underline;
   text-underline-offset: 0.15em;
   cursor: pointer;
 }
 
-.paperclip-markdown a.paperclip-mention-chip {
+.stacy-markdown a.stacy-mention-chip {
   text-decoration: none;
 }
 
-.paperclip-markdown a.paperclip-mention-chip[data-mention-kind="issue"] {
+.stacy-markdown a.stacy-mention-chip[data-mention-kind="issue"] {
   border-color: color-mix(in oklab, var(--foreground) 14%, var(--border) 86%);
   background: color-mix(in oklab, var(--accent) 42%, transparent);
 }
 
 /* Inline issue references in markdown: no pill chrome, just a status icon
    beside the link label — keeps the pair from splitting across lines. */
-.paperclip-markdown-issue-ref {
+.stacy-markdown-issue-ref {
   display: inline;
   white-space: nowrap;
 }
 
-.dark .paperclip-markdown a {
+.dark .stacy-markdown a {
   color: color-mix(in oklab, var(--foreground) 80%, #58a6ff 20%);
 }
 
-.paperclip-markdown blockquote {
+.stacy-markdown blockquote {
   margin-left: 0;
   padding-left: 0.95rem;
   border-left: 0.24rem solid color-mix(in oklab, var(--border) 84%, var(--muted-foreground) 16%);
   color: var(--muted-foreground);
 }
 
-.paperclip-markdown hr {
+.stacy-markdown hr {
   margin: 1.25rem 0;
   border-color: var(--border);
 }
 
-.paperclip-markdown img {
+.stacy-markdown img {
   border-radius: calc(var(--radius) + 2px);
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent);
 }
 
-.paperclip-markdown table {
+.stacy-markdown table {
   width: 100%;
 }
 
-.paperclip-markdown th {
+.stacy-markdown th {
   font-weight: 600;
   text-align: left;
 }
 
-.paperclip-mermaid {
+.stacy-mermaid {
   margin: 0.5rem 0;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--border);
@@ -826,7 +861,7 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   overflow-x: auto;
 }
 
-.paperclip-mermaid svg {
+.stacy-mermaid svg {
   display: block;
   width: max-content;
   max-width: none;
@@ -834,17 +869,17 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
   height: auto;
 }
 
-.paperclip-mermaid-status {
+.stacy-mermaid-status {
   margin: 0 0 0.45rem;
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
 
-.paperclip-mermaid-status-error {
+.stacy-mermaid-status-error {
   color: var(--destructive);
 }
 
-.paperclip-mermaid-source {
+.stacy-mermaid-source {
   margin: 0;
   padding: 0;
   border: 0;
@@ -852,10 +887,10 @@ a.paperclip-mention-chip[data-mention-kind="agent"]::before {
 }
 
 /* Mention chips rendered inline in prose (MarkdownBody or inline anchors) */
-a.paperclip-mention-chip,
-a.paperclip-project-mention-chip,
-span.paperclip-mention-chip,
-span.paperclip-project-mention-chip {
+a.stacy-mention-chip,
+a.stacy-project-mention-chip,
+span.stacy-mention-chip,
+span.stacy-project-mention-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -874,10 +909,10 @@ span.paperclip-project-mention-chip {
 
 /* When the identifier inside a chip is backtick-wrapped in markdown, strip the
    inline-code monospace/gray styling so the pill label reads cleanly. */
-.paperclip-markdown a.paperclip-mention-chip code,
-.paperclip-markdown a.paperclip-project-mention-chip code,
-.paperclip-markdown span.paperclip-mention-chip code,
-.paperclip-markdown span.paperclip-project-mention-chip code {
+.stacy-markdown a.stacy-mention-chip code,
+.stacy-markdown a.stacy-project-mention-chip code,
+.stacy-markdown span.stacy-mention-chip code,
+.stacy-markdown span.stacy-project-mention-chip code {
   font-family: inherit;
   background: none;
   color: inherit;

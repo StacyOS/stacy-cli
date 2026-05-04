@@ -50,7 +50,7 @@ interface ApiClientOptions {
   recoverAuth?: (input: RecoverAuthInput) => Promise<string | null>;
 }
 
-export class PaperclipApiClient {
+export class StacyApiClient {
   readonly apiBase: string;
   apiKey?: string;
   readonly runId?: string;
@@ -112,7 +112,7 @@ export class PaperclipApiClient {
     }
 
     if (this.runId) {
-      headers["x-paperclip-run-id"] = this.runId;
+      headers["x-stacy-run-id"] = this.runId;
     }
 
     let response: Response;
@@ -219,7 +219,7 @@ function buildConnectionErrorMessage(input: {
     "Try:",
     "- Start Stacy with `pnpm dev` or `pnpm stacy run`.",
     `- Verify the server is reachable with \`curl ${healthUrl}\`.`,
-    `- If Stacy is running elsewhere, pass \`--api-base ${input.apiBase.replace(/\/+$/, "")}\` or set \`STACY_API_URL\` (or legacy \`PAPERCLIP_API_URL\`).`,
+    `- If Stacy is running elsewhere, pass \`--api-base ${input.apiBase.replace(/\/+$/, "")}\` or set \`STACY_API_URL\` (or legacy \`STACY_API_URL\`).`,
   );
   return lines.join("\n");
 }

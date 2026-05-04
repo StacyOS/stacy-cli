@@ -16,9 +16,9 @@ import {
   type DeploymentMode,
   type SecretProvider,
   type StorageProvider,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { configExists, readConfig, resolveConfigPath, writeConfig } from "../config/store.js";
-import type { PaperclipConfig } from "../config/schema.js";
+import type { StacyConfig } from "../config/schema.js";
 import { ensureAgentJwtSecret, resolveAgentJwtEnvFile } from "../config/env.js";
 import { ensureLocalSecretsKeyFile } from "../config/secrets-key.js";
 import { promptDatabase } from "../prompts/database.js";
@@ -34,10 +34,10 @@ import {
   resolveDefaultBackupDir,
   resolveDefaultEmbeddedPostgresDir,
   resolveDefaultLogsDir,
-  resolvePaperclipInstanceId,
+  resolveStacyInstanceId,
 } from "../config/home.js";
 import { bootstrapCeoInvite } from "./auth-bootstrap-ceo.js";
-import { printPaperclipCliBanner } from "../utils/banner.js";
+import { printStacyCliBanner } from "../utils/banner.js";
 import {
   getTelemetryClient,
   trackInstallStarted,
@@ -54,41 +54,41 @@ type OnboardOptions = {
   bind?: BindMode;
 };
 
-type OnboardDefaults = Pick<PaperclipConfig, "database" | "logging" | "server" | "auth" | "storage" | "secrets">;
+type OnboardDefaults = Pick<StacyConfig, "database" | "logging" | "server" | "auth" | "storage" | "secrets">;
 
 const TAILNET_BIND_WARNING =
   "No Tailscale address was detected during setup. The saved config will stay on loopback until Tailscale is available or STACY_TAILNET_BIND_HOST is set.";
 
 const ONBOARD_ENV_KEYS = [
-  "PAPERCLIP_PUBLIC_URL",
+  "STACY_PUBLIC_URL",
   "DATABASE_URL",
-  "PAPERCLIP_DB_BACKUP_ENABLED",
-  "PAPERCLIP_DB_BACKUP_INTERVAL_MINUTES",
-  "PAPERCLIP_DB_BACKUP_RETENTION_DAYS",
-  "PAPERCLIP_DB_BACKUP_DIR",
-  "PAPERCLIP_DEPLOYMENT_MODE",
-  "PAPERCLIP_DEPLOYMENT_EXPOSURE",
-  "PAPERCLIP_BIND",
-  "PAPERCLIP_BIND_HOST",
-  "PAPERCLIP_TAILNET_BIND_HOST",
+  "STACY_DB_BACKUP_ENABLED",
+  "STACY_DB_BACKUP_INTERVAL_MINUTES",
+  "STACY_DB_BACKUP_RETENTION_DAYS",
+  "STACY_DB_BACKUP_DIR",
+  "STACY_DEPLOYMENT_MODE",
+  "STACY_DEPLOYMENT_EXPOSURE",
+  "STACY_BIND",
+  "STACY_BIND_HOST",
+  "STACY_TAILNET_BIND_HOST",
   "HOST",
   "PORT",
   "SERVE_UI",
-  "PAPERCLIP_ALLOWED_HOSTNAMES",
-  "PAPERCLIP_AUTH_BASE_URL_MODE",
-  "PAPERCLIP_AUTH_PUBLIC_BASE_URL",
+  "STACY_ALLOWED_HOSTNAMES",
+  "STACY_AUTH_BASE_URL_MODE",
+  "STACY_AUTH_PUBLIC_BASE_URL",
   "BETTER_AUTH_URL",
   "BETTER_AUTH_BASE_URL",
-  "PAPERCLIP_STORAGE_PROVIDER",
-  "PAPERCLIP_STORAGE_LOCAL_DIR",
-  "PAPERCLIP_STORAGE_S3_BUCKET",
-  "PAPERCLIP_STORAGE_S3_REGION",
-  "PAPERCLIP_STORAGE_S3_ENDPOINT",
-  "PAPERCLIP_STORAGE_S3_PREFIX",
-  "PAPERCLIP_STORAGE_S3_FORCE_PATH_STYLE",
-  "PAPERCLIP_SECRETS_PROVIDER",
-  "PAPERCLIP_SECRETS_STRICT_MODE",
-  "PAPERCLIP_SECRETS_MASTER_KEY_FILE",
+  "STACY_STORAGE_PROVIDER",
+  "STACY_STORAGE_LOCAL_DIR",
+  "STACY_STORAGE_S3_BUCKET",
+  "STACY_STORAGE_S3_REGION",
+  "STACY_STORAGE_S3_ENDPOINT",
+  "STACY_STORAGE_S3_PREFIX",
+  "STACY_STORAGE_S3_FORCE_PATH_STYLE",
+  "STACY_SECRETS_PROVIDER",
+  "STACY_SECRETS_STRICT_MODE",
+  "STACY_SECRETS_MASTER_KEY_FILE",
 ] as const;
 
 function parseBooleanFromEnv(rawValue: string | undefined): boolean | null {
@@ -116,7 +116,7 @@ function resolvePathFromEnv(rawValue: string | undefined): string | null {
   return path.resolve(expandHomePrefix(rawValue.trim()));
 }
 
-function describeServerBinding(server: Pick<PaperclipConfig["server"], "bind" | "customBindHost" | "host" | "port">): string {
+function describeServerBinding(server: Pick<StacyConfig["server"], "bind" | "customBindHost" | "host" | "port">): string {
   const bind = server.bind ?? inferBindModeFromHost(server.host);
   const detail =
     bind === "custom"
@@ -133,30 +133,30 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
   ignoredEnvKeys: Array<{ key: string; reason: string }>;
 } {
   const preferTrustedLocal = opts?.preferTrustedLocal ?? false;
-  const instanceId = resolvePaperclipInstanceId();
+  const instanceId = resolveStacyInstanceId();
   const defaultStorage = defaultStorageConfig();
   const defaultSecrets = defaultSecretsConfig();
   const databaseUrl = process.env.DATABASE_URL?.trim() || undefined;
   const publicUrl = preferTrustedLocal
     ? undefined
     : (
-      process.env.PAPERCLIP_PUBLIC_URL?.trim() ||
-      process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL?.trim() ||
+      process.env.STACY_PUBLIC_URL?.trim() ||
+      process.env.STACY_AUTH_PUBLIC_BASE_URL?.trim() ||
       process.env.BETTER_AUTH_URL?.trim() ||
       process.env.BETTER_AUTH_BASE_URL?.trim() ||
       undefined
     );
   const deploymentMode = preferTrustedLocal
     ? "local_trusted"
-    : (parseEnumFromEnv<DeploymentMode>(process.env.PAPERCLIP_DEPLOYMENT_MODE, DEPLOYMENT_MODES) ?? "local_trusted");
+    : (parseEnumFromEnv<DeploymentMode>(process.env.STACY_DEPLOYMENT_MODE, DEPLOYMENT_MODES) ?? "local_trusted");
   const deploymentExposureFromEnv = parseEnumFromEnv<DeploymentExposure>(
-    process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE,
+    process.env.STACY_DEPLOYMENT_EXPOSURE,
     DEPLOYMENT_EXPOSURES,
   );
   const deploymentExposure =
     deploymentMode === "local_trusted" ? "private" : (deploymentExposureFromEnv ?? "private");
-  const bindFromEnv = parseEnumFromEnv<BindMode>(process.env.PAPERCLIP_BIND, BIND_MODES);
-  const customBindHostFromEnv = process.env.PAPERCLIP_BIND_HOST?.trim() || undefined;
+  const bindFromEnv = parseEnumFromEnv<BindMode>(process.env.STACY_BIND, BIND_MODES);
+  const customBindHostFromEnv = process.env.STACY_BIND_HOST?.trim() || undefined;
   const hostFromEnv = process.env.HOST?.trim() || undefined;
   const configuredBindHost = customBindHostFromEnv ?? hostFromEnv;
   const bind = preferTrustedLocal
@@ -170,16 +170,16 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
     bind,
     host: hostFromEnv ?? (bind === "loopback" ? "127.0.0.1" : "0.0.0.0"),
     customBindHost: customBindHostFromEnv,
-    tailnetBindHost: process.env.PAPERCLIP_TAILNET_BIND_HOST?.trim(),
+    tailnetBindHost: process.env.STACY_TAILNET_BIND_HOST?.trim(),
   });
   const authPublicBaseUrl = publicUrl;
   const authBaseUrlModeFromEnv = parseEnumFromEnv<AuthBaseUrlMode>(
-    process.env.PAPERCLIP_AUTH_BASE_URL_MODE,
+    process.env.STACY_AUTH_BASE_URL_MODE,
     AUTH_BASE_URL_MODES,
   );
   const authBaseUrlMode = authBaseUrlModeFromEnv ?? (authPublicBaseUrl ? "explicit" : "auto");
-  const allowedHostnamesFromEnv = process.env.PAPERCLIP_ALLOWED_HOSTNAMES
-    ? process.env.PAPERCLIP_ALLOWED_HOSTNAMES
+  const allowedHostnamesFromEnv = process.env.STACY_ALLOWED_HOSTNAMES
+    ? process.env.STACY_ALLOWED_HOSTNAMES
       .split(",")
       .map((value) => value.trim().toLowerCase())
       .filter((value) => value.length > 0)
@@ -194,19 +194,19 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
     })()
     : null;
   const storageProvider =
-    parseEnumFromEnv<StorageProvider>(process.env.PAPERCLIP_STORAGE_PROVIDER, STORAGE_PROVIDERS) ??
+    parseEnumFromEnv<StorageProvider>(process.env.STACY_STORAGE_PROVIDER, STORAGE_PROVIDERS) ??
     defaultStorage.provider;
   const secretsProvider =
-    parseEnumFromEnv<SecretProvider>(process.env.PAPERCLIP_SECRETS_PROVIDER, SECRET_PROVIDERS) ??
+    parseEnumFromEnv<SecretProvider>(process.env.STACY_SECRETS_PROVIDER, SECRET_PROVIDERS) ??
     defaultSecrets.provider;
-  const databaseBackupEnabled = parseBooleanFromEnv(process.env.PAPERCLIP_DB_BACKUP_ENABLED) ?? true;
+  const databaseBackupEnabled = parseBooleanFromEnv(process.env.STACY_DB_BACKUP_ENABLED) ?? true;
   const databaseBackupIntervalMinutes = Math.max(
     1,
-    parseNumberFromEnv(process.env.PAPERCLIP_DB_BACKUP_INTERVAL_MINUTES) ?? 60,
+    parseNumberFromEnv(process.env.STACY_DB_BACKUP_INTERVAL_MINUTES) ?? 60,
   );
   const databaseBackupRetentionDays = Math.max(
     1,
-    parseNumberFromEnv(process.env.PAPERCLIP_DB_BACKUP_RETENTION_DAYS) ?? 30,
+    parseNumberFromEnv(process.env.STACY_DB_BACKUP_RETENTION_DAYS) ?? 30,
   );
   const defaults: OnboardDefaults = {
     database: {
@@ -218,7 +218,7 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
         enabled: databaseBackupEnabled,
         intervalMinutes: databaseBackupIntervalMinutes,
         retentionDays: databaseBackupRetentionDays,
-        dir: resolvePathFromEnv(process.env.PAPERCLIP_DB_BACKUP_DIR) ?? resolveDefaultBackupDir(instanceId),
+        dir: resolvePathFromEnv(process.env.STACY_DB_BACKUP_DIR) ?? resolveDefaultBackupDir(instanceId),
       },
     },
     logging: {
@@ -244,24 +244,24 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
       provider: storageProvider,
       localDisk: {
         baseDir:
-          resolvePathFromEnv(process.env.PAPERCLIP_STORAGE_LOCAL_DIR) ?? defaultStorage.localDisk.baseDir,
+          resolvePathFromEnv(process.env.STACY_STORAGE_LOCAL_DIR) ?? defaultStorage.localDisk.baseDir,
       },
       s3: {
-        bucket: process.env.PAPERCLIP_STORAGE_S3_BUCKET ?? defaultStorage.s3.bucket,
-        region: process.env.PAPERCLIP_STORAGE_S3_REGION ?? defaultStorage.s3.region,
-        endpoint: process.env.PAPERCLIP_STORAGE_S3_ENDPOINT ?? defaultStorage.s3.endpoint,
-        prefix: process.env.PAPERCLIP_STORAGE_S3_PREFIX ?? defaultStorage.s3.prefix,
+        bucket: process.env.STACY_STORAGE_S3_BUCKET ?? defaultStorage.s3.bucket,
+        region: process.env.STACY_STORAGE_S3_REGION ?? defaultStorage.s3.region,
+        endpoint: process.env.STACY_STORAGE_S3_ENDPOINT ?? defaultStorage.s3.endpoint,
+        prefix: process.env.STACY_STORAGE_S3_PREFIX ?? defaultStorage.s3.prefix,
         forcePathStyle:
-          parseBooleanFromEnv(process.env.PAPERCLIP_STORAGE_S3_FORCE_PATH_STYLE) ??
+          parseBooleanFromEnv(process.env.STACY_STORAGE_S3_FORCE_PATH_STYLE) ??
           defaultStorage.s3.forcePathStyle,
       },
     },
     secrets: {
       provider: secretsProvider,
-      strictMode: parseBooleanFromEnv(process.env.PAPERCLIP_SECRETS_STRICT_MODE) ?? defaultSecrets.strictMode,
+      strictMode: parseBooleanFromEnv(process.env.STACY_SECRETS_STRICT_MODE) ?? defaultSecrets.strictMode,
       localEncrypted: {
         keyFilePath:
-          resolvePathFromEnv(process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE) ??
+          resolvePathFromEnv(process.env.STACY_SECRETS_MASTER_KEY_FILE) ??
           defaultSecrets.localEncrypted.keyFilePath,
       },
     },
@@ -270,14 +270,14 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
   if (preferTrustedLocal) {
     const forcedLocalReason = "Ignored because --yes quickstart forces trusted local loopback defaults";
     for (const key of [
-      "PAPERCLIP_DEPLOYMENT_MODE",
-      "PAPERCLIP_DEPLOYMENT_EXPOSURE",
-      "PAPERCLIP_BIND",
-      "PAPERCLIP_BIND_HOST",
+      "STACY_DEPLOYMENT_MODE",
+      "STACY_DEPLOYMENT_EXPOSURE",
+      "STACY_BIND",
+      "STACY_BIND_HOST",
       "HOST",
-      "PAPERCLIP_AUTH_BASE_URL_MODE",
-      "PAPERCLIP_AUTH_PUBLIC_BASE_URL",
-      "PAPERCLIP_PUBLIC_URL",
+      "STACY_AUTH_BASE_URL_MODE",
+      "STACY_AUTH_PUBLIC_BASE_URL",
+      "STACY_PUBLIC_URL",
       "BETTER_AUTH_URL",
       "BETTER_AUTH_BASE_URL",
     ] as const) {
@@ -286,21 +286,21 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
       }
     }
   }
-  if (deploymentMode === "local_trusted" && process.env.PAPERCLIP_DEPLOYMENT_EXPOSURE !== undefined) {
+  if (deploymentMode === "local_trusted" && process.env.STACY_DEPLOYMENT_EXPOSURE !== undefined) {
     ignoredEnvKeys.push({
-      key: "PAPERCLIP_DEPLOYMENT_EXPOSURE",
+      key: "STACY_DEPLOYMENT_EXPOSURE",
       reason: "Ignored because deployment mode local_trusted always forces private exposure",
     });
   }
-  if (deploymentMode === "local_trusted" && process.env.PAPERCLIP_BIND !== undefined) {
+  if (deploymentMode === "local_trusted" && process.env.STACY_BIND !== undefined) {
     ignoredEnvKeys.push({
-      key: "PAPERCLIP_BIND",
+      key: "STACY_BIND",
       reason: "Ignored because deployment mode local_trusted always uses loopback reachability",
     });
   }
-  if (deploymentMode === "local_trusted" && process.env.PAPERCLIP_BIND_HOST !== undefined) {
+  if (deploymentMode === "local_trusted" && process.env.STACY_BIND_HOST !== undefined) {
     ignoredEnvKeys.push({
-      key: "PAPERCLIP_BIND_HOST",
+      key: "STACY_BIND_HOST",
       reason: "Ignored because deployment mode local_trusted always uses loopback reachability",
     });
   }
@@ -318,7 +318,7 @@ function quickstartDefaultsFromEnv(opts?: { preferTrustedLocal?: boolean }): {
   return { defaults, usedEnvKeys, ignoredEnvKeys };
 }
 
-function canCreateBootstrapInviteImmediately(config: Pick<PaperclipConfig, "database" | "server">): boolean {
+function canCreateBootstrapInviteImmediately(config: Pick<StacyConfig, "database" | "server">): boolean {
   return config.server.deploymentMode === "authenticated" && config.database.mode !== "embedded-postgres";
 }
 
@@ -327,17 +327,17 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     throw new Error(`Unsupported bind preset for onboard: ${opts.bind}. Use loopback, lan, or tailnet.`);
   }
 
-  printPaperclipCliBanner();
+  printStacyCliBanner();
   p.intro(pc.bgCyan(pc.black(" stacy onboard ")));
   const configPath = resolveConfigPath(opts.config);
-  const instance = describeLocalInstancePaths(resolvePaperclipInstanceId());
+  const instance = describeLocalInstancePaths(resolveStacyInstanceId());
   p.log.message(
     pc.dim(
       `Local home: ${instance.homeDir} | instance: ${instance.instanceId} | config: ${configPath}`,
     ),
   );
 
-  let existingConfig: PaperclipConfig | null = null;
+  let existingConfig: StacyConfig | null = null;
   if (configExists(opts.config)) {
     p.log.message(pc.dim(`${configPath} exists`));
 
@@ -362,7 +362,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     const envFilePath = resolveAgentJwtEnvFile(configPath);
     if (jwtSecret.created) {
       p.log.success(`Created ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
-    } else if (process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim()) {
+    } else if (process.env.STACY_AGENT_JWT_SECRET?.trim()) {
       p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} from environment`);
     } else {
       p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
@@ -412,7 +412,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     }
 
     if (shouldRunNow && !opts.invokedByRun) {
-      process.env.PAPERCLIP_OPEN_ON_LISTEN = "true";
+      process.env.STACY_OPEN_ON_LISTEN = "true";
       const { runCommand } = await import("./run.js");
       await runCommand({ config: configPath, repair: true, yes: true });
       return;
@@ -458,7 +458,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   const tc = getTelemetryClient();
   if (tc) trackInstallStarted(tc);
 
-  let llm: PaperclipConfig["llm"] | undefined;
+  let llm: StacyConfig["llm"] | undefined;
   const { defaults: derivedDefaults, usedEnvKeys, ignoredEnvKeys } = quickstartDefaultsFromEnv({
     preferTrustedLocal: opts.yes === true && !opts.bind,
   });
@@ -492,7 +492,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
       const s = p.spinner();
       s.start("Testing database connection...");
       try {
-        const { createDb } = await import("@paperclipai/db");
+        const { createDb } = await import("@arpanstacy/stacy-db");
         const db = createDb(database.connectionString);
         await db.execute("SELECT 1");
         s.stop("Database connection successful");
@@ -594,13 +594,13 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   const envFilePath = resolveAgentJwtEnvFile(configPath);
   if (jwtSecret.created) {
     p.log.success(`Created ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
-  } else if (process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim()) {
+  } else if (process.env.STACY_AGENT_JWT_SECRET?.trim()) {
     p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} from environment`);
   } else {
     p.log.info(`Using existing ${pc.cyan("STACY_AGENT_JWT_SECRET")} in ${pc.dim(envFilePath)}`);
   }
 
-  const config: PaperclipConfig = {
+  const config: StacyConfig = {
     $meta: {
       version: 1,
       updatedAt: new Date().toISOString(),
@@ -672,7 +672,7 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   }
 
   if (shouldRunNow && !opts.invokedByRun) {
-    process.env.PAPERCLIP_OPEN_ON_LISTEN = "true";
+    process.env.STACY_OPEN_ON_LISTEN = "true";
     const { runCommand } = await import("./run.js");
     await runCommand({ config: configPath, repair: true, yes: true });
     return;

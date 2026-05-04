@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Paperclip, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   DndContext,
@@ -30,7 +30,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Company } from "@paperclipai/shared";
+import type { Company } from "@arpanstacy/stacy-shared";
 import { CompanyPatternIcon } from "./CompanyPatternIcon";
 
 function SortableCompanyItem({
@@ -200,9 +200,14 @@ export function CompanyRail() {
 
   return (
     <div className="flex flex-col items-center w-[72px] shrink-0 h-full bg-background border-r border-border">
-      {/* Paperclip icon - aligned with top sections (implied line, no visible border) */}
+      {/* Stacy mark - aligned with top sections (implied line, no visible border) */}
       <div className="flex items-center justify-center h-12 w-full shrink-0">
-        <Paperclip className="h-5 w-5 text-foreground" />
+        <div
+          className="flex size-8 items-center justify-center bg-primary font-serif text-[22px] leading-none text-primary-foreground [clip-path:polygon(0_0,calc(100%_-_7px)_0,100%_7px,100%_100%,7px_100%,0_calc(100%_-_7px))]"
+          aria-label="Stacy"
+        >
+          S
+        </div>
       </div>
 
       {/* Company list */}

@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
 import {
   activityLog,
   agentWakeupRequests,
@@ -26,9 +26,9 @@ import {
   labels,
   projectWorkspaces,
   projects,
-} from "@paperclipai/db";
-import type { IssueBlockerAttention, IssueRelationIssueSummary } from "@paperclipai/shared";
-import { extractAgentMentionIds, extractProjectMentionIds, isUuidLike } from "@paperclipai/shared";
+} from "@arpanstacy/stacy-db";
+import type { IssueBlockerAttention, IssueRelationIssueSummary } from "@arpanstacy/stacy-shared";
+import { extractAgentMentionIds, extractProjectMentionIds, isUuidLike } from "@arpanstacy/stacy-shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import {
   defaultIssueExecutionWorkspaceSettingsForProject,

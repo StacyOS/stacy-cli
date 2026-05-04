@@ -1,6 +1,6 @@
 # Stacy Architecture
 
-Stacy is a trust-first AI company control plane. It is forked from Paperclip,
+Stacy is a trust-first AI company control plane. It is forked from Stacy,
 but the product target is narrower: dependable autonomous work execution for an
 operator who wants durable tasks, visible agent activity, hard stops, and clear
 audit trails.
@@ -217,10 +217,9 @@ Stacy needs a clean install path before it is a product:
 - Upgrade notes between releases
 - Clear self-hosted production guide
 
-Until the CLI package is renamed, `pnpm stacy` is the preferred local command
-and the upstream-compatible `paperclipai` command remains available as a
-temporary bridge. The publishable CLI also exposes a `stacy` binary alias while
-the npm package name decision remains open.
+`pnpm stacy` is the preferred local command. Public installs use the
+`stacy-cli` wrapper, which exposes the same `stacy` binary and wraps the
+Stacy-owned `@arpanstacy/stacy` core package.
 
 Phase 5 tracks this handoff work in `docs/stacy/PHASE-5.md`.
 Self-hosted operator steps live in `docs/stacy/SELF-HOSTED-OPERATIONS.md`.

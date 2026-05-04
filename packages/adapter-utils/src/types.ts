@@ -174,7 +174,7 @@ export type AdapterSkillState =
 
 export type AdapterSkillOrigin =
   | "company_managed"
-  | "paperclip_required"
+  | "stacy_required"
   | "user_installed"
   | "external_unknown";
 
@@ -318,7 +318,7 @@ export interface ServerAdapterModule {
    * Optional explicit refresh hook for model discovery.
    * Use this when the adapter caches discovered models and needs a bypass path
    * so the UI can fetch newly released models without waiting for cache expiry
-   * or a Paperclip code update.
+   * or a Stacy code update.
    */
   refreshModels?: () => Promise<AdapterModel[]>;
   agentConfigurationDoc?: string;
@@ -376,7 +376,7 @@ export interface ServerAdapterModule {
   /**
    * Adapter needs runtime skill entries materialized (written to disk)
    * before being passed via config. Used by adapters that scan a directory
-   * rather than reading config.paperclipRuntimeSkills.
+   * rather than reading config.stacyRuntimeSkills.
    */
   requiresMaterializedRuntimeSkills?: boolean;
 }

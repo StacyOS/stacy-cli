@@ -383,7 +383,7 @@ NODE
       echo "Error: npm user $current_user does not appear to have publish access to:"
       printf '  - %s\n' "${missing_access[@]}"
       echo
-      echo "Ask an existing npm package owner to add $current_user as a maintainer, or run this release with a token/user that has write access to the paperclipai packages."
+      echo "Use package names under a scope owned by $current_user, or run this release with a token/user that has write access to every Stacy package in the release."
     } >&2
     exit 1
   fi

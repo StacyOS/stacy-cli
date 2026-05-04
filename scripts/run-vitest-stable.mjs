@@ -8,13 +8,13 @@ const repoRoot = process.cwd();
 const serverRoot = path.join(repoRoot, "server");
 const serverTestsDir = path.join(repoRoot, "server", "src", "__tests__");
 const nonServerProjects = [
-  "@paperclipai/shared",
-  "@paperclipai/db",
-  "@paperclipai/adapter-utils",
-  "@paperclipai/adapter-codex-local",
-  "@paperclipai/adapter-opencode-local",
-  "@paperclipai/ui",
-  "paperclipai",
+  "@arpanstacy/stacy-shared",
+  "@arpanstacy/stacy-db",
+  "@arpanstacy/stacy-adapter-utils",
+  "@arpanstacy/stacy-adapter-codex-local",
+  "@arpanstacy/stacy-adapter-opencode-local",
+  "@arpanstacy/stacy-ui",
+  "@arpanstacy/stacy",
 ];
 const routeTestPattern = /[^/]*(?:route|routes|authz)[^/]*\.test\.ts$/;
 const additionalSerializedServerTests = new Set([
@@ -79,14 +79,14 @@ function isRouteOrAuthzTest(file) {
 function runVitest(args, label) {
   console.log(`\n[test:run] ${label}`);
   invocationIndex += 1;
-  const testRoot = mkdtempSync(path.join(os.tmpdir(), `paperclip-vitest-${process.pid}-${invocationIndex}-`));
+  const testRoot = mkdtempSync(path.join(os.tmpdir(), `stacy-vitest-${process.pid}-${invocationIndex}-`));
   const env = {
     ...process.env,
-    PAPERCLIP_HOME: path.join(testRoot, "home"),
-    PAPERCLIP_INSTANCE_ID: `vitest-${process.pid}-${invocationIndex}`,
+    STACY_HOME: path.join(testRoot, "home"),
+    STACY_INSTANCE_ID: `vitest-${process.pid}-${invocationIndex}`,
     TMPDIR: path.join(testRoot, "tmp"),
   };
-  mkdirSync(env.PAPERCLIP_HOME, { recursive: true });
+  mkdirSync(env.STACY_HOME, { recursive: true });
   mkdirSync(env.TMPDIR, { recursive: true });
   const result = spawnSync("pnpm", ["exec", "vitest", "run", ...args], {
     cwd: repoRoot,
@@ -116,7 +116,7 @@ for (const project of nonServerProjects) {
 }
 
 runVitest(
-  ["--project", "@paperclipai/server", ...excludeRouteArgs],
+  ["--project", "@arpanstacy/stacy-server", ...excludeRouteArgs],
   `server suites excluding ${routeTests.length} serialized suites`,
 );
 
@@ -124,7 +124,7 @@ for (const routeTest of routeTests) {
   runVitest(
     [
       "--project",
-      "@paperclipai/server",
+      "@arpanstacy/stacy-server",
       routeTest.repoPath,
       "--pool=forks",
       "--poolOptions.forks.isolate=true",

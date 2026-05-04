@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
 import {
   agentWakeupRequests,
   heartbeatRuns,
@@ -7,7 +7,7 @@ import {
   issueTreeHoldMembers,
   issueTreeHolds,
   issues,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import {
   ISSUE_STATUSES,
   type IssueStatus,
@@ -20,7 +20,7 @@ import {
   type IssueTreePreviewIssue,
   type IssueTreePreviewRun,
   type IssueTreePreviewWarning,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import {
   ACTIVE_HEARTBEAT_RUN_STATUSES,

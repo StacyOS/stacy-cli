@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ExecutionWorkspace, Issue, Project, ProjectWorkspace } from "@paperclipai/shared";
+import type { ExecutionWorkspace, Issue, Project, ProjectWorkspace } from "@arpanstacy/stacy-shared";
 import { ArrowLeft, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
@@ -299,7 +299,7 @@ function ExecutionWorkspaceIssuesList({
       projects={projectOptions}
       liveIssueIds={liveIssueIds}
       projectId={project?.id}
-      viewStateKey="paperclip:execution-workspace-issues-view"
+      viewStateKey="stacy:execution-workspace-issues-view"
       onUpdateIssue={(id, data) => updateIssue.mutate({ id, data })}
     />
   );
@@ -468,7 +468,7 @@ export function ExecutionWorkspaceDetail() {
   if (workspaceId && activeTab === null) {
     let cachedTab: ExecutionWorkspaceTab = "configuration";
     try {
-      const storedTab = localStorage.getItem(`paperclip:execution-workspace-tab:${workspaceId}`);
+      const storedTab = localStorage.getItem(`stacy:execution-workspace-tab:${workspaceId}`);
       if (storedTab === "issues" || storedTab === "configuration" || storedTab === "runtime_logs") {
         cachedTab = storedTab;
       }
@@ -478,7 +478,7 @@ export function ExecutionWorkspaceDetail() {
 
   const handleTabChange = (tab: ExecutionWorkspaceTab) => {
     try {
-      localStorage.setItem(`paperclip:execution-workspace-tab:${workspace.id}`, tab);
+      localStorage.setItem(`stacy:execution-workspace-tab:${workspace.id}`, tab);
     } catch {}
     navigate(executionWorkspaceTabPath(workspace.id, tab));
   };
@@ -525,7 +525,7 @@ export function ExecutionWorkspaceDetail() {
           </div>
           <h1 className="truncate text-xl font-semibold sm:text-2xl">{workspace.name}</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Configure the concrete runtime workspace that Paperclip reuses for this issue flow.
+            Configure the concrete runtime workspace that Stacy reuses for this issue flow.
             <span className="hidden sm:inline"> These settings stay attached to the execution workspace so future runs can keep local paths, repo refs, provisioning, teardown, and runtime-service behavior in sync with the actual workspace being reused.</span>
           </p>
         </div>
@@ -672,7 +672,7 @@ export function ExecutionWorkspaceDetail() {
 
                 <div className="space-y-4">
                   <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Lifecycle commands</div>
-                  <Field label="Provision command" hint="Runs when Paperclip prepares this execution workspace">
+                  <Field label="Provision command" hint="Runs when Stacy prepares this execution workspace">
                     <Textarea
                       className="min-h-20 font-mono"
                       value={form.provisionCommand}

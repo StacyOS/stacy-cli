@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { PaperclipConfig } from "../config/schema.js";
+import type { StacyConfig } from "../config/schema.js";
 import type { CheckResult } from "./index.js";
 import { resolveRuntimeLikePath } from "./path-resolver.js";
 
@@ -28,7 +28,7 @@ function decodeMasterKey(raw: string): Buffer | null {
 
 function withStrictModeNote(
   base: Pick<CheckResult, "name" | "status" | "message" | "canRepair" | "repair" | "repairHint">,
-  config: PaperclipConfig,
+  config: StacyConfig,
 ): CheckResult {
   const strictModeDisabledInDeployedSetup =
     config.database.mode === "postgres" && config.secrets.strictMode === false;
@@ -45,7 +45,7 @@ function withStrictModeNote(
   };
 }
 
-export function secretsCheck(config: PaperclipConfig, configPath?: string): CheckResult {
+export function secretsCheck(config: StacyConfig, configPath?: string): CheckResult {
   const provider = config.secrets.provider;
   if (provider !== "local_encrypted") {
     return {
@@ -57,7 +57,7 @@ export function secretsCheck(config: PaperclipConfig, configPath?: string): Chec
     };
   }
 
-  const envMasterKey = process.env.STACY_SECRETS_MASTER_KEY ?? process.env.PAPERCLIP_SECRETS_MASTER_KEY;
+  const envMasterKey = process.env.STACY_SECRETS_MASTER_KEY ?? process.env.STACY_SECRETS_MASTER_KEY;
   if (envMasterKey && envMasterKey.trim().length > 0) {
     if (!decodeMasterKey(envMasterKey)) {
       return {
@@ -80,7 +80,7 @@ export function secretsCheck(config: PaperclipConfig, configPath?: string): Chec
     );
   }
 
-  const keyFileOverride = process.env.STACY_SECRETS_MASTER_KEY_FILE ?? process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+  const keyFileOverride = process.env.STACY_SECRETS_MASTER_KEY_FILE ?? process.env.STACY_SECRETS_MASTER_KEY_FILE;
   const configuredPath =
     keyFileOverride && keyFileOverride.trim().length > 0
       ? keyFileOverride.trim()

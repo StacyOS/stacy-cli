@@ -13,7 +13,7 @@ const localCliSource = resolve(localRepoRoot, "cli/src/index.ts");
 let command = process.execPath;
 let args;
 try {
-  args = [require.resolve("paperclipai/dist/index.js"), ...process.argv.slice(2)];
+  args = [require.resolve("@arpanstacy/stacy/dist/index.js"), ...process.argv.slice(2)];
 } catch {
   if (existsSync(localTsxBin) && existsSync(localCliSource)) {
     args = [localTsxBin, localCliSource, ...process.argv.slice(2)];

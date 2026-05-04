@@ -1,6 +1,6 @@
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
-import { agents, approvals, companies, costEvents, heartbeatRuns, issues } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
+import { agents, approvals, companies, costEvents, heartbeatRuns, issues } from "@arpanstacy/stacy-db";
 import { notFound } from "../errors.js";
 import { budgetService } from "./budgets.js";
 import { ACTIVE_HEARTBEAT_RUN_STATUSES } from "./execution-kernel/status.js";

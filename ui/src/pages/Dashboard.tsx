@@ -24,7 +24,7 @@ import { Activity, AlertTriangle, Bot, CircleCheck, CircleDot, Clock3, DollarSig
 import { ActiveAgentsPanel } from "../components/ActiveAgentsPanel";
 import { ChartCard, RunActivityChart, PriorityChart, IssueStatusChart, SuccessRateChart } from "../components/ActivityCharts";
 import { PageSkeleton } from "../components/PageSkeleton";
-import type { Agent, DashboardSummary, Issue } from "@paperclipai/shared";
+import type { Agent, DashboardSummary, Issue } from "@arpanstacy/stacy-shared";
 import { PluginSlotOutlet } from "@/plugins/slots";
 
 const DASHBOARD_ACTIVITY_LIMIT = 10;

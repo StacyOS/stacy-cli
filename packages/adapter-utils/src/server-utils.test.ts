@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
-  applyPaperclipWorkspaceEnv,
+  applyStacyWorkspaceEnv,
   appendWithByteCap,
-  DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE,
-  renderPaperclipWakePrompt,
+  DEFAULT_STACY_AGENT_PROMPT_TEMPLATE,
+  renderStacyWakePrompt,
   runningProcesses,
   runChildProcess,
-  stringifyPaperclipWakePayload,
+  stringifyStacyWakePayload,
 } from "./server-utils.js";
 
 function isPidAlive(pid: number) {
@@ -251,25 +251,25 @@ describe("runChildProcess", () => {
   });
 });
 
-describe("renderPaperclipWakePrompt", () => {
+describe("renderStacyWakePrompt", () => {
   it("keeps the default local-agent prompt action-oriented", () => {
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("Start actionable work in this heartbeat");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("do not stop at a plan");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("Prefer the smallest verification that proves the change");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("Use child issues");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("instead of polling agents, sessions, or processes");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("Create child issues directly when you know what needs to be done");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("POST /api/issues/{issueId}/interactions");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("kind suggest_tasks, ask_user_questions, or request_confirmation");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("confirmation:{issueId}:plan:{revisionId}");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain("Wait for acceptance before creating implementation subtasks");
-    expect(DEFAULT_PAPERCLIP_AGENT_PROMPT_TEMPLATE).toContain(
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("Start actionable work in this heartbeat");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("do not stop at a plan");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("Prefer the smallest verification that proves the change");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("Use child issues");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("instead of polling agents, sessions, or processes");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("Create child issues directly when you know what needs to be done");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("POST /api/issues/{issueId}/interactions");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("kind suggest_tasks, ask_user_questions, or request_confirmation");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("confirmation:{issueId}:plan:{revisionId}");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain("Wait for acceptance before creating implementation subtasks");
+    expect(DEFAULT_STACY_AGENT_PROMPT_TEMPLATE).toContain(
       "Respect budget, pause/cancel, approval gates, and company boundaries",
     );
   });
 
   it("adds the execution contract to scoped wake prompts", () => {
-    const prompt = renderPaperclipWakePrompt({
+    const prompt = renderStacyWakePrompt({
       reason: "issue_assigned",
       issue: {
         id: "issue-1",
@@ -286,14 +286,14 @@ describe("renderPaperclipWakePrompt", () => {
       fallbackFetchNeeded: false,
     });
 
-    expect(prompt).toContain("## Paperclip Wake Payload");
+    expect(prompt).toContain("## Stacy Wake Payload");
     expect(prompt).toContain("Execution contract: take concrete action in this heartbeat");
     expect(prompt).toContain("use child issues instead of polling");
     expect(prompt).toContain("mark blocked work with the unblock owner/action");
   });
 
   it("renders dependency-blocked interaction guidance", () => {
-    const prompt = renderPaperclipWakePrompt({
+    const prompt = renderStacyWakePrompt({
       reason: "issue_commented",
       issue: {
         id: "issue-1",
@@ -329,7 +329,7 @@ describe("renderPaperclipWakePrompt", () => {
   });
 
   it("renders loose review request instructions for execution handoffs", () => {
-    const prompt = renderPaperclipWakePrompt({
+    const prompt = renderStacyWakePrompt({
       reason: "execution_review_requested",
       issue: {
         id: "issue-1",
@@ -392,7 +392,7 @@ describe("renderPaperclipWakePrompt", () => {
       ],
     };
 
-    expect(JSON.parse(stringifyPaperclipWakePayload(payload) ?? "{}")).toMatchObject({
+    expect(JSON.parse(stringifyStacyWakePayload(payload) ?? "{}")).toMatchObject({
       continuationSummary: {
         body: expect.stringContaining("Continuation Summary"),
       },
@@ -411,7 +411,7 @@ describe("renderPaperclipWakePrompt", () => {
       ],
     });
 
-    const prompt = renderPaperclipWakePrompt(payload);
+    const prompt = renderStacyWakePrompt(payload);
     expect(prompt).toContain("Issue continuation summary:");
     expect(prompt).toContain("Integrate child outputs.");
     expect(prompt).toContain("Run liveness continuation:");
@@ -426,16 +426,16 @@ describe("renderPaperclipWakePrompt", () => {
   });
 });
 
-describe("applyPaperclipWorkspaceEnv", () => {
+describe("applyStacyWorkspaceEnv", () => {
   it("adds shared workspace env vars including AGENT_HOME", () => {
-    const env = applyPaperclipWorkspaceEnv(
+    const env = applyStacyWorkspaceEnv(
       {},
       {
         workspaceCwd: "/tmp/workspace",
         workspaceSource: "project_primary",
         workspaceStrategy: "git_worktree",
         workspaceId: "workspace-1",
-        workspaceRepoUrl: "https://github.com/paperclipai/paperclip.git",
+        workspaceRepoUrl: "https://github.com/StacyOS/stacy-cli.git",
         workspaceRepoRef: "main",
         workspaceBranch: "feature/test",
         workspaceWorktreePath: "/tmp/worktree",
@@ -444,19 +444,11 @@ describe("applyPaperclipWorkspaceEnv", () => {
     );
 
     expect(env).toEqual({
-      PAPERCLIP_WORKSPACE_CWD: "/tmp/workspace",
-      PAPERCLIP_WORKSPACE_SOURCE: "project_primary",
-      PAPERCLIP_WORKSPACE_STRATEGY: "git_worktree",
-      PAPERCLIP_WORKSPACE_ID: "workspace-1",
-      PAPERCLIP_WORKSPACE_REPO_URL: "https://github.com/paperclipai/paperclip.git",
-      PAPERCLIP_WORKSPACE_REPO_REF: "main",
-      PAPERCLIP_WORKSPACE_BRANCH: "feature/test",
-      PAPERCLIP_WORKSPACE_WORKTREE_PATH: "/tmp/worktree",
       STACY_WORKSPACE_CWD: "/tmp/workspace",
       STACY_WORKSPACE_SOURCE: "project_primary",
       STACY_WORKSPACE_STRATEGY: "git_worktree",
       STACY_WORKSPACE_ID: "workspace-1",
-      STACY_WORKSPACE_REPO_URL: "https://github.com/paperclipai/paperclip.git",
+      STACY_WORKSPACE_REPO_URL: "https://github.com/StacyOS/stacy-cli.git",
       STACY_WORKSPACE_REPO_REF: "main",
       STACY_WORKSPACE_BRANCH: "feature/test",
       STACY_WORKSPACE_WORKTREE_PATH: "/tmp/worktree",
@@ -465,7 +457,7 @@ describe("applyPaperclipWorkspaceEnv", () => {
   });
 
   it("skips empty workspace env values", () => {
-    const env = applyPaperclipWorkspaceEnv(
+    const env = applyStacyWorkspaceEnv(
       {},
       {
         workspaceCwd: "",

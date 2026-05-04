@@ -13,7 +13,7 @@ import {
   environments,
   heartbeatRunEvents,
   heartbeatRuns,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -75,8 +75,8 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
   afterEach(async () => {
     await db.delete(environmentLeases);
     await db.delete(environments);
-    await db.delete(activityLog);
     await db.delete(heartbeatRunEvents);
+    await db.delete(activityLog);
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);
     await db.delete(agentRuntimeState);
@@ -96,7 +96,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
 
     await db.insert(companies).values({
       id: companyId,
-      name: "Paperclip",
+      name: "Stacy",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
@@ -138,7 +138,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     expect(leases[0]?.releasedAt).not.toBeNull();
 
     const context = finished?.contextSnapshot as Record<string, unknown>;
-    expect(context.paperclipEnvironment).toMatchObject({
+    expect(context.stacyEnvironment).toMatchObject({
       id: localRows[0]?.id,
       name: "Local",
       driver: "local",

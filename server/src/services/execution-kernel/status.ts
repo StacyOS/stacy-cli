@@ -3,7 +3,7 @@ import {
   WAKEUP_REQUEST_STATUSES,
   type HeartbeatRunStatus,
   type WakeupRequestStatus,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 
 export type ActiveHeartbeatRunStatus = Extract<
   HeartbeatRunStatus,

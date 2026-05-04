@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HEARTBEAT_RUN_STATUSES, WAKEUP_REQUEST_STATUSES } from "@paperclipai/shared";
+import { HEARTBEAT_RUN_STATUSES, WAKEUP_REQUEST_STATUSES } from "@arpanstacy/stacy-shared";
 import {
   ACTIVE_HEARTBEAT_RUN_STATUSES,
   ACTIVE_WAKEUP_REQUEST_STATUSES,

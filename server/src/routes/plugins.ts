@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { and, desc, eq, gte } from "drizzle-orm";
-import type { Db } from "@paperclipai/db";
+import type { Db } from "@arpanstacy/stacy-db";
 import {
   agents,
   companies,
@@ -33,17 +33,17 @@ import {
   pluginLogs,
   pluginWebhookDeliveries,
   projects,
-} from "@paperclipai/db";
+} from "@arpanstacy/stacy-db";
 import type {
   PluginApiRouteDeclaration,
   PluginStatus,
-  PaperclipPluginManifestV1,
+  StacyPluginManifestV1,
   PluginBridgeErrorCode,
   PluginLauncherRenderContextSnapshot,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import {
   PLUGIN_STATUSES,
-} from "@paperclipai/shared";
+} from "@arpanstacy/stacy-shared";
 import { pluginRegistryService } from "../services/plugin-registry.js";
 import { pluginLifecycleManager } from "../services/plugin-lifecycle.js";
 import { getPluginUiContributionMetadata, pluginLoader } from "../services/plugin-loader.js";
@@ -55,8 +55,8 @@ import type { PluginJobStore } from "../services/plugin-job-store.js";
 import type { PluginWorkerManager } from "../services/plugin-worker-manager.js";
 import type { PluginStreamBus } from "../services/plugin-stream-bus.js";
 import type { PluginToolDispatcher } from "../services/plugin-tool-dispatcher.js";
-import type { ToolRunContext } from "@paperclipai/plugin-sdk";
-import { JsonRpcCallError, PLUGIN_RPC_ERROR_CODES } from "@paperclipai/plugin-sdk";
+import type { ToolRunContext } from "@arpanstacy/stacy-plugin-sdk";
+import { JsonRpcCallError, PLUGIN_RPC_ERROR_CODES } from "@arpanstacy/stacy-plugin-sdk";
 import {
   assertAuthenticated,
   assertBoard,
@@ -69,9 +69,9 @@ import { validateInstanceConfig } from "../services/plugin-config-validator.js";
 import { badRequest, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 
 /** UI slot declaration extracted from plugin manifest */
-type PluginUiSlotDeclaration = NonNullable<NonNullable<PaperclipPluginManifestV1["ui"]>["slots"]>[number];
+type PluginUiSlotDeclaration = NonNullable<NonNullable<StacyPluginManifestV1["ui"]>["slots"]>[number];
 /** Launcher declaration extracted from plugin manifest */
-type PluginLauncherDeclaration = NonNullable<PaperclipPluginManifestV1["launchers"]>[number];
+type PluginLauncherDeclaration = NonNullable<StacyPluginManifestV1["launchers"]>[number];
 
 /**
  * Normalized UI contribution for frontend slot host consumption.
@@ -95,7 +95,7 @@ type PluginUiContribution = {
 
 /** Request body for POST /api/plugins/install */
 interface PluginInstallRequest {
-  /** npm package name (e.g., @paperclip/plugin-linear) or local path */
+  /** npm package name (e.g., @stacy/plugin-linear) or local path */
   packageName: string;
   /** Target version for npm packages (optional, defaults to latest) */
   version?: string;
@@ -142,32 +142,32 @@ const REPO_ROOT = path.resolve(__dirname, "../../..");
 
 const BUNDLED_PLUGIN_EXAMPLES: AvailablePluginExample[] = [
   {
-    packageName: "@paperclipai/plugin-hello-world-example",
-    pluginKey: "paperclip.hello-world-example",
+    packageName: "@arpanstacy/stacy-plugin-hello-world-example",
+    pluginKey: "stacy.hello-world-example",
     displayName: "Hello World Widget (Example)",
-    description: "Reference UI plugin that adds a simple Hello World widget to the Paperclip dashboard.",
+    description: "Reference UI plugin that adds a simple Hello World widget to the Stacy dashboard.",
     localPath: "packages/plugins/examples/plugin-hello-world-example",
     tag: "example",
   },
   {
-    packageName: "@paperclipai/plugin-file-browser-example",
-    pluginKey: "paperclip-file-browser-example",
+    packageName: "@arpanstacy/stacy-plugin-file-browser-example",
+    pluginKey: "stacy-file-browser-example",
     displayName: "File Browser (Example)",
     description: "Example plugin that adds a Files link in project navigation plus a project detail file browser.",
     localPath: "packages/plugins/examples/plugin-file-browser-example",
     tag: "example",
   },
   {
-    packageName: "@paperclipai/plugin-kitchen-sink-example",
-    pluginKey: "paperclip-kitchen-sink-example",
+    packageName: "@arpanstacy/stacy-plugin-kitchen-sink-example",
+    pluginKey: "stacy-kitchen-sink-example",
     displayName: "Kitchen Sink (Example)",
-    description: "Reference plugin that demonstrates the current Paperclip plugin API surface, bridge flows, UI extension surfaces, jobs, webhooks, tools, streams, and trusted local workspace/process demos.",
+    description: "Reference plugin that demonstrates the current Stacy plugin API surface, bridge flows, UI extension surfaces, jobs, webhooks, tools, streams, and trusted local workspace/process demos.",
     localPath: "packages/plugins/examples/plugin-kitchen-sink-example",
     tag: "example",
   },
   {
-    packageName: "@paperclipai/plugin-orchestration-smoke-example",
-    pluginKey: "paperclipai.plugin-orchestration-smoke-example",
+    packageName: "@arpanstacy/stacy-plugin-orchestration-smoke-example",
+    pluginKey: "stacy.plugin-orchestration-smoke-example",
     displayName: "Orchestration Smoke (Example)",
     description: "Acceptance fixture for scoped plugin routes, restricted database namespaces, issue orchestration, documents, wakeups, summaries, and UI status surfaces.",
     localPath: "packages/plugins/examples/plugin-orchestration-smoke-example",
@@ -397,7 +397,7 @@ export function pluginRoutes(
       "accept",
       "content-type",
       "user-agent",
-      "x-paperclip-run-id",
+      "x-stacy-run-id",
       "x-request-id",
     ]);
     const headers: Record<string, string> = {};
@@ -663,7 +663,7 @@ export function pluginRoutes(
    * [
    *   {
    *     "pluginId": "plg_123",
-   *     "pluginKey": "paperclip.claude-usage",
+   *     "pluginKey": "stacy.claude-usage",
    *     "displayName": "Claude Usage",
    *     "version": "1.0.0",
    *     "uiEntryFile": "index.js",

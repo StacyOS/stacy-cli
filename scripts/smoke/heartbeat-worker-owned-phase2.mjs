@@ -8,17 +8,17 @@ const repoRoot = process.cwd();
 const testRoot = mkdtempSync(path.join(os.tmpdir(), `stacy-worker-owned-smoke-${process.pid}-`));
 const env = {
   ...process.env,
-  PAPERCLIP_HOME: path.join(testRoot, "home"),
-  PAPERCLIP_INSTANCE_ID: `worker-owned-smoke-${process.pid}`,
-  PAPERCLIP_HEARTBEAT_DISPATCH_MODE: "worker_owned",
-  PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_ENABLED: "true",
-  PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS: "1000",
-  PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE: "10",
-  PAPERCLIP_HEARTBEAT_DISPATCH_WORKER_LEASE_MS: "60000",
+  STACY_HOME: path.join(testRoot, "home"),
+  STACY_INSTANCE_ID: `worker-owned-smoke-${process.pid}`,
+  STACY_HEARTBEAT_DISPATCH_MODE: "worker_owned",
+  STACY_HEARTBEAT_DISPATCH_WORKER_ENABLED: "true",
+  STACY_HEARTBEAT_DISPATCH_WORKER_INTERVAL_MS: "1000",
+  STACY_HEARTBEAT_DISPATCH_WORKER_BATCH_SIZE: "10",
+  STACY_HEARTBEAT_DISPATCH_WORKER_LEASE_MS: "60000",
   TMPDIR: path.join(testRoot, "tmp"),
 };
 
-mkdirSync(env.PAPERCLIP_HOME, { recursive: true });
+mkdirSync(env.STACY_HOME, { recursive: true });
 mkdirSync(env.TMPDIR, { recursive: true });
 
 const tests = [
@@ -27,8 +27,8 @@ const tests = [
 ];
 
 console.log("[smoke:heartbeat-worker-owned] profile");
-console.log(`  PAPERCLIP_HEARTBEAT_DISPATCH_MODE=${env.PAPERCLIP_HEARTBEAT_DISPATCH_MODE}`);
-console.log(`  PAPERCLIP_HOME=${env.PAPERCLIP_HOME}`);
+console.log(`  STACY_HEARTBEAT_DISPATCH_MODE=${env.STACY_HEARTBEAT_DISPATCH_MODE}`);
+console.log(`  STACY_HOME=${env.STACY_HOME}`);
 console.log(`  tests=${tests.join(" ")}`);
 
 const result = spawnSync("pnpm", ["exec", "vitest", "run", ...tests], {
