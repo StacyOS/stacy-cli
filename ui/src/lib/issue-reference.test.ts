@@ -6,6 +6,9 @@ describe("issue-reference", () => {
     expect(parseIssuePathIdFromPath("/PAP/issues/PAP-1271")).toBe("PAP-1271");
     expect(parseIssuePathIdFromPath("/PAP/issues/pap-1272")).toBe("PAP-1272");
     expect(parseIssuePathIdFromPath("/issues/PAP-1179")).toBe("PAP-1179");
+    expect(parseIssuePathIdFromPath("/issues/8a28d7bd-b75a-42d5-b3e5-bcad7d9d49b2")).toBe(
+      "8a28d7bd-b75a-42d5-b3e5-bcad7d9d49b2",
+    );
     expect(parseIssuePathIdFromPath("/issues/:id")).toBeNull();
   });
 
@@ -23,6 +26,13 @@ describe("issue-reference", () => {
     expect(parseIssuePathIdFromPath("/issues/:id")).toBeNull();
     expect(parseIssuePathIdFromPath("http://localhost:3100/issues/:id")).toBeNull();
     expect(parseIssueReferenceFromHref("/issues/:id")).toBeNull();
+  });
+
+  it("ignores malformed issue paths with trailing punctuation", () => {
+    expect(parseIssuePathIdFromPath("/issues/PAP-1179)")).toBeNull();
+    expect(parseIssuePathIdFromPath("/issues/PAP-1179.")).toBeNull();
+    expect(parseIssueReferenceFromHref("/issues/PAP-1179)")).toBeNull();
+    expect(parseIssueReferenceFromHref("issue://PAP-1179)")).toBeNull();
   });
 
   it("normalizes bare identifiers, relative issue paths, and issue scheme links into internal links", () => {

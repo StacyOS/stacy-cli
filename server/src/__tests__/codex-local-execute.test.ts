@@ -490,6 +490,65 @@ describe("codex execute", () => {
     }
   });
 
+  it("persists retry-not-before metadata for account-level codex usage-limit failures", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "stacy-codex-execute-account-limit-"));
+    const workspace = path.join(root, "workspace");
+    const commandPath = path.join(root, "codex");
+    await fs.mkdir(workspace, { recursive: true });
+    await writeFailingCodexCommand(
+      commandPath,
+      "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at May 5th, 2026 1:20 AM.",
+    );
+
+    const previousHome = process.env.HOME;
+    process.env.HOME = root;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 4, 21, 20, 0));
+
+    try {
+      const result = await execute({
+        runId: "run-account-usage-limit",
+        agent: {
+          id: "agent-1",
+          companyId: "company-1",
+          name: "Codex Coder",
+          adapterType: "codex_local",
+          adapterConfig: {},
+        },
+        runtime: {
+          sessionId: "codex-session-account-limit",
+          sessionParams: {
+            sessionId: "codex-session-account-limit",
+            cwd: workspace,
+          },
+          sessionDisplayId: "codex-session-account-limit",
+          taskKey: null,
+        },
+        config: {
+          command: commandPath,
+          cwd: workspace,
+          model: "gpt-5.3-codex",
+          promptTemplate: "Follow the stacy heartbeat.",
+        },
+        context: {},
+        authToken: "run-jwt-token",
+        onLog: async () => {},
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.errorCode).toBe("codex_transient_upstream");
+      expect(result.errorFamily).toBe("transient_upstream");
+      expect(result.retryNotBefore).toBeTruthy();
+      expect(result.resultJson?.retryNotBefore).toBe(result.retryNotBefore);
+      expect(result.errorMessage).toContain("usage limit");
+    } finally {
+      vi.useRealTimers();
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("uses safer invocation settings and a fresh-session handoff for codex transient fallback retries", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "stacy-codex-execute-fallback-"));
     const workspace = path.join(root, "workspace");

@@ -6,8 +6,15 @@ type MarkdownNode = {
 };
 
 const BARE_ISSUE_IDENTIFIER_RE = /^[A-Z][A-Z0-9]+-\d+$/i;
+const UUID_RE = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const ISSUE_SCHEME_RE = /^issue:\/\/:?([^?#\s]+)(?:[?#].*)?$/i;
 const ISSUE_REFERENCE_TOKEN_RE = /issue:\/\/:?[^\s<>()]+|https?:\/\/[^\s<>()]+|\/(?:[^\s<>()/]+\/)*issues\/[A-Z][A-Z0-9]+-\d+(?=$|[\s<>)\],.;!?:])|\b[A-Z][A-Z0-9]+-\d+\b/gi;
+
+function normalizeIssuePathId(issuePathId: string): string | null {
+  if (BARE_ISSUE_IDENTIFIER_RE.test(issuePathId)) return issuePathId.toUpperCase();
+  if (UUID_RE.test(issuePathId)) return issuePathId;
+  return null;
+}
 
 export function parseIssuePathIdFromPath(pathOrUrl: string | null | undefined): string | null {
   if (!pathOrUrl) return null;
@@ -20,7 +27,7 @@ export function parseIssuePathIdFromPath(pathOrUrl: string | null | undefined): 
   if (issueIndex === -1 || issueIndex === segments.length - 1) return null;
   const issuePathId = decodeURIComponent(segments[issueIndex + 1] ?? "");
   if (!issuePathId || issuePathId.startsWith(":")) return null;
-  return BARE_ISSUE_IDENTIFIER_RE.test(issuePathId) ? issuePathId.toUpperCase() : issuePathId;
+  return normalizeIssuePathId(issuePathId);
 }
 
 export function parseIssueReferenceFromHref(href: string | null | undefined) {
@@ -28,7 +35,8 @@ export function parseIssueReferenceFromHref(href: string | null | undefined) {
   const trimmed = href.trim();
   const issueSchemeMatch = trimmed.match(ISSUE_SCHEME_RE);
   if (issueSchemeMatch?.[1]) {
-    const issuePathId = decodeURIComponent(issueSchemeMatch[1]);
+    const issuePathId = normalizeIssuePathId(decodeURIComponent(issueSchemeMatch[1]));
+    if (!issuePathId) return null;
     return {
       issuePathId,
       href: `/issues/${encodeURIComponent(issuePathId)}`,

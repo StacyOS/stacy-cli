@@ -160,6 +160,26 @@ describe("isCodexTransientUpstreamError", () => {
     );
   });
 
+  it("classifies account usage-limit failures with absolute retry dates", () => {
+    const errorMessage = [
+      "You've hit your usage limit.",
+      "Upgrade to Pro (https://chatgpt.com/explore/pro), visit",
+      "https://chatgpt.com/codex/settings/usage to purchase more credits",
+      "or try again at May 5th, 2026 1:20 AM.",
+    ].join(" ");
+    const retryAt = extractCodexRetryNotBefore(
+      { errorMessage },
+      new Date("2026-05-04T15:50:00.000Z"),
+    );
+
+    expect(isCodexTransientUpstreamError({ errorMessage })).toBe(true);
+    expect(retryAt?.getFullYear()).toBe(2026);
+    expect(retryAt?.getMonth()).toBe(4);
+    expect(retryAt?.getDate()).toBe(5);
+    expect(retryAt?.getHours()).toBe(1);
+    expect(retryAt?.getMinutes()).toBe(20);
+  });
+
   it("parses explicit timezone hints on usage-limit retry windows", () => {
     const errorMessage = "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 11:31 PM (America/Chicago).";
     const now = new Date("2026-04-23T03:29:02.000Z");

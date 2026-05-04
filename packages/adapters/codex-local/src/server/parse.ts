@@ -9,7 +9,7 @@ const CODEX_TRANSIENT_UPSTREAM_RE =
   /(?:we(?:'|’)re\s+currently\s+experiencing\s+high\s+demand|temporary\s+errors|rate[-\s]?limit(?:ed)?|too\s+many\s+requests|\b429\b|server\s+overloaded|service\s+unavailable|try\s+again\s+later)/i;
 const CODEX_REMOTE_COMPACTION_RE = /remote\s+compact\s+task/i;
 const CODEX_USAGE_LIMIT_RE =
-  /you(?:'|’)ve hit your usage limit for .+\.\s+switch to another model now,\s+or try again at\s+([^.!\n]+)(?:[.!]|\n|$)/i;
+  /you(?:'|’)ve hit your usage limit(?: for .+?)?\.[\s\S]*?\btry again at\s+([^.!\n]+)(?:[.!]|\n|$)/i;
 const CODEX_AUTH_REQUIRED_RE =
   /(?:not\s+logged\s+in|login\s+required|authentication\s+required|unauthorized|invalid(?:\s+or\s+missing)?\s+api(?:[_\s-]?key)?|openai[_\s-]?api[_\s-]?key|api[_\s-]?key.*required|please\s+run\s+`?codex\s+(?:login|auth)`?)/i;
 const CODEX_VALIDATION_ERROR_RE =
@@ -295,6 +295,17 @@ function parseLocalClockTime(clockText: string, now: Date): Date | null {
   return retryAt;
 }
 
+function parseAbsoluteRetryTime(value: string): Date | null {
+  const normalized = value
+    .replace(/\b(\d{1,2})(?:st|nd|rd|th)\b/gi, "$1")
+    .replace(/\s*\(([^)]+)\)\s*$/, " $1")
+    .trim();
+  if (!/[a-z]/i.test(normalized) || !/\b\d{4}\b/.test(normalized)) return null;
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function extractCodexRetryNotBefore(input: {
   stdout?: string | null;
   stderr?: string | null;
@@ -303,7 +314,8 @@ export function extractCodexRetryNotBefore(input: {
   const haystack = buildCodexErrorHaystack(input);
   const usageLimitMatch = haystack.match(CODEX_USAGE_LIMIT_RE);
   if (!usageLimitMatch) return null;
-  return parseLocalClockTime(usageLimitMatch[1] ?? "", now);
+  const retryText = usageLimitMatch[1] ?? "";
+  return parseAbsoluteRetryTime(retryText) ?? parseLocalClockTime(retryText, now);
 }
 
 export function isCodexTransientUpstreamError(input: {
