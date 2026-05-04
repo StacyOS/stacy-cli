@@ -598,6 +598,15 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
             loginUrl: loginMeta.loginUrl,
           }
         : undefined;
+    const authRequiredMessage = (detail?: string | null) => {
+      const action = loginMeta.loginUrl
+        ? `Complete Claude login at ${loginMeta.loginUrl}, then retry.`
+        : "Run `claude login` or update/unset ANTHROPIC_API_KEY, then retry.";
+      const cleanDetail = detail?.trim();
+      return cleanDetail
+        ? `Claude authentication required. ${action} Detail: ${cleanDetail}`
+        : `Claude authentication required. ${action}`;
+    };
 
     if (proc.timedOut) {
       return {
@@ -645,7 +654,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         exitCode: proc.exitCode,
         signal: proc.signal,
         timedOut: false,
-        errorMessage: fallbackErrorMessage,
+        errorMessage: loginMeta.requiresLogin ? authRequiredMessage(fallbackErrorMessage) : fallbackErrorMessage,
         errorCode,
         errorFamily,
         retryNotBefore: transientRetryNotBefore ? transientRetryNotBefore.toISOString() : null,
@@ -698,8 +707,13 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     const unknownSession = isClaudeUnknownSessionError(parsed);
     const parsedIsError = asBoolean(parsed.is_error, false);
     const failed = (proc.exitCode ?? 0) !== 0 || parsedIsError;
-    const errorMessage = failed
+    const rawFailureMessage = failed
       ? describeClaudeFailure(parsed) ?? `Claude exited with code ${proc.exitCode ?? -1}`
+      : null;
+    const errorMessage = failed
+      ? loginMeta.requiresLogin
+        ? authRequiredMessage(rawFailureMessage)
+        : rawFailureMessage
       : null;
     const transientUpstream =
       failed &&

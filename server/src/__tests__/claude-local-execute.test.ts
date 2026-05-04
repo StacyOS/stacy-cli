@@ -661,6 +661,63 @@ describe("claude execute", () => {
     }
   }, 15_000);
 
+  it("classifies Claude 401 authentication failures even when the CLI reports subtype success", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "stacy-claude-execute-auth-"));
+    const workspace = path.join(root, "workspace");
+    const commandPath = path.join(root, "claude");
+    await fs.mkdir(workspace, { recursive: true });
+    await writeFailingClaudeCommand(commandPath, {
+      resultEvent: {
+        type: "result",
+        subtype: "success",
+        session_id: "claude-session-auth",
+        result: 'Failed to authenticate. API Error: 401 {"type":"error","error":{"type":"authentication_error"}}',
+      },
+    });
+
+    const previousHome = process.env.HOME;
+    process.env.HOME = root;
+
+    try {
+      const result = await execute({
+        runId: "run-claude-auth",
+        agent: {
+          id: "agent-1",
+          companyId: "company-1",
+          name: "Claude Coder",
+          adapterType: "claude_local",
+          adapterConfig: {},
+        },
+        runtime: {
+          sessionId: null,
+          sessionParams: null,
+          sessionDisplayId: null,
+          taskKey: null,
+        },
+        config: {
+          command: commandPath,
+          cwd: workspace,
+          promptTemplate: "Follow the stacy heartbeat.",
+        },
+        context: {},
+        authToken: "run-jwt-token",
+        onLog: async () => {},
+      });
+
+      expect(result.exitCode).toBe(1);
+      expect(result.errorCode).toBe("claude_auth_required");
+      expect(result.errorFamily).toBe("auth_required");
+      expect(result.resultJson?.errorFamily).toBe("auth_required");
+      expect(result.errorMessage ?? "").toContain("Claude authentication required");
+      expect(result.errorMessage ?? "").toContain("ANTHROPIC_API_KEY");
+      expect(result.errorMessage ?? "").not.toContain("subtype=success");
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("classifies Claude 'out of extra usage' failures as transient upstream errors", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "stacy-claude-execute-transient-"));
     const workspace = path.join(root, "workspace");

@@ -6,7 +6,7 @@ import {
   parseJson,
 } from "@arpanstacy/stacy-adapter-utils/server-utils";
 
-const CLAUDE_AUTH_REQUIRED_RE = /(?:not\s+logged\s+in|please\s+log\s+in|please\s+run\s+`?claude\s+login`?|login\s+required|requires\s+login|unauthorized|authentication\s+required)/i;
+const CLAUDE_AUTH_REQUIRED_RE = /(?:not\s+logged\s+in|please\s+log\s+in|please\s+run\s+`?claude\s+login`?|login\s+required|requires\s+login|unauthorized|unauthenticated|authentication\s+required|failed\s+to\s+authenticate|\bapi\s+error:\s*401\b|\b401\s+(?:unauthorized|unauthenticated)|invalid\s+(?:api\s+)?key|api\s+key\s+(?:missing|invalid))/i;
 const URL_RE = /(https?:\/\/[^\s'"`<>()[\]{};,!?]+[^\s'"`<>()[\]{};,!.?:]+)/gi;
 
 const CLAUDE_TRANSIENT_UPSTREAM_RE =
@@ -159,7 +159,7 @@ export function describeClaudeFailure(parsed: Record<string, unknown>): string |
   }
 
   const parts = ["Claude run failed"];
-  if (subtype) parts.push(`subtype=${subtype}`);
+  if (subtype && subtype !== "success") parts.push(`subtype=${subtype}`);
   if (detail) parts.push(detail);
   return parts.length > 1 ? parts.join(": ") : null;
 }
