@@ -89,6 +89,10 @@ pnpm stacy upgrade:check
 - [Public CLI packaging](docs/stacy/PUBLIC-CLI-PACKAGING.md)
 - [Phase 5 release notes](docs/stacy/PHASE-5.md)
 
+## Maintainer
+
+Stacy is maintained by [Arpan Mondal](https://github.com/arpan-mondal).
+
 ## License
 
 Stacy is released under the MIT license. See [LICENSE](LICENSE).

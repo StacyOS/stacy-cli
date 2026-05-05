@@ -1,6 +1,7 @@
 {
   "name": "stacy",
   "private": true,
+  "author": "Arpan Mondal <arpan-mondal@users.noreply.github.com> (https://github.com/arpan-mondal)",
   "type": "module",
   "scripts": {
     "preflight:workspace-links": "node cli/node_modules/tsx/dist/cli.mjs scripts/ensure-workspace-package-links.ts",

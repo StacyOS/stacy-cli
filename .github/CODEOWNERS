@@ -1,17 +1,19 @@
-# Replace @cryppadotta if a different maintainer or team should own release infrastructure.
+# Stacy is maintained by Arpan Mondal.
 
-.github/** @cryppadotta @devinfoley
-scripts/release*.sh @cryppadotta @devinfoley
-scripts/release-*.mjs @cryppadotta @devinfoley
-scripts/create-github-release.sh @cryppadotta @devinfoley
-scripts/rollback-latest.sh @cryppadotta @devinfoley
-doc/RELEASING.md @cryppadotta @devinfoley
-doc/PUBLISHING.md @cryppadotta @devinfoley
-doc/RELEASE-AUTOMATION-SETUP.md @cryppadotta @devinfoley
+* @arpan-mondal
+
+.github/** @arpan-mondal
+scripts/release*.sh @arpan-mondal
+scripts/release-*.mjs @arpan-mondal
+scripts/create-github-release.sh @arpan-mondal
+scripts/rollback-latest.sh @arpan-mondal
+doc/RELEASING.md @arpan-mondal
+doc/PUBLISHING.md @arpan-mondal
+doc/RELEASE-AUTOMATION-SETUP.md @arpan-mondal
 
 # Package files — dependency changes require review
 # package.json matches recursively at all depths (covers root + all workspaces)
-package.json @cryppadotta @devinfoley
-pnpm-lock.yaml @cryppadotta @devinfoley
-pnpm-workspace.yaml @cryppadotta @devinfoley
-.npmrc @cryppadotta @devinfoley
+package.json @arpan-mondal
+pnpm-lock.yaml @arpan-mondal
+pnpm-workspace.yaml @arpan-mondal
+.npmrc @arpan-mondal

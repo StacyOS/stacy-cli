@@ -10,7 +10,7 @@ description: >
 
 # Stacy Dev
 
-This skill covers the day-to-day workflows for developing and operating a local Stacy instance. It assumes you are working inside the Stacy repo checkout with `origin` pointing to `git@github.com:arpanstacy/stacy.git`.
+This skill covers the day-to-day workflows for developing and operating a local Stacy instance. It assumes you are working inside the Stacy repo checkout with `origin` pointing to `git@github.com:StacyOS/stacy-cli.git`.
 
 > **OPEN SOURCE HYGIENE:** This repository is public-facing. Treat anything you push to `origin` as publishable. Never commit or push secrets, API keys, tokens, private logs, PII, customer data, or machine-local configuration that should stay private. Keep git history tidy as well: avoid pushing throwaway branches, noisy checkpoint commits, or speculative work that does not need to be shared upstream.
 
@@ -96,7 +96,7 @@ npx stacy worktree:cleanup my-feature
 
 ## Forks — Prefer Pushing to a User Fork
 
-If the user has a personal fork of `arpanstacy/stacy` configured as a git remote, push your feature branches to **that fork** instead of creating branches on the main repo. This keeps the upstream branch list clean and matches the standard open-source contribution flow.
+If the user has a personal fork of `StacyOS/stacy-cli` configured as a git remote, push your feature branches to **that fork** instead of creating branches on the main repo. This keeps the upstream branch list clean and matches the standard open-source contribution flow.
 
 ### Detect a fork remote
 
@@ -106,7 +106,7 @@ Before pushing or creating a PR, list remotes and check for one that points at a
 git remote -v
 ```
 
-Treat any remote whose URL points to `github.com:<user>/stacy` (or `github.com/<user>/stacy.git`) as the user's fork. Common names are `fork`, `<username>`, or `myfork`. The remote named `origin` or `upstream` that points at `arpanstacy/stacy` is the canonical upstream — do not push feature branches there if a fork exists.
+Treat any remote whose URL points to `github.com:<user>/stacy-cli` (or `github.com/<user>/stacy-cli.git`) as the user's fork. Common names are `fork`, `<username>`, or `myfork`. The remote named `origin` or `upstream` that points at `StacyOS/stacy-cli` is the canonical upstream — do not push feature branches there if a fork exists.
 
 ### Pushing to the fork
 
@@ -118,18 +118,18 @@ git push -u <fork-remote> HEAD
 Then create the PR from the fork branch:
 
 ```bash
-gh pr create --repo arpanstacy/stacy --head <fork-owner>:<branch-name> ...
+gh pr create --repo StacyOS/stacy-cli --head <fork-owner>:<branch-name> ...
 ```
 
 `gh pr create` usually figures out the head ref automatically when run from a branch tracking the fork; the explicit `--head <owner>:<branch>` form is the reliable fallback when it does not.
 
 ### When no fork exists
 
-If `git remote -v` shows only `arpanstacy/stacy` remotes (no user fork), fall back to pushing branches to `origin` as before. Do NOT create a fork on the user's behalf — ask first.
+If `git remote -v` shows only `StacyOS/stacy-cli` remotes (no user fork), fall back to pushing branches to `origin` as before. Do NOT create a fork on the user's behalf — ask first.
 
 ### Keeping the fork up to date
 
-The canonical remote that points at `arpanstacy/stacy` may be named `origin` **or** `upstream` depending on how the user set up the repo. Detect it the same way as in the "Detect a fork remote" step, then fetch and push from/with that remote so the sync works under either convention:
+The canonical remote that points at `StacyOS/stacy-cli` may be named `origin` **or** `upstream` depending on how the user set up the repo. Detect it the same way as in the "Detect a fork remote" step, then fetch and push from/with that remote so the sync works under either convention:
 
 ```bash
 UPSTREAM_REMOTE=$(git remote -v | awk '/stacy\/stacy.*\(fetch\)/{print $1; exit}')
@@ -264,4 +264,4 @@ lsof -nP -iTCP:<port> -sTCP:LISTEN
 | CLI command fails | Do NOT work around it — report the error and block (see Hard Rules above) |
 | Agent tries manual postgres operations | NEVER do this — all DB ops go through the CLI (see Hard Rules above) |
 | Dev server dies between heartbeats | Launch in a detached `tmux` session — see "Persistent Dev Servers" above |
-| Pushed feature branch to `arpanstacy/stacy` when a fork exists | Push to the user's fork remote instead — see "Forks" above |
+| Pushed feature branch to `StacyOS/stacy-cli` when a fork exists | Push to the user's fork remote instead — see "Forks" above |

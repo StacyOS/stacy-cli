@@ -6,8 +6,8 @@ usage() {
 Usage: review-checkout-pr <owner/repo|github-url> <pr-number> [checkout-dir]
 
 Examples:
-  review-checkout-pr arpanstacy/stacy 432
-  review-checkout-pr https://github.com/arpanstacy/stacy.git 432
+  review-checkout-pr StacyOS/stacy-cli 432
+  review-checkout-pr https://github.com/StacyOS/stacy-cli.git 432
 EOF
 }
 

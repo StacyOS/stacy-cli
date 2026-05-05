@@ -2,12 +2,12 @@
 
 <!--
   Required. Trace your reasoning from the top of the project down to this
-  specific change. Start with what Paperclip is, then narrow through the
+  specific change. Start with what Stacy is, then narrow through the
   subsystem, the problem, and why this PR exists. Use blockquote style.
   Aim for 5–8 steps. See CONTRIBUTING.md for full examples.
 -->
 
-> - Paperclip orchestrates AI agents for zero-human companies
+> - Stacy supervises AI agents with visible ownership, cost, risk, and audit trails
 > - [Which subsystem or capability is involved]
 > - [What problem or gap exists]
 > - [Why it needs to be addressed]

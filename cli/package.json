@@ -13,6 +13,7 @@
     "orchestration",
     "cli"
   ],
+  "author": "Arpan Mondal <arpan-mondal@users.noreply.github.com> (https://github.com/arpan-mondal)",
   "license": "MIT",
   "repository": {
     "type": "git",
