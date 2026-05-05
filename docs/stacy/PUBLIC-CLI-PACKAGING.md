@@ -41,8 +41,9 @@ npx stacy-cli@latest onboard
 
 The package name is now owned by the `arpanstacy` npm account. The first
 published version, `stacy-cli@0.3.1`, was deprecated because it pointed at the
-old core package. The corrected public release is `stacy-cli@2026.501.0`, which
-wraps the matching `@arpanstacy/stacy@2026.501.0` core package.
+old core package. The first corrected public release was
+`stacy-cli@2026.501.0`; the current public release is `stacy-cli@2026.505.0`,
+which wraps the matching `@arpanstacy/stacy@2026.505.0` core package.
 
 As of May 4, 2026, the old package namespace is no longer part of the release
 plan. The full workspace stable release publishes under the `@arpanstacy/*`
@@ -137,7 +138,7 @@ When the stable release script publishes the wrapper as part of the full
 workspace release, deprecate the reserved wrapper separately:
 
 ```bash
-pnpm release:stacy-cli:deprecate-old -- --replacement-version 2026.501.0 --otp <code>
+pnpm release:stacy-cli:deprecate-old -- --replacement-version <version> --otp <code>
 ```
 
 If using a granular npm access token with 2FA bypass enabled, keep the token out
@@ -155,7 +156,7 @@ If using a granular npm access token with 2FA bypass enabled for deprecation:
 ```bash
 read -r -s NPM_TOKEN
 export NPM_TOKEN
-pnpm release:stacy-cli:deprecate-old -- --replacement-version 2026.501.0
+pnpm release:stacy-cli:deprecate-old -- --replacement-version <version>
 unset NPM_TOKEN
 ```
 

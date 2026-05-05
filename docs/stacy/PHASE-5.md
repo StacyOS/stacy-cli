@@ -259,6 +259,10 @@ transferred or an owner-approved wrapper plan exists.
   `pnpm smoke:stacy-cli-npm -- --version 2026.501.0 --expected-core 2026.501.0`.
 - Deprecated the old reserved package version, `stacy-cli@0.3.1`.
 - Created the local release tag `v2026.501.0`.
+- Published the public-release polish cut at `2026.505.0` on May 5, 2026.
+- Confirmed the current wrapper with
+  `pnpm smoke:stacy-cli-npm -- --version 2026.505.0 --expected-core 2026.505.0`.
+- Published the GitHub release `v2026.505.0`.
 
 Keep `stacy` as a future vanity-package migration only if ownership is
 transferred or approved. The public install path for this release is

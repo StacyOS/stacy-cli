@@ -1,6 +1,6 @@
 {
   "name": "stacy-cli",
-  "version": "2026.501.0",
+  "version": "2026.505.0",
   "description": "Stacy CLI for the trust-first AI agent control plane",
   "type": "module",
   "bin": {
