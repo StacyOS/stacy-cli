@@ -221,7 +221,7 @@ async function main() {
         "",
         "Acceptance criteria:",
         "- Create index.html, styles.css, and app.js.",
-        "- Users can add tasks, toggle tasks complete, delete tasks, and persist tasks in localStorage.",
+        "- Users can add tasks, toggle tasks complete with a visible input[type=\"checkbox\"] for each task, delete tasks, and persist tasks in localStorage.",
         "- Keep the implementation dependency-free and small.",
         "- Verify the files exist before finishing.",
         "- When finished, PATCH /api/issues/$STACY_TASK_ID using Authorization: Bearer $STACY_API_KEY and X-Stacy-Run-Id: $STACY_RUN_ID with status=done and a concise completion comment.",

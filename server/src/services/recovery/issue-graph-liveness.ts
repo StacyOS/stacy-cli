@@ -497,24 +497,83 @@ export function classifyIssueGraphLiveness(input: IssueGraphLivenessInput): Issu
     dependencyPath: IssueLivenessIssueInput[],
     seen: Set<string>,
   ): IssueLivenessFinding | null {
-    if (seen.has(current.id)) return null;
-    seen.add(current.id);
+    type PathNode = {
+      issue: IssueLivenessIssueInput;
+      previous: PathNode | null;
+    };
+    type VisitAction = {
+      kind: "visit";
+      current: IssueLivenessIssueInput;
+      pathNode: PathNode;
+      seen: Set<string>;
+    };
+    type LeafAction = {
+      kind: "leaf";
+      blocker: IssueLivenessIssueInput;
+      pathNode: PathNode;
+    };
+    type Action = VisitAction | LeafAction;
 
-    const relations = blockersByBlockedIssueId.get(current.id) ?? [];
-    for (const relation of relations) {
-      if (relation.companyId !== current.companyId || relation.companyId !== source.companyId) continue;
-      const blocker = issuesById.get(relation.blockerIssueId);
-      if (!blocker || blocker.companyId !== source.companyId || blocker.status === "done") continue;
-      const path = [...dependencyPath, blocker];
+    function pathFromNode(node: PathNode) {
+      const path: IssueLivenessIssueInput[] = [];
+      for (let cursor: PathNode | null = node; cursor; cursor = cursor.previous) {
+        path.push(cursor.issue);
+      }
+      path.reverse();
+      return path;
+    }
 
-      if (blocker.status === "blocked") {
-        const nested = firstBlockedChainFinding(source, blocker, path, new Set(seen));
-        if (nested) return nested;
-        if (hasExplicitWaitingPath(blocker)) continue;
+    const startNode = dependencyPath.reduce<PathNode | null>(
+      (previous, issue) => ({ issue, previous }),
+      null,
+    );
+    const stack: Action[] = [{
+      kind: "visit",
+      current,
+      pathNode: startNode ?? { issue: current, previous: null },
+      seen: new Set(seen),
+    }];
+
+    while (stack.length > 0) {
+      const action = stack.pop()!;
+
+      if (action.kind === "leaf") {
+        const leafFinding = blockedFindingForLeaf(
+          source,
+          action.blocker,
+          pathFromNode(action.pathNode),
+        );
+        if (leafFinding) return leafFinding;
+        continue;
       }
 
-      const leafFinding = blockedFindingForLeaf(source, blocker, path);
-      if (leafFinding) return leafFinding;
+      if (action.seen.has(action.current.id)) continue;
+      const nextSeen = new Set(action.seen);
+      nextSeen.add(action.current.id);
+
+      const relations = blockersByBlockedIssueId.get(action.current.id) ?? [];
+      for (let index = relations.length - 1; index >= 0; index -= 1) {
+        const relation = relations[index]!;
+        if (relation.companyId !== action.current.companyId || relation.companyId !== source.companyId) continue;
+        const blocker = issuesById.get(relation.blockerIssueId);
+        if (!blocker || blocker.companyId !== source.companyId || blocker.status === "done") continue;
+        const pathNode = { issue: blocker, previous: action.pathNode };
+
+        if (blocker.status === "blocked") {
+          if (!hasExplicitWaitingPath(blocker)) {
+            stack.push({ kind: "leaf", blocker, pathNode });
+          }
+          stack.push({
+            kind: "visit",
+            current: blocker,
+            pathNode,
+            seen: new Set(nextSeen),
+          });
+          continue;
+        }
+
+        stack.push({ kind: "leaf", blocker, pathNode });
+      }
     }
 
     return null;

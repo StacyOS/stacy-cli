@@ -45,6 +45,10 @@ import { DEFAULT_GEMINI_LOCAL_MODEL } from "@arpanstacy/stacy-adapter-gemini-loc
 import { resolveRouteOnboardingOptions } from "../lib/onboarding-route";
 import { AsciiArtAnimation } from "./AsciiArtAnimation";
 import {
+  LocalAdapterConnectionPanel,
+  isLocalAccountAdapter,
+} from "./LocalAdapterConnectionPanel";
+import {
   Building2,
   Bot,
   ListTodo,
@@ -203,6 +207,7 @@ export function OnboardingWizard() {
   const getCapabilities = useAdapterCapabilities();
   const adapterCaps = getCapabilities(adapterType);
   const isLocalAdapter = adapterCaps.supportsInstructionsBundle || adapterCaps.supportsSkills || adapterCaps.supportsLocalAgentJwt;
+  const showLocalAccountConnection = isLocalAccountAdapter(adapterType);
 
   // Build adapter grids dynamically from the UI registry + display metadata.
   // External/plugin adapters automatically appear with generic defaults.
@@ -966,7 +971,44 @@ export function OnboardingWizard() {
                     </div>
                   )}
 
-                  {isLocalAdapter && (
+                  {isLocalAdapter && showLocalAccountConnection && isLocalAccountAdapter(adapterType) ? (
+                    <div className="space-y-2">
+                      <LocalAdapterConnectionPanel
+                        adapterType={adapterType}
+                        result={adapterEnvResult}
+                        error={adapterEnvError}
+                        isTesting={adapterEnvLoading}
+                        onTest={() => void runAdapterEnvironmentTest()}
+                        compact
+                      />
+
+                      {shouldSuggestUnsetAnthropicApiKey && (
+                        <div className="rounded-md border border-amber-300/60 bg-amber-50/40 px-2.5 py-2 space-y-2">
+                          <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                            Claude failed while{" "}
+                            <span className="font-mono">ANTHROPIC_API_KEY</span>{" "}
+                            is set. You can clear it in this CEO adapter config
+                            and retry the probe.
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2.5 text-xs"
+                            disabled={
+                              adapterEnvLoading || unsetAnthropicLoading
+                            }
+                            onClick={() => void handleUnsetAnthropicApiKey()}
+                          >
+                            {unsetAnthropicLoading
+                              ? "Retrying..."
+                              : "Unset ANTHROPIC_API_KEY"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {isLocalAdapter && !showLocalAccountConnection && (
                     <div className="space-y-2 rounded-md border border-border p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div>

@@ -421,4 +421,45 @@ describe("issue graph liveness classifier", () => {
       recoveryIssueId: reviewIssueId,
     });
   });
+
+  it("walks very deep blocked chains without overflowing the call stack", () => {
+    const depth = 12_000;
+    const issues = [];
+    const relations = [];
+
+    for (let index = 0; index <= depth; index += 1) {
+      const id = `deep-${index}`;
+      issues.push(
+        issue({
+          id,
+          identifier: `DEE-${index}`,
+          title: `Deep blocker ${index}`,
+          status: index === depth ? "todo" : "blocked",
+          assigneeAgentId: index === depth ? null : coderId,
+        }),
+      );
+
+      if (index > 0) {
+        relations.push({
+          companyId,
+          blockedIssueId: `deep-${index - 1}`,
+          blockerIssueId: id,
+        });
+      }
+    }
+
+    const findings = classifyIssueGraphLiveness({
+      issues,
+      relations,
+      agents: [agent(), manager],
+    });
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      issueId: "deep-0",
+      state: "blocked_by_unassigned_issue",
+      recoveryIssueId: `deep-${depth}`,
+    });
+    expect(findings[0]?.dependencyPath).toHaveLength(depth + 1);
+  });
 });

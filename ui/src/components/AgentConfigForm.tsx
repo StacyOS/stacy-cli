@@ -49,6 +49,10 @@ import { ChoosePathButton } from "./PathInstructionsModal";
 import { OpenCodeLogoIcon } from "./OpenCodeLogoIcon";
 import { ReportsToPicker } from "./ReportsToPicker";
 import { EnvVarEditor } from "./EnvVarEditor";
+import {
+  LocalAdapterConnectionPanel,
+  isLocalAccountAdapter,
+} from "./LocalAdapterConnectionPanel";
 import { shouldShowLegacyWorkingDirectoryField } from "../lib/legacy-agent-config";
 import { listAdapterOptions, listVisibleAdapterTypes } from "../adapters/metadata";
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
@@ -479,6 +483,14 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
   const currentDefaultEnvironmentId = isCreate
     ? val!.defaultEnvironmentId ?? ""
     : eff("identity", "defaultEnvironmentId", props.agent.defaultEnvironmentId ?? "");
+  const showLocalAccountConnection =
+    showAdapterTestEnvironmentButton && isLocalAccountAdapter(adapterType);
+  const testEnvironmentError =
+    testEnvironment.error instanceof Error
+      ? testEnvironment.error.message
+      : testEnvironment.error
+        ? "Environment test failed"
+        : null;
   return (
     <div className={cn("relative", cards && "space-y-6")}>
       {/* ---- Floating Save button (edit mode, when dirty) ---- */}
@@ -618,7 +630,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
             ? <h3 className="text-sm font-medium">Adapter</h3>
             : <span className="text-xs font-medium text-muted-foreground">Adapter</span>
           }
-          {showAdapterTestEnvironmentButton && (
+          {showAdapterTestEnvironmentButton && !showLocalAccountConnection && (
             <Button
               type="button"
               variant="outline"
@@ -687,7 +699,17 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
             </Field>
           )}
 
-          {testEnvironment.error && (
+          {showLocalAccountConnection && isLocalAccountAdapter(adapterType) && (
+            <LocalAdapterConnectionPanel
+              adapterType={adapterType}
+              result={testEnvironment.data ?? null}
+              error={testEnvironmentError}
+              isTesting={testEnvironment.isPending}
+              onTest={() => testEnvironment.mutate()}
+            />
+          )}
+
+          {!showLocalAccountConnection && testEnvironment.error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {testEnvironment.error instanceof Error
                 ? testEnvironment.error.message
@@ -695,7 +717,7 @@ export function AgentConfigForm(props: AgentConfigFormProps) {
             </div>
           )}
 
-          {testEnvironment.data && (
+          {!showLocalAccountConnection && testEnvironment.data && (
             <AdapterEnvironmentResult result={testEnvironment.data} />
           )}
 

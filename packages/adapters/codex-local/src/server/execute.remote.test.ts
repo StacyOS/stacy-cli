@@ -201,6 +201,7 @@ describe("codex remote execution", () => {
     expect(call?.[2]).toEqual([
       "exec",
       "--json",
+      "--skip-git-repo-check",
       "-",
     ]);
   });
@@ -271,6 +272,7 @@ describe("codex remote execution", () => {
     expect(call?.[2]).toEqual([
       "exec",
       "--json",
+      "--skip-git-repo-check",
       "resume",
       "session-123",
       "-",
@@ -349,6 +351,7 @@ describe("codex remote execution", () => {
     expect(call?.[2]).toEqual([
       "exec",
       "--json",
+      "--skip-git-repo-check",
       "resume",
       "session-123",
       "-",
@@ -513,8 +516,8 @@ describe("codex remote execution", () => {
     expect(runChildProcess).toHaveBeenCalledTimes(2);
     const firstCall = runChildProcess.mock.calls[0] as unknown as [string, string, string[]] | undefined;
     const secondCall = runChildProcess.mock.calls[1] as unknown as [string, string, string[]] | undefined;
-    expect(firstCall?.[2]).toEqual(["exec", "--json", "resume", "stale-session", "-"]);
-    expect(secondCall?.[2]).toEqual(["exec", "--json", "-"]);
+    expect(firstCall?.[2]).toEqual(["exec", "--json", "--skip-git-repo-check", "resume", "stale-session", "-"]);
+    expect(secondCall?.[2]).toEqual(["exec", "--json", "--skip-git-repo-check", "-"]);
     expect(logs.join("")).toContain('Codex resume session "stale-session" is unavailable');
     expect(result).toMatchObject({
       exitCode: 0,

@@ -30,6 +30,11 @@ pnpm stacy run
 Stacy starts the local UI and API at
 [http://localhost:3100](http://localhost:3100).
 
+When a user creates a Codex or Claude agent, Stacy verifies that user's own
+local CLI login on that machine. Stacy does not ship with shared Codex or
+Claude credentials, and it does not require operators to hand Stacy a central
+provider account.
+
 ## What You Get
 
 - Company dashboard for agents, tasks, runs, approvals, spend, and risk
@@ -48,7 +53,8 @@ Stacy starts the local UI and API at
 
 1. Create a company.
 2. Connect a project or workspace.
-3. Add a Codex or Claude agent with budgets and permissions.
+3. Connect the user's local Codex or Claude account, then add an agent with
+   budgets and permissions.
 4. Assign a task.
 5. Watch the live run, inspect logs, and cancel when needed.
 6. Review cost, risk, and output before marking the task done.

@@ -8,6 +8,7 @@ import { stdin, stdout } from "node:process";
 import { createCapturedOutputBuffer, parseJsonResponseWithLimit } from "./dev-runner-output.ts";
 import { shouldTrackDevServerPath } from "./dev-runner-paths.mjs";
 import { createDevServiceIdentity, repoRoot } from "./dev-service-profile.ts";
+import { ensureDevRunnerAgentJwtSecret } from "../server/src/dev-runner-env.ts";
 import { bootstrapDevRunnerWorktreeEnv } from "../server/src/dev-runner-worktree.ts";
 import {
   findAdoptableLocalService,
@@ -133,6 +134,11 @@ const env: NodeJS.ProcessEnv = {
   ...process.env,
   STACY_UI_DEV_MIDDLEWARE: "true",
 };
+
+const agentJwtSecret = ensureDevRunnerAgentJwtSecret(env);
+if (agentJwtSecret.created) {
+  console.log("[stacy] dev mode: generated ephemeral STACY_AGENT_JWT_SECRET for local adapter API auth");
+}
 
 if (mode === "dev") {
   env.STACY_DEV_SERVER_STATUS_FILE = devServerStatusFilePath;

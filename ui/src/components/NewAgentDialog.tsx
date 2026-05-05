@@ -138,9 +138,9 @@ export function NewAgentDialog() {
                   <Bot className="h-6 w-6 text-foreground" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  We recommend letting your CEO handle agent setup — they know the
-                  org structure and can configure reporting, permissions, and
-                  adapters.
+                  Let the CEO draft the role, reporting line, permissions, and
+                  first task. Use manual launch when you want to connect a local
+                  Claude, Codex, or other operator account yourself.
                 </p>
               </div>
 
@@ -155,7 +155,7 @@ export function NewAgentDialog() {
                   className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                   onClick={handleAdvancedConfig}
                 >
-                  I want advanced configuration myself
+                  Launch an operator manually
                 </button>
               </div>
             </>
@@ -170,7 +170,8 @@ export function NewAgentDialog() {
                   Back
                 </button>
                 <p className="text-sm text-muted-foreground">
-                  Choose your adapter type for advanced setup.
+                  Choose the runtime this Stacy operator will use. Local Claude
+                  and Codex setups use the current user&apos;s own CLI login.
                 </p>
               </div>
 

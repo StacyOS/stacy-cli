@@ -5959,6 +5959,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         ? createLocalAgentJwt(agent.id, agent.companyId, agent.adapterType, run.id)
         : null;
       if (adapter.supportsLocalAgentJwt && !authToken) {
+        const message =
+          "Local adapter authentication is not configured. Run `stacy onboard` or set STACY_AGENT_JWT_SECRET before starting Stacy so local agents receive STACY_API_KEY.";
         logger.warn(
           {
             companyId: agent.companyId,
@@ -5966,8 +5968,10 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             runId: run.id,
             adapterType: agent.adapterType,
           },
-          "local agent jwt secret missing or invalid; running without injected STACY_API_KEY",
+          message,
         );
+        await onLog("stderr", `[stacy] ${message}\n`);
+        throw new Error(message);
       }
       const adapterResult = await adapter.execute({
         runId: run.id,
