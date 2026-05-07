@@ -1,12 +1,28 @@
-# Stacy
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+    <img alt="Stacy logo" src="docs/images/logo-light.svg" width="96">
+  </picture>
+</p>
 
-Stacy is a trust-first control plane for assigning, supervising, and auditing
-AI agents.
+<h1 align="center">Stacy</h1>
 
-It is built for operators who need more than a chat box: every agent has an
-owner, a budget, a workspace, a run history, logs, approvals, and a visible stop
-button. The first product promise is simple: you should know what each agent is
-doing, what it changed, what it cost, and whether it touched anything risky.
+<p align="center">
+  <strong>A trust-first control plane for assigning, supervising, and auditing local AI agents.</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/stacy-cli"><img alt="npm version" src="https://img.shields.io/npm/v/stacy-cli?color=ff7038"></a>
+  <a href="https://github.com/StacyOS/stacy-cli/releases"><img alt="latest release" src="https://img.shields.io/github/v/release/StacyOS/stacy-cli?color=d1c2a5"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-f0e7da"></a>
+  <img alt="node" src="https://img.shields.io/badge/node-%3E%3D20-262626">
+</p>
+
+Stacy gives operators a local cockpit for running Codex, Claude, and other CLI
+agents with visible ownership, live logs, budgets, approvals, workspace
+isolation, and stop controls. It is built for the moment when a chat window is
+not enough and you need to know: who is working, what changed, what it cost,
+what is risky, and how to stop it.
 
 ![Stacy product cockpit](docs/images/stacy-product-screenshot-dark.png)
 
@@ -19,6 +35,8 @@ npx stacy-cli@latest onboard --yes
 npx stacy-cli@latest run
 ```
 
+Open [http://localhost:3100](http://localhost:3100).
+
 The npm package is `stacy-cli`; it exposes the `stacy` command when installed.
 Inside a cloned repository, use the workspace shortcut:
 
@@ -27,57 +45,150 @@ pnpm stacy onboard --yes
 pnpm stacy run
 ```
 
-Stacy starts the local UI and API at
-[http://localhost:3100](http://localhost:3100).
+Prerequisites:
 
-When a user creates a Codex or Claude agent, Stacy verifies that user's own
-local CLI login on that machine. Stacy does not ship with shared Codex or
-Claude credentials, and it does not require operators to hand Stacy a central
-provider account.
+- Node.js 20 or newer
+- A local Codex, Claude, or other supported CLI login for the agents you want
+  to run
+- pnpm 9 or newer for repository development
+
+Stacy does not ship shared Codex or Claude credentials. Each operator connects
+their own local account on their own machine.
+
+## Why Stacy
+
+AI agents are useful, but they become hard to trust when their work is invisible.
+Stacy turns autonomous work into an auditable operating surface:
+
+- every agent has an owner, role, budget, permissions, and adapter config
+- every task has status, assignment, run history, logs, and review state
+- every run can be watched, inspected, retried, cancelled, or killed
+- every risky action can be put behind an approval gate
+- every workspace can be isolated with a git worktree
+
+The product should feel like an agent operations cockpit: part project board,
+part runtime console, part audit log.
 
 ## What You Get
 
-- Company dashboard for agents, tasks, runs, approvals, spend, and risk
-- Agents with roles, budgets, permissions, and adapter configuration
-- Projects connected to local repos and workspaces
-- Issues and tasks with parent-child structure
-- One-click assignment to Codex, Claude, and other local adapters
-- Live run timeline with logs, status, retries, and cancellation
-- Cost tracking per agent, task, project, and run
-- Approval gates before risky actions
-- Git worktree isolation per task
-- Secrets redaction and local sandbox defaults
-- Backup, restore, upgrade, and Docker self-hosting guides
+| Area | What Stacy provides |
+| --- | --- |
+| Agent operations | Create Codex, Claude, Cursor, Gemini, OpenCode, Pi, and gateway-backed agents with roles and permissions. |
+| Task execution | Assign issues to agents, track run state, inspect transcripts, and cancel work in progress. |
+| Trust controls | Approval gates, stop controls, budget limits, cost visibility, and risk surfaces. |
+| Local-first runtime | User-owned local CLI credentials, local API/UI, embedded Postgres, and Docker/self-hosting paths. |
+| Workspace safety | Git worktree isolation per task, workspace lifecycle tracking, and recovery for stalled work. |
+| Auditability | Run timelines, logs, cost records, comments, approvals, and activity history. |
+| Operations | Backup, restore, upgrade checks, release smoke tests, and self-hosted operations docs. |
 
 ## Core Workflow
 
 1. Create a company.
 2. Connect a project or workspace.
-3. Connect the user's local Codex or Claude account, then add an agent with
-   budgets and permissions.
-4. Assign a task.
-5. Watch the live run, inspect logs, and cancel when needed.
-6. Review cost, risk, and output before marking the task done.
+3. Connect the user's local Codex or Claude account.
+4. Add an agent with role, model, budget, and permissions.
+5. Create or import a task.
+6. Assign the task to an agent.
+7. Watch the live run, logs, cost, and risk state.
+8. Cancel, approve, review, or mark the task done.
 
-The product should feel like Linear plus GitHub Actions plus an agent runtime
-console. Stacy keeps autonomy visible, interruptible, and auditable.
+## How It Works
+
+```text
+Stacy CLI / Web UI
+        |
+Local API + Auth
+        |
+Postgres domain model
+        |
+Outbox + run queue
+        |
+Run orchestrator
+        |
+Workspace / environment lease
+        |
+Agent adapter
+        |
+Codex / Claude / Cursor / Gemini / OpenCode / Pi
+```
+
+Stacy keeps the control plane separate from the agent runtime. The control plane
+stores durable task, run, cost, approval, and log records. Adapters translate
+Stacy assignments into CLI execution for the user's own local agent accounts.
+
+## Comparison
+
+This is a practical positioning map, not a scoreboard. Stacy is focused on
+trustworthy local agent execution rather than chat-only collaboration or fully
+managed cloud workers.
+
+| Capability | Stacy | Multi-agent chat tools | Cloud agent platforms | CI automation | Project-management tools |
+| --- | --- | --- | --- | --- | --- |
+| Local-first operation | Yes | Sometimes | Usually no | Sometimes | N/A |
+| User-owned Codex/Claude CLI login | Yes | Rarely | Usually no | N/A | N/A |
+| Live agent run logs | Yes | Limited | Yes | Yes | No |
+| Human approval gates | Yes | Sometimes | Sometimes | Yes | Manual only |
+| Cost and risk surface | Yes | Limited | Varies | Limited | No |
+| Git worktree isolation | Yes | Rarely | Varies | Usually repo checkout based | No |
+| Kill switch / cancel controls | Yes | Limited | Varies | Yes | No |
+| Task ownership and review state | Yes | Limited | Varies | No | Yes |
+| Self-hosting path | Yes | Varies | Varies | Yes | Varies |
+
+## Supported Agent Adapters
+
+Stacy is designed around adapter contracts. The current local adapter family
+includes:
+
+- Codex local
+- Claude local
+- Cursor local
+- Gemini local
+- OpenCode local
+- Pi local
+- OpenClaw gateway
+
+Adapters use the user's local environment. If a CLI needs authentication, the
+user signs in with that provider's own login flow before assigning work.
+
+## Trust And Safety Model
+
+Stacy's first product promise is not maximum autonomy. It is dependable
+autonomy that operators can understand and interrupt.
+
+- **Credential boundary:** Stacy does not bundle shared model-provider
+  credentials.
+- **Workspace boundary:** agent work can run in isolated git worktrees.
+- **Approval boundary:** risky steps can require explicit human approval.
+- **Cost boundary:** agent, task, project, and run costs are visible.
+- **Secret boundary:** secrets are scoped and redacted from logs where possible.
+- **Operational boundary:** live runs can be cancelled and failed runs remain
+  inspectable.
 
 ## Local Development
 
-Prerequisites: Node.js 20+ and pnpm 9+.
+Install dependencies and start the app:
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-Useful local commands:
+Useful commands:
 
 ```bash
 pnpm stacy onboard --yes
 pnpm stacy doctor --repair --yes
 pnpm stacy db:backup
 pnpm stacy upgrade:check
+pnpm test:run
+pnpm typecheck
+```
+
+Release and public-package checks:
+
+```bash
+pnpm smoke:stacy-cli-npm -- --version <published-version> --expected-core <published-version>
+pnpm release:phase5-gate -- --strict-live
 ```
 
 ## Documentation
@@ -88,6 +199,18 @@ pnpm stacy upgrade:check
 - [Self-hosted operations](docs/stacy/SELF-HOSTED-OPERATIONS.md)
 - [Public CLI packaging](docs/stacy/PUBLIC-CLI-PACKAGING.md)
 - [Phase 5 release notes](docs/stacy/PHASE-5.md)
+- [Releases](https://github.com/StacyOS/stacy-cli/releases)
+
+## Repository Status
+
+The public npm entrypoint is:
+
+```bash
+npx stacy-cli@latest onboard --yes
+```
+
+The exact `npx stacy onboard` package name is not the supported public path
+because the `stacy` package name is not available on npm.
 
 ## Maintainer
 
