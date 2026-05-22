@@ -1,6 +1,14 @@
 import { brainCreateCommand, type BrainCreateDependencies } from "./brain-create.js";
 import { brainShowCommand, type BrainShowDependencies } from "./brain-show.js";
+import {
+  contactsAddCommand,
+  contactsListCommand,
+  contactsShowCommand,
+  type ContactsDependencies,
+} from "./contacts.js";
+import { receiptsListCommand, type ReceiptsDependencies } from "./receipts.js";
 import { revokeCommand, type RevokeDependencies } from "./revoke.js";
+import { runTaskCommand, type RunTaskDependencies } from "./run-task.js";
 import { shareCommand, type ShareDependencies } from "./share.js";
 
 interface CommandLike {
@@ -25,6 +33,9 @@ export interface RegisterFederationCommandsOptions {
   readonly brainShow?: BrainShowDependencies;
   readonly share?: ShareDependencies;
   readonly revoke?: RevokeDependencies;
+  readonly contacts?: ContactsDependencies;
+  readonly receipts?: ReceiptsDependencies;
+  readonly runTask?: RunTaskDependencies;
 }
 
 export function registerFederationCommands(
@@ -67,7 +78,8 @@ export function registerFederationCommands(
     .command(federationCliCommands.share)
     .description("Federate a signed Knowledge Object with per-object consent")
     .argument("<ko_id>", "Knowledge Object ID or content hash")
-    .requiredOption("--with <install>", "Consumer install ID")
+    .option("--with <install>", "Consumer install ID")
+    .option("--with-contact <name>", "Consumer contact name from the federation contacts book")
     .option("--to <url>", "Consumer /api/federation endpoint URL")
     .option("--revocation-url <url>", "Producer revocation lookup URL for consumer next-read checks")
     .option("--scope <scope>", "Consent scope", "read")
@@ -78,6 +90,61 @@ export function registerFederationCommands(
     .option("--db-url <url>", "Database connection string")
     .action(async (koId, commandOptions) => {
       await shareCommand(String(koId), commandOptions as Parameters<typeof shareCommand>[1], options.share);
+    });
+
+  const contacts = program
+    .command("contacts")
+    .description("Federation contact address book operations");
+
+  contacts
+    .command("add")
+    .description("Add or update a federation contact")
+    .argument("<name>", "Contact name")
+    .requiredOption("--install-id <id>", "Contact install ID")
+    .requiredOption("--endpoint <url>", "Contact /api/federation endpoint URL")
+    .requiredOption("--revocation-url <url>", "Contact revocation lookup URL")
+    .option("--label <text>", "Human-readable label")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (name, commandOptions) => {
+      await contactsAddCommand(String(name), commandOptions as Parameters<typeof contactsAddCommand>[1], options.contacts);
+    });
+
+  contacts
+    .command("list")
+    .description("List federation contacts")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await contactsListCommand(commandOptions as Parameters<typeof contactsListCommand>[0], options.contacts);
+    });
+
+  contacts
+    .command("show")
+    .description("Show a federation contact")
+    .argument("<name>", "Contact name")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (name, commandOptions) => {
+      await contactsShowCommand(String(name), commandOptions as Parameters<typeof contactsShowCommand>[1], options.contacts);
+    });
+
+  const receipts = program
+    .command("receipts")
+    .description("Federation receipt log operations");
+
+  receipts
+    .command("list")
+    .description("List federation receipts")
+    .option("--ko <ko_id>", "Filter receipts by Knowledge Object ID")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await receiptsListCommand(commandOptions as Parameters<typeof receiptsListCommand>[0], options.receipts);
     });
 
   program
@@ -93,6 +160,8 @@ export function registerFederationCommands(
       await revokeCommand(String(koId), commandOptions as Parameters<typeof revokeCommand>[1], options.revoke);
     });
 }
+
+export { runTaskCommand, type RunTaskDependencies };
 
 function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];

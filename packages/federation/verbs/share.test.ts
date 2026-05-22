@@ -9,6 +9,7 @@ import { createInstallIdentity } from "../src/identity/install-identity.js";
 import { resolveFederationIdentityPath } from "../src/identity/paths.js";
 import { createKnowledgeObject } from "../src/ko/knowledge-object.js";
 import { shareCommand } from "./share.js";
+import { addContact, resolveContactsPath } from "../src/contacts/contact-store.js";
 
 const tempRoots: string[] = [];
 
@@ -172,6 +173,90 @@ describe("shareCommand", () => {
       delivery: {
         endpointUrl: "http://127.0.0.1:3101/api/federation",
         status: 201,
+      },
+    });
+  });
+
+  it("resolves consumer install and endpoints from --with-contact", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-share-contact-"));
+    tempRoots.push(root);
+    const instanceRoot = join(root, "instances", "demo");
+    const configPath = join(instanceRoot, "config.json");
+    const producer = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Contact share" },
+      identity: producer,
+      idGenerator: () => "ko_share_contact",
+    });
+    await mkdir(join(instanceRoot, "secrets"), { recursive: true });
+    await writeFile(resolveFederationIdentityPath(instanceRoot), JSON.stringify(producer.record), {
+      mode: 0o600,
+    });
+    await writeFile(configPath, JSON.stringify(testConfig(root)), { mode: 0o600 });
+    await addContact(resolveContactsPath(instanceRoot), {
+      name: "meera",
+      label: "Meera",
+      installId: consumer.record.installId,
+      federationEndpointUrl: "http://127.0.0.1:3102/api/federation",
+      revocationUrl: "http://127.0.0.1:3101/api/federation/revocations",
+    });
+    const deliveries: Array<{ readonly url: string; readonly body: unknown }> = [];
+    const lines: string[] = [];
+
+    await shareCommand(
+      ko.id,
+      {
+        config: configPath,
+        dbUrl: "postgres://example",
+        withContact: "meera",
+        expires: "30d",
+        revocable: true,
+        json: true,
+      },
+      {
+        createDb: () => dbForRows([
+          [
+            {
+              id: ko.id,
+              signed_payload_json: ko.signedPayload,
+              signer_json: ko.signer,
+              signature: ko.signature,
+              provenance_json: {
+                source: "local",
+                creatorInstallId: producer.record.installId,
+                storedAt: "2026-05-22T00:00:00.000Z",
+              },
+            },
+          ],
+          [],
+          [],
+        ]),
+        fetch: async (url, init) => {
+          deliveries.push({ url, body: JSON.parse(init.body) });
+          return {
+            ok: true,
+            status: 201,
+            text: async () => JSON.stringify({ accepted: true }),
+          };
+        },
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(deliveries[0]).toMatchObject({
+      url: "http://127.0.0.1:3102/api/federation",
+    });
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      consumerInstallId: consumer.record.installId,
+      delivery: {
+        endpointUrl: "http://127.0.0.1:3102/api/federation",
+      },
+      message: {
+        revocationLookupUrl: "http://127.0.0.1:3101/api/federation/revocations",
       },
     });
   });

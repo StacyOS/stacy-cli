@@ -35,6 +35,25 @@ export {
 } from "./identity/install-identity.js";
 export { resolveFederationIdentityPath } from "./identity/paths.js";
 export {
+  addContact,
+  listContacts,
+  normalizeContactName,
+  readContact,
+  readContactBook,
+  resolveContactsPath,
+  writeContactBook,
+  type ContactBook,
+  type FederationContact,
+} from "./contacts/contact-store.js";
+export {
+  createDeterministicDashboardContent,
+  parseCsv,
+  parseCsvDashboardInput,
+  type DashboardContent,
+  type DashboardInput,
+  type DashboardWidget,
+} from "./dashboard/dashboard-content.js";
+export {
   KNOWLEDGE_OBJECT_SCHEMA_VERSION,
   createKnowledgeObject,
   verifyKnowledgeObject,

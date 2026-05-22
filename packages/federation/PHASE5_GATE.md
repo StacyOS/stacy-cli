@@ -64,7 +64,7 @@ pnpm --filter @arpanstacy/stacy typecheck
 
 `pnpm --filter @arpanstacy/stacy-federation demo:check` passed locally:
 
-- acceptance contract: 6 tests passed
+- acceptance contract: 7 tests passed
 - real DB smoke: 4 tests passed
 - real two-install server smoke: 4 tests passed
 - real server smoke duration: about 53 seconds
@@ -94,3 +94,19 @@ Cross-package wiring checks also passed:
 - Real two-install server flow is covered.
 - Full revoke path has a real-smoke timing assertion under four minutes.
 - No new federation behavior was added during Phase 5.
+
+## Public Demo Addendum
+
+The post-Phase-5 public-demo layer adds:
+
+- CSV-backed `stacy run "<task>" --input <csv>` KO creation.
+- Federation contact book for `--with-contact meera`.
+- Public demo script and repeat gate:
+  - `pnpm --filter @arpanstacy/stacy-federation demo:public`
+  - `STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation demo:public:repeat`
+- Receipt summary command:
+  - `stacy receipts list --ko <ko_id>`
+
+See `PUBLIC_DEMO_GATE.md` for the public-demo proof and latest timing.
+
+Public demo gate status: complete.

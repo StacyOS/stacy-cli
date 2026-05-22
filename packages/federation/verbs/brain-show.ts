@@ -93,6 +93,8 @@ function formatBrainShowText(result: Extract<ReadKnowledgeObjectResult, { ok: tr
     `Content type: ${result.ko.signedPayload.contentType}`,
     `Creator install: ${result.ko.signedPayload.creatorInstallId}`,
     `Source: ${result.provenance.source}`,
+    `Signature: verified`,
+    `Consent: ${result.provenance.source === "federated" ? "enforced on read" : "local owner read"}`,
     "",
     renderedContent,
   ].join("\n");
@@ -112,8 +114,10 @@ function renderContent(content: unknown): string {
 }
 
 interface DashboardContent {
-  readonly title: string;
+  readonly title?: string;
+  readonly summary?: string;
   readonly widgets: readonly unknown[];
+  readonly input?: unknown;
 }
 
 function isDashboardContent(content: unknown): content is DashboardContent {
@@ -121,7 +125,6 @@ function isDashboardContent(content: unknown): content is DashboardContent {
     typeof content === "object" &&
     content !== null &&
     !Array.isArray(content) &&
-    typeof (content as { title?: unknown }).title === "string" &&
     Array.isArray((content as { widgets?: unknown }).widgets)
   );
 }
@@ -139,5 +142,24 @@ function renderDashboardContent(content: DashboardContent): string {
     return `  ${index + 1}. [${kind}] ${label}${value}`;
   });
 
-  return [`Dashboard: ${content.title}`, ...widgetLines].join("\n");
+  const title = typeof content.title === "string" ? content.title : "Dashboard";
+  const lines = [`Dashboard: ${title}`];
+  if (typeof content.summary === "string") {
+    lines.push(`Summary: ${content.summary}`);
+  }
+  if (isDashboardInput(content.input)) {
+    lines.push(`Input: ${content.input.fileName} (${content.input.rows} rows, ${content.input.contentHash})`);
+  }
+  lines.push("Widgets:", ...widgetLines);
+  return lines.join("\n");
+}
+
+function isDashboardInput(input: unknown): input is { readonly fileName: string; readonly rows: number; readonly contentHash: string } {
+  return (
+    typeof input === "object" &&
+    input !== null &&
+    typeof (input as { fileName?: unknown }).fileName === "string" &&
+    typeof (input as { rows?: unknown }).rows === "number" &&
+    typeof (input as { contentHash?: unknown }).contentHash === "string"
+  );
 }

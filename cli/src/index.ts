@@ -27,7 +27,7 @@ import { registerPluginCommands } from "./commands/client/plugin.js";
 import { registerClientAuthCommands } from "./commands/client/auth.js";
 import { cliVersion } from "./version.js";
 import { applyStacyEnvAliases } from "./config/env-aliases.js";
-import { registerFederationCommands } from "@arpanstacy/stacy-federation/verbs";
+import { registerFederationCommands, runTaskCommand } from "@arpanstacy/stacy-federation/verbs";
 
 const program = new Command();
 applyStacyEnvAliases();
@@ -138,13 +138,26 @@ program
 program
   .command("run")
   .description("Bootstrap local setup (onboard + doctor) and run Stacy")
+  .argument("[task]", "Public federation demo task to turn into a signed Knowledge Object")
   .option("-c, --config <path>", "Path to config file")
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("-i, --instance <id>", "Local instance id (default: default)")
   .option("--bind <mode>", "On first run, use onboarding reachability preset (loopback, lan, tailnet)")
   .option("--repair", "Attempt automatic repairs during doctor", true)
   .option("--no-repair", "Disable automatic repairs during doctor")
-  .action(runCommand);
+  .option("--input <path>", "Input file for a public federation demo task")
+  .option("--adapter-command <command>", "Optional adapter-like command for task generation")
+  .option("--adapter-arg <arg>", "Argument passed to --adapter-command; repeat for multiple args", collectOption, [])
+  .option("--ko-id <id>", "Deterministic Knowledge Object ID for demo runs")
+  .option("--db-url <url>", "Database connection string")
+  .option("--json", "Print raw JSON output", false)
+  .action(async (task, opts) => {
+    if (typeof task === "string" && task.trim()) {
+      await runTaskCommand(task, opts);
+      return;
+    }
+    await runCommand(opts);
+  });
 
 const heartbeat = program.command("heartbeat").description("Heartbeat utilities");
 
@@ -214,3 +227,7 @@ async function main(): Promise<void> {
 }
 
 void main();
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}

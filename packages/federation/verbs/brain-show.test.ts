@@ -96,6 +96,12 @@ describe("brainShowCommand", () => {
       contentType: "application/vnd.stacy.dashboard+json",
       content: {
         title: "Phase 2 Dashboard",
+        summary: "A compact dashboard summary.",
+        input: {
+          fileName: "acme-q2-revenue.csv",
+          rows: 3,
+          contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
         widgets: [{ kind: "metric", label: "Signed KOs", value: 1 }],
       },
       identity,
@@ -123,6 +129,10 @@ describe("brainShowCommand", () => {
     );
 
     expect(lines.join("\n")).toContain("Dashboard: Phase 2 Dashboard");
+    expect(lines.join("\n")).toContain("Summary: A compact dashboard summary.");
+    expect(lines.join("\n")).toContain("Input: acme-q2-revenue.csv (3 rows, sha256:");
+    expect(lines.join("\n")).toContain("Signature: verified");
+    expect(lines.join("\n")).toContain("Consent: local owner read");
     expect(lines.join("\n")).toContain("1. [metric] Signed KOs: 1");
   });
 

@@ -11,9 +11,11 @@ import {
   type LocalRuntimeDependencies,
   type LocalRuntimeOptions,
 } from "./local-runtime.js";
+import { readContact, resolveContactsPath } from "../src/contacts/contact-store.js";
 
 export interface ShareOptions extends LocalRuntimeOptions {
-  readonly with: string;
+  readonly with?: string;
+  readonly withContact?: string;
   readonly to?: string;
   readonly revocationUrl?: string;
   readonly scope?: string;
@@ -51,13 +53,20 @@ export async function shareCommand(
     throw new Error("Phase 3 only supports --scope read");
   }
 
-  const consumerInstallId = options.with.trim();
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const contact = options.withContact
+    ? await readContact(resolveContactsPath(runtime.instanceRoot), options.withContact)
+    : null;
+  if (options.withContact && !contact) {
+    throw new Error(`Unknown federation contact: ${options.withContact}`);
+  }
+
+  const consumerInstallId = (contact?.installId ?? options.with ?? "").trim();
   if (!consumerInstallId) {
-    throw new Error("Missing consumer install id");
+    throw new Error("Missing consumer install id. Pass --with <install> or --with-contact <name>.");
   }
 
   const stdout = dependencies.stdout ?? console;
-  const runtime = resolveLocalRuntime(options, dependencies);
   const ownsDb = dependencies.createDb === undefined;
   const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
 
@@ -71,12 +80,13 @@ export async function shareCommand(
       consumerInstallId,
       expiresAt: addDuration(now, options.expires ?? "30d"),
       revocable: options.revocable === true,
-      revocationLookupUrl: options.revocationUrl,
+      revocationLookupUrl: contact?.revocationUrl ?? options.revocationUrl,
       createdAt: now,
     });
-    const delivery = options.to
+    const endpointUrl = contact?.federationEndpointUrl ?? options.to;
+    const delivery = endpointUrl
       ? await deliverFederationMessage({
-          endpointUrl: options.to,
+          endpointUrl,
           message,
           fetch: dependencies.fetch ?? fetch,
         })

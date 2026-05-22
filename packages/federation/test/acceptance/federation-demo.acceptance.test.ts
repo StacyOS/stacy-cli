@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { createConsentGrant } from "../../src/consent/grant.js";
 import { enforceReadConsent } from "../../src/consent/enforcement.js";
 import { createRevocationTombstone } from "../../src/consent/revocation.js";
+import {
+  createDeterministicDashboardContent,
+  parseCsvDashboardInput,
+} from "../../src/dashboard/dashboard-content.js";
 import { createInstallIdentity } from "../../src/identity/install-identity.js";
 import {
   createKnowledgeObject,
@@ -310,6 +316,40 @@ describe("StacyOS federation demo acceptance contract", () => {
         expect.objectContaining({ eventType: "deny", actorInstallId: "install_b" }),
       ]),
     );
+  });
+  it("PUBLIC TASK: CSV task input creates a signed dashboard Knowledge Object", () => {
+    const identity = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const csvPath = resolve(process.cwd(), "demo/acme-q2-revenue.csv");
+    const input = parseCsvDashboardInput(csvPath, readFileSync(csvPath, "utf8"));
+    const content = createDeterministicDashboardContent({
+      task: "build a quarterly revenue dashboard from this CSV",
+      input,
+    });
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content,
+      identity,
+      createdAt: new Date("2026-05-22T00:00:01.000Z"),
+      idGenerator: () => "ko_acceptance_public_task",
+    });
+
+    expect(verifyKnowledgeObject(ko)).toEqual({
+      ok: true,
+      contentHash: ko.signedPayload.contentHash,
+    });
+    expect(ko.signedPayload.content).toMatchObject({
+      kind: "dashboard",
+      input: {
+        fileName: "acme-q2-revenue.csv",
+        rows: 3,
+      },
+      widgets: expect.arrayContaining([
+        expect.objectContaining({ label: "Revenue" }),
+        expect.objectContaining({ label: "Pipeline" }),
+        expect.objectContaining({ label: "Active customers" }),
+      ]),
+    });
   });
 });
 
