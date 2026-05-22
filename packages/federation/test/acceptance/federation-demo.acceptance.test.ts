@@ -7,6 +7,7 @@ import { enforceReadConsent } from "../../src/consent/enforcement.js";
 import { createRevocationTombstone } from "../../src/consent/revocation.js";
 import {
   createDeterministicDashboardContent,
+  parseDashboardSchema,
   parseCsvDashboardInput,
 } from "../../src/dashboard/dashboard-content.js";
 import { createInstallIdentity } from "../../src/identity/install-identity.js";
@@ -320,10 +321,13 @@ describe("StacyOS federation demo acceptance contract", () => {
   it("PUBLIC TASK: CSV task input creates a signed dashboard Knowledge Object", () => {
     const identity = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
     const csvPath = resolve(process.cwd(), "demo/acme-q2-revenue.csv");
+    const schemaPath = resolve(process.cwd(), "demo/acme-dashboard.schema.json");
     const input = parseCsvDashboardInput(csvPath, readFileSync(csvPath, "utf8"));
+    const schema = parseDashboardSchema(readFileSync(schemaPath, "utf8"));
     const content = createDeterministicDashboardContent({
       task: "build a quarterly revenue dashboard from this CSV",
       input,
+      schema,
     });
     const ko = createKnowledgeObject({
       tenant: "stacy/acme",
@@ -368,11 +372,18 @@ function receiptRow(
     counterparty_install_id: counterpartyInstallId ?? null,
     payload_json: {},
     created_at: "2026-05-22T00:00:00.000Z",
+    previous_receipt_hash: null,
+    receipt_hash: null,
   };
 }
 
 function dbForReceiptRows(rows: readonly unknown[]) {
+  let callCount = 0;
   return {
-    execute: async () => rows,
+    execute: async () => {
+      callCount += 1;
+      if (callCount <= 5) return [];
+      return rows;
+    },
   };
 }

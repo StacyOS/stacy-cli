@@ -49,7 +49,7 @@ describe("local Brain KO creation", () => {
       },
     });
     expect(result.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(db.queries).toHaveLength(8);
+    expect(db.queries).toHaveLength(13);
   });
 
   it("produces KOs that the Brain read path can verify", async () => {

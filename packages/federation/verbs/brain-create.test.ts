@@ -40,7 +40,7 @@ describe("brainCreateCommand", () => {
       },
     );
 
-    expect(queries).toHaveLength(8);
+    expect(queries).toHaveLength(13);
     expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
       id: "ko_brain_create",
       tenant: "stacy/acme",

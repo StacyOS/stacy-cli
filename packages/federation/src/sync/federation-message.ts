@@ -1,4 +1,4 @@
-import { sign, verify } from "node:crypto";
+import { randomUUID, sign, verify } from "node:crypto";
 
 import { readKnowledgeObject, storeKnowledgeObject, type BrainDb } from "../brain/brain-store.js";
 import { storeConsentGrant } from "../consent/grant-store.js";
@@ -10,6 +10,7 @@ import { appendReceipt } from "../receipts/receipt-store.js";
 import { storeRevocationSource } from "./revocation-source-store.js";
 
 export const FEDERATION_MESSAGE_SCHEMA_VERSION = 1;
+export const FEDERATION_MESSAGE_REPLAY_WINDOW_MS = 60_000;
 
 export interface FederationKnowledgeObjectMessageSignedPayload {
   readonly kind: "federation_ko_message";
@@ -20,6 +21,7 @@ export interface FederationKnowledgeObjectMessageSignedPayload {
   readonly ko: SignedKnowledgeObject;
   readonly grant: SignedConsentGrant;
   readonly revocationLookupUrl?: string;
+  readonly nonce: string;
   readonly createdAt: string;
 }
 
@@ -39,6 +41,7 @@ export interface CreateFederationMessageOptions {
   readonly expiresAt: Date;
   readonly revocable: boolean;
   readonly revocationLookupUrl?: string;
+  readonly nonce?: string;
   readonly createdAt?: Date;
 }
 
@@ -46,6 +49,12 @@ export interface ReceiveFederationMessageOptions {
   readonly db: BrainDb;
   readonly message: FederationKnowledgeObjectMessage;
   readonly receivedAt?: Date;
+  readonly replayWindowMs?: number;
+  readonly replayGuard?: FederationReplayGuard;
+}
+
+export interface FederationReplayGuard {
+  claim(key: string, expiresAt: Date, now: Date): boolean;
 }
 
 export async function createFederationMessage(
@@ -101,6 +110,7 @@ export async function createFederationMessage(
     ko: read.ko,
     grant,
     ...(options.revocationLookupUrl ? { revocationLookupUrl: options.revocationLookupUrl } : {}),
+    nonce: options.nonce ?? randomUUID(),
     createdAt: createdAt.toISOString(),
   };
   const signature = sign(
@@ -122,6 +132,7 @@ export async function createFederationMessage(
 export async function receiveFederationMessage(
   options: ReceiveFederationMessageOptions,
 ): Promise<{ readonly koId: string; readonly grantId: string; readonly contentHash: string }> {
+  const receivedAt = options.receivedAt ?? new Date();
   if (options.message.kind !== "federation_ko_message") {
     throw new Error("Federation message has the wrong kind");
   }
@@ -133,6 +144,13 @@ export async function receiveFederationMessage(
   if (!verifyFederationMessageSignature(options.message)) {
     throw new Error("Federation message signature verification failed");
   }
+
+  validateFederationMessageFreshness({
+    message: options.message,
+    receivedAt,
+    replayWindowMs: options.replayWindowMs ?? FEDERATION_MESSAGE_REPLAY_WINDOW_MS,
+    replayGuard: options.replayGuard ?? defaultFederationReplayGuard,
+  });
 
   if (options.message.tenant !== options.message.ko.signedPayload.tenant) {
     throw new Error("Federation message tenant does not match KO");
@@ -159,12 +177,12 @@ export async function receiveFederationMessage(
     ko: options.message.ko,
     source: "federated",
     receivedFromInstallId: options.message.producerInstallId,
-    storedAt: options.receivedAt,
+    storedAt: receivedAt,
   });
   await storeConsentGrant({
     db: options.db,
     grant: options.message.grant,
-    storedAt: options.receivedAt,
+    storedAt: receivedAt,
   });
   if (options.message.revocationLookupUrl) {
     await storeRevocationSource({
@@ -172,10 +190,9 @@ export async function receiveFederationMessage(
       koId: options.message.ko.id,
       producerInstallId: options.message.producerInstallId,
       lookupUrl: options.message.revocationLookupUrl,
-      storedAt: options.receivedAt,
+      storedAt: receivedAt,
     });
   }
-  const receivedAt = options.receivedAt ?? new Date();
   await appendReceipt({
     db: options.db,
     eventType: "receive",
@@ -225,6 +242,54 @@ export function verifyFederationMessageSignature(
   }
 }
 
+export function createMemoryFederationReplayGuard(): FederationReplayGuard {
+  const seen = new Map<string, number>();
+  return {
+    claim(key, expiresAt, now) {
+      const nowMs = now.getTime();
+      for (const [seenKey, expiresAtMs] of seen) {
+        if (expiresAtMs <= nowMs) {
+          seen.delete(seenKey);
+        }
+      }
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.set(key, expiresAt.getTime());
+      return true;
+    },
+  };
+}
+
+function validateFederationMessageFreshness(options: {
+  readonly message: FederationKnowledgeObjectMessage;
+  readonly receivedAt: Date;
+  readonly replayWindowMs: number;
+  readonly replayGuard: FederationReplayGuard;
+}): void {
+  if (typeof options.message.nonce !== "string" || !options.message.nonce.trim()) {
+    throw new Error("Federation message nonce is required");
+  }
+
+  const createdAtMs = Date.parse(options.message.createdAt);
+  if (!Number.isFinite(createdAtMs)) {
+    throw new Error("Federation message createdAt is invalid");
+  }
+
+  const deltaMs = Math.abs(options.receivedAt.getTime() - createdAtMs);
+  if (deltaMs > options.replayWindowMs) {
+    throw new Error("Federation message is outside the replay window");
+  }
+
+  const replayKey = `${options.message.producerInstallId}:${options.message.nonce}`;
+  const expiresAt = new Date(options.receivedAt.getTime() + options.replayWindowMs);
+  if (!options.replayGuard.claim(replayKey, expiresAt, options.receivedAt)) {
+    throw new Error("Federation message replay detected");
+  }
+}
+
+const defaultFederationReplayGuard = createMemoryFederationReplayGuard();
+
 function signedPayloadForMessage(
   message: FederationKnowledgeObjectMessage,
 ): FederationKnowledgeObjectMessageSignedPayload {
@@ -237,6 +302,7 @@ function signedPayloadForMessage(
     ko: message.ko,
     grant: message.grant,
     ...(message.revocationLookupUrl ? { revocationLookupUrl: message.revocationLookupUrl } : {}),
+    nonce: message.nonce,
     createdAt: message.createdAt,
   };
 }

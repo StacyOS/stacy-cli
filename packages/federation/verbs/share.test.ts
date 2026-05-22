@@ -201,7 +201,7 @@ describe("shareCommand", () => {
       label: "Meera",
       installId: consumer.record.installId,
       federationEndpointUrl: "http://127.0.0.1:3102/api/federation",
-      revocationUrl: "http://127.0.0.1:3101/api/federation/revocations",
+      revocationUrl: "http://127.0.0.1:3102/api/federation/revocations",
     });
     const deliveries: Array<{ readonly url: string; readonly body: unknown }> = [];
     const lines: string[] = [];
@@ -212,6 +212,7 @@ describe("shareCommand", () => {
         config: configPath,
         dbUrl: "postgres://example",
         withContact: "meera",
+        revocationUrl: "http://127.0.0.1:3101/api/federation/revocations",
         expires: "30d",
         revocable: true,
         json: true,

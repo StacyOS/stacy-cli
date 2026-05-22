@@ -146,6 +146,7 @@ program
   .option("--repair", "Attempt automatic repairs during doctor", true)
   .option("--no-repair", "Disable automatic repairs during doctor")
   .option("--input <path>", "Input file for a public federation demo task")
+  .option("--schema <path>", "Dashboard schema JSON for mapping CSV columns to widgets")
   .option("--adapter-command <command>", "Optional adapter-like command for task generation")
   .option("--adapter-arg <arg>", "Argument passed to --adapter-command; repeat for multiple args", collectOption, [])
   .option("--ko-id <id>", "Deterministic Knowledge Object ID for demo runs")

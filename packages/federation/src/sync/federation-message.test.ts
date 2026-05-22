@@ -4,6 +4,7 @@ import type { BrainDb } from "../brain/brain-store.js";
 import { createInstallIdentity } from "../identity/install-identity.js";
 import { createKnowledgeObject } from "../ko/knowledge-object.js";
 import {
+  createMemoryFederationReplayGuard,
   createFederationMessage,
   receiveFederationMessage,
   verifyFederationMessageSignature,
@@ -53,6 +54,7 @@ describe("federation KO messages", () => {
       tenant: "stacy/acme",
       producerInstallId: producer.record.installId,
       consumerInstallId: consumer.record.installId,
+      nonce: expect.any(String),
       ko,
       sender: {
         installId: producer.record.installId,
@@ -101,6 +103,7 @@ describe("federation KO messages", () => {
       consumerInstallId: consumer.record.installId,
       expiresAt: new Date("2026-06-21T00:00:00.000Z"),
       revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
     });
     const consumerDb = dbForRows([[], [], [], [], [], []]);
 
@@ -115,6 +118,110 @@ describe("federation KO messages", () => {
       grantId: message.grant.id,
       contentHash: ko.signedPayload.contentHash,
     });
+  });
+
+  it("rejects stale federation messages before storage", async () => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Too old" },
+      identity: producer,
+      idGenerator: () => "ko_stale_message",
+    });
+    const producerDb = dbForRows([
+      [
+        {
+          id: ko.id,
+          signed_payload_json: ko.signedPayload,
+          signer_json: ko.signer,
+          signature: ko.signature,
+          provenance_json: {
+            source: "local",
+            creatorInstallId: producer.record.installId,
+            storedAt: "2026-05-22T00:00:00.000Z",
+          },
+        },
+      ],
+      [],
+      [],
+    ]);
+    const message = await createFederationMessage({
+      db: producerDb,
+      koId: ko.id,
+      producerIdentity: producer,
+      consumerInstallId: consumer.record.installId,
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+    });
+
+    await expect(
+      receiveFederationMessage({
+        db: failOnExecuteDb(),
+        message,
+        receivedAt: new Date("2026-05-22T00:02:00.000Z"),
+        replayGuard: createMemoryFederationReplayGuard(),
+      }),
+    ).rejects.toThrow("outside the replay window");
+  });
+
+  it("rejects replayed federation message nonces before storage", async () => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Replay me once" },
+      identity: producer,
+      idGenerator: () => "ko_replay_message",
+    });
+    const producerDb = dbForRows([
+      [
+        {
+          id: ko.id,
+          signed_payload_json: ko.signedPayload,
+          signer_json: ko.signer,
+          signature: ko.signature,
+          provenance_json: {
+            source: "local",
+            creatorInstallId: producer.record.installId,
+            storedAt: "2026-05-22T00:00:00.000Z",
+          },
+        },
+      ],
+      [],
+      [],
+    ]);
+    const message = await createFederationMessage({
+      db: producerDb,
+      koId: ko.id,
+      producerIdentity: producer,
+      consumerInstallId: consumer.record.installId,
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      nonce: "nonce_replay_test",
+    });
+    const replayGuard = createMemoryFederationReplayGuard();
+
+    await expect(
+      receiveFederationMessage({
+        db: dbForRows([[], [], [], [], []]),
+        message,
+        receivedAt: new Date("2026-05-22T00:00:01.000Z"),
+        replayGuard,
+      }),
+    ).resolves.toMatchObject({ koId: ko.id });
+    await expect(
+      receiveFederationMessage({
+        db: failOnExecuteDb(),
+        message,
+        receivedAt: new Date("2026-05-22T00:00:02.000Z"),
+        replayGuard,
+      }),
+    ).rejects.toThrow("replay detected");
   });
 
   it("rejects a tampered federation message envelope", async () => {
@@ -170,5 +277,13 @@ function dbForRows(rows: readonly unknown[]): BrainDb {
   let index = 0;
   return {
     execute: async () => rows[index++] ?? [],
+  };
+}
+
+function failOnExecuteDb(): BrainDb {
+  return {
+    execute: async () => {
+      throw new Error("Storage should not be touched");
+    },
   };
 }

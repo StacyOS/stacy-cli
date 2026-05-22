@@ -38,7 +38,7 @@ class FakeCommand {
 }
 
 describe("federation CLI registration", () => {
-  it("registers brain show, share, and revoke commands", () => {
+  it("registers federation command groups and public demo subcommands", () => {
     const program = new FakeCommand("stacy");
 
     registerFederationCommands(program);
@@ -47,10 +47,20 @@ describe("federation CLI registration", () => {
     expect(topLevelCommands).toContain(federationCliCommands.brain);
     expect(topLevelCommands).toContain(federationCliCommands.share);
     expect(topLevelCommands).toContain(federationCliCommands.revoke);
+    expect(topLevelCommands).toContain("contacts");
+    expect(topLevelCommands).toContain("receipts");
 
     const brain = program.children.find((child) => child.nameAndArgs === federationCliCommands.brain);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainCreate);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainShow);
+
+    const contacts = program.children.find((child) => child.nameAndArgs === "contacts");
+    expect(contacts?.children.map((child) => child.nameAndArgs)).toEqual(
+      expect.arrayContaining(["add", "list", "show", "export", "import"]),
+    );
+
+    const receipts = program.children.find((child) => child.nameAndArgs === "receipts");
+    expect(receipts?.children.map((child) => child.nameAndArgs)).toEqual(expect.arrayContaining(["list", "verify"]));
   });
 
   it("wires brain show to the Phase 2 implementation", async () => {

@@ -1,7 +1,7 @@
 import { createDb } from "@arpanstacy/stacy-db";
 
 import type { BrainDb } from "../src/brain/brain-store.js";
-import { listReceipts } from "../src/receipts/receipt-store.js";
+import { listReceipts, verifyReceiptChain } from "../src/receipts/receipt-store.js";
 import {
   resolveLocalRuntime,
   type LocalRuntimeDependencies,
@@ -33,6 +33,39 @@ export async function receiptsListCommand(
       return;
     }
     stdout.log(formatReceipts(receipts));
+  } finally {
+    if (ownsDb) await closeDb(db);
+  }
+}
+
+export async function receiptsVerifyCommand(
+  options: ReceiptsListOptions,
+  dependencies: ReceiptsDependencies = {},
+): Promise<void> {
+  const stdout = dependencies.stdout ?? console;
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const ownsDb = dependencies.createDb === undefined;
+  const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
+  try {
+    const verification = await verifyReceiptChain({ db, koId: options.ko });
+    if (options.json) {
+      stdout.log(JSON.stringify({ verification }, null, 2));
+      return;
+    }
+
+    if (verification.valid) {
+      stdout.log(`Receipt chain valid. Checked ${verification.checked} receipt(s).`);
+      return;
+    }
+
+    const message = [
+      "Receipt chain invalid.",
+      `Checked before failure: ${verification.checked}`,
+      verification.firstInvalidReceiptId ? `First invalid receipt: ${verification.firstInvalidReceiptId}` : undefined,
+      verification.reason ? `Reason: ${verification.reason}` : undefined,
+    ].filter(Boolean).join("\n");
+    stdout.log(message);
+    throw new Error(message);
   } finally {
     if (ownsDb) await closeDb(db);
   }

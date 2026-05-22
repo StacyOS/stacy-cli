@@ -13,13 +13,21 @@ pnpm --filter @arpanstacy/stacy-federation demo:public
 
 - `stacy run "<task>" --input <csv>` creates a signed dashboard KO.
 - KO content is derived from `demo/acme-q2-revenue.csv`.
-- A stores B as contact `meera`.
-- `stacy share <ko> --with-contact meera` resolves install ID, federation
-  endpoint, and revocation URL from the contact book.
+- The public Acme demo uses `demo/acme-dashboard.schema.json` for explicit
+  CSV-column-to-widget mapping.
+- The default generator is deterministic, and `STACY_PUBLIC_DEMO_ADAPTER`
+  can switch the public demo to an adapter-command path.
+- B exports a signed contact card, and A verifies/imports it as contact
+  `meera`.
+- `stacy share <ko> --with-contact meera` resolves B's install ID and
+  federation endpoint from the verified contact book.
+- A-to-B federation messages carry a signed nonce and signed timestamp; B rejects
+  stale or replayed messages before storage.
 - B reads before revoke with provenance and verification.
 - A revokes access.
 - B's next read is denied through read-time revocation enforcement.
 - Receipts persist on both installs.
+- Receipt hash chains verify on both installs.
 
 ## Copy-Paste Gate
 
@@ -29,6 +37,7 @@ Run from the `stacy-cli` repo root:
 pnpm install
 pnpm --filter @arpanstacy/stacy-federation preflight
 STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation demo:public:repeat
+pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-smoke
 ```
 
 ## Latest Local Result
@@ -36,12 +45,26 @@ STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation
 ```text
 StacyOS public federation demo complete
 KO: ko_public_revenue_dashboard
+Generator: deterministic_dashboard
 B read before revoke: allowed
 A revoked access
 B read after revoke: denied
+Receipt chain A: valid
+Receipt chain B: valid
 Receipts A: create, sign, share, revoke
 Receipts B: store, receive, read, deny
-Total runtime: 15.56s
+Total runtime: 20.31s
+```
+
+Latest adapter-smoke result:
+
+```text
+Generator: adapter_command
+B read before revoke: allowed
+B read after revoke: denied
+Receipt chain A: valid
+Receipt chain B: valid
+Total runtime: 20.34s
 ```
 
 ## Repeat Gate
@@ -68,5 +91,6 @@ pnpm --filter @arpanstacy/stacy-federation test
 pnpm --filter @arpanstacy/stacy typecheck
 pnpm --filter @arpanstacy/stacy-server typecheck
 pnpm --filter @arpanstacy/stacy-federation demo:check
+pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-smoke
 STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation demo:public:repeat
 ```

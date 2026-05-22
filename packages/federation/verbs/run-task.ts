@@ -6,6 +6,7 @@ import type { BrainDb } from "../src/brain/brain-store.js";
 import { createLocalKnowledgeObject } from "../src/brain/local-brain.js";
 import {
   createDeterministicDashboardContent,
+  parseDashboardSchema,
   parseCsvDashboardInput,
 } from "../src/dashboard/dashboard-content.js";
 import {
@@ -16,6 +17,7 @@ import {
 
 export interface RunTaskOptions extends LocalRuntimeOptions {
   readonly input?: string;
+  readonly schema?: string;
   readonly adapterCommand?: string;
   readonly adapterArg?: string[];
   readonly koId?: string;
@@ -42,6 +44,9 @@ export async function runTaskCommand(
 
   const rawInput = await readFile(inputPath, "utf8");
   const dashboardInput = parseCsvDashboardInput(inputPath, rawInput);
+  const dashboardSchema = options.schema?.trim()
+    ? parseDashboardSchema(await readFile(options.schema.trim(), "utf8"))
+    : undefined;
   const adapterOutput = options.adapterCommand?.trim()
     ? await runAdapterCommand({
         command: options.adapterCommand.trim(),
@@ -52,6 +57,7 @@ export async function runTaskCommand(
   const content = createDeterministicDashboardContent({
     task,
     input: dashboardInput,
+    schema: dashboardSchema,
     adapterOutput,
   });
   const ownsDb = dependencies.createDb === undefined;
@@ -74,6 +80,7 @@ export async function runTaskCommand(
       tenant: result.ko.signedPayload.tenant,
       task,
       input: content.input,
+      generator: content.generator,
       contentHash: result.contentHash,
       creatorInstallId: result.creatorInstallId,
       signature: result.ko.signature,
@@ -116,12 +123,14 @@ async function runAdapterCommand(options: {
 function formatRunTaskText(output: {
   readonly id: string;
   readonly task: string;
+  readonly generator?: string;
   readonly contentHash: string;
   readonly creatorInstallId: string;
 }): string {
   return [
     `Created public demo Knowledge Object: ${output.id}`,
     `Task: ${output.task}`,
+    ...(output.generator ? [`Generator: ${output.generator}`] : []),
     `Content hash: ${output.contentHash}`,
     `Creator install: ${output.creatorInstallId}`,
   ].join("\n");

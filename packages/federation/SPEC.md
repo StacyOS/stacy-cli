@@ -33,6 +33,41 @@ identities distinguish:
 Signatures are made by the install identity unless a later spec revision explicitly
 names a different signer.
 
+## Contact Cards
+
+A signed contact card is an install-issued discovery object for the N=2 demo. It
+contains the install id, public key, federation endpoint, revocation endpoint,
+label, tenant, and created timestamp, then signs those canonical bytes with the
+install Ed25519 key.
+
+Import verification must reject cards where:
+
+- the signature is invalid
+- the payload install id does not match the signer install id
+- the public key does not derive the payload install id
+- the signer public key differs from the payload public key
+- the contact name is malformed after normalization
+
+Contact cards are discovery metadata only. They do not grant consent, do not
+change KO signing semantics, and do not replace the producer revocation lookup
+URL embedded in a revocable share.
+
+## Federation Transport Hardening
+
+Every A-to-B federation KO message includes a signed nonce and signed
+`createdAt` timestamp. Consumers reject messages that are outside the demo replay
+window or reuse a nonce already accepted in the current receiver process.
+
+For the public N=2 demo:
+
+- the replay window is 60 seconds
+- the nonce is part of the signed federation message payload
+- replay checks happen after signature verification and before storage
+- freshness failure must not store the KO, grant, revocation source, or receipts
+
+This is transport hardening only. It does not replace object signatures, consent
+grants, revocation tombstones, or read-time enforcement.
+
 ## Canonical Serialization
 
 Signed objects are serialized with a deterministic field order before hashing or
@@ -118,6 +153,11 @@ Minimum receipt events:
 
 Receipt records must survive restart and must never be updated in place through the
 federation package API.
+
+Receipts are tamper-evident per Knowledge Object. Every new receipt includes the
+previous receipt hash for the same KO and its own canonical SHA-256 receipt hash.
+Verification fails if a receipt is edited, deleted from the middle of the chain,
+or linked to the wrong predecessor.
 
 ## Read-Time Enforcement
 

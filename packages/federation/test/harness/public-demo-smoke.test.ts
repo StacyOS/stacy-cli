@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { loadInstallIdentity } from "../../src/identity/install-identity.js";
@@ -7,6 +7,9 @@ import { createTwoInstallHarness, type HarnessCommandResult } from "./two-instal
 
 const runPublicDemoSmoke = process.env.STACY_FEDERATION_PUBLIC_DEMO_SMOKE === "1";
 const demoCsvPath = resolve(process.cwd(), "demo/acme-q2-revenue.csv");
+const demoSchemaPath = resolve(process.cwd(), "demo/acme-dashboard.schema.json");
+const publicDemoAdapterCommand = process.env.STACY_PUBLIC_DEMO_ADAPTER?.trim();
+const publicDemoAdapterArgs = parseAdapterArgs(process.env.STACY_PUBLIC_DEMO_ADAPTER_ARGS);
 
 describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
   it("runs task -> KO -> contact share -> read -> revoke -> denied next read with receipts", async () => {
@@ -37,25 +40,45 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
       expectSuccessfulCommand(seedB);
       const consumerIdentity = await loadInstallIdentity(resolveFederationIdentityPath(harness.installB.instanceRoot));
 
-      const addContactCommand = [
+      const contactCardPath = join(harness.rootDir, "meera.contact-card.json");
+      const exportContactCardCommand = [
         "contacts",
-        "add",
+        "export",
         "meera",
         "--config",
-        harness.installA.configPath,
-        "--install-id",
-        consumerIdentity.record.installId,
+        harness.installB.configPath,
         "--endpoint",
         `http://127.0.0.1:${harness.installB.serverPort}/api/federation`,
         "--revocation-url",
-        `http://127.0.0.1:${harness.installA.serverPort}/api/federation/revocations`,
+        `http://127.0.0.1:${harness.installB.serverPort}/api/federation/revocations`,
         "--label",
         "Meera's Stacy install",
+        "--out",
+        contactCardPath,
+      ];
+      const importContactCardCommand = [
+        "contacts",
+        "import",
+        contactCardPath,
+        "--config",
+        harness.installA.configPath,
+        "--as",
+        "meera",
         "--json",
       ];
-      logStep("3. Register B as contact meera", [formatDemoCommand("A", addContactCommand)]);
-      const addContact = await harness.runCli("A", addContactCommand);
-      expectSuccessfulCommand(addContact);
+      logStep("3. Exchange B's signed contact card as meera", [
+        formatDemoCommand("B", exportContactCardCommand),
+        formatDemoCommand("A", importContactCardCommand),
+      ]);
+      const exportContactCard = await harness.runCli("B", exportContactCardCommand);
+      const importContactCard = await harness.runCli("A", importContactCardCommand);
+      expectSuccessfulCommand(exportContactCard);
+      expectSuccessfulCommand(importContactCard);
+      expect(parseCommandJson(importContactCard)).toMatchObject({
+        name: "meera",
+        installId: consumerIdentity.record.installId,
+        federationEndpointUrl: `http://127.0.0.1:${harness.installB.serverPort}/api/federation`,
+      });
 
       const runTaskCommand = [
         "run",
@@ -64,8 +87,17 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         harness.installA.configPath,
         "--input",
         demoCsvPath,
+        "--schema",
+        demoSchemaPath,
         "--ko-id",
         "ko_public_revenue_dashboard",
+        ...(publicDemoAdapterCommand
+          ? [
+              "--adapter-command",
+              publicDemoAdapterCommand,
+              ...publicDemoAdapterArgs.flatMap((arg) => ["--adapter-arg", arg]),
+            ]
+          : []),
         "--json",
       ];
       logStep("4. Create signed KO from real CSV task", [formatDemoCommand("A", runTaskCommand)]);
@@ -75,10 +107,12 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         readonly id: string;
         readonly contentHash: string;
         readonly creatorInstallId: string;
+        readonly generator: string;
       };
       expect(created).toMatchObject({
         id: "ko_public_revenue_dashboard",
         contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        generator: publicDemoAdapterCommand ? "adapter_command" : "deterministic_dashboard",
       });
 
       const showACommand = [
@@ -91,9 +125,15 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
       logStep("5. Show local dashboard KO with provenance", [formatDemoCommand("A", showACommand)]);
       const showA = await harness.runCli("A", showACommand);
       expectSuccessfulCommand(showA);
-      expect(showA.stdout).toContain("Dashboard: Build a quarterly revenue dashboard from this CSV");
+      expect(showA.stdout).toContain("Dashboard: Acme Q2 Revenue Dashboard");
       expect(showA.stdout).toContain("Input: acme-q2-revenue.csv");
       expect(showA.stdout).toContain("Signature: verified");
+      expect(showA.stdout).toContain(
+        publicDemoAdapterCommand ? "Generator: adapter_command" : "Generator: deterministic_dashboard",
+      );
+      if (publicDemoAdapterCommand) {
+        expect(showA.stdout).toContain("Adapter output: Fake adapter summary:");
+      }
 
       const shareCommand = [
         "share",
@@ -102,6 +142,8 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         harness.installA.configPath,
         "--with-contact",
         "meera",
+        "--revocation-url",
+        `http://127.0.0.1:${harness.installA.serverPort}/api/federation/revocations`,
         "--expires",
         "30d",
         "--revocable",
@@ -203,18 +245,40 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "--ko",
         created.id,
       ];
+      const verifyReceiptsACommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installA.configPath,
+        "--ko",
+        created.id,
+      ];
+      const verifyReceiptsBCommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installB.configPath,
+        "--ko",
+        created.id,
+      ];
       logStep("10. Show receipts on both installs", [
         formatDemoCommand("A", receiptsATextCommand),
         formatDemoCommand("B", receiptsBTextCommand),
+        formatDemoCommand("A", verifyReceiptsACommand),
+        formatDemoCommand("B", verifyReceiptsBCommand),
       ]);
       const receiptsA = await harness.runCli("A", receiptsACommand);
       const receiptsB = await harness.runCli("B", receiptsBCommand);
       const receiptsAText = await harness.runCli("A", receiptsATextCommand);
       const receiptsBText = await harness.runCli("B", receiptsBTextCommand);
+      const verifyReceiptsA = await harness.runCli("A", verifyReceiptsACommand);
+      const verifyReceiptsB = await harness.runCli("B", verifyReceiptsBCommand);
       expectSuccessfulCommand(receiptsA);
       expectSuccessfulCommand(receiptsB);
       expectSuccessfulCommand(receiptsAText);
       expectSuccessfulCommand(receiptsBText);
+      expectSuccessfulCommand(verifyReceiptsA);
+      expectSuccessfulCommand(verifyReceiptsB);
       const eventsA = receiptEvents(receiptsA);
       const eventsB = receiptEvents(receiptsB);
       expect(eventsA).toEqual(expect.arrayContaining(["create", "sign", "share", "revoke"]));
@@ -223,6 +287,8 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
       expect(receiptsAText.stdout).toContain("By event:");
       expect(receiptsAText.stdout).toContain("share:");
       expect(receiptsBText.stdout).toContain("deny:");
+      expect(verifyReceiptsA.stdout).toContain("Receipt chain valid.");
+      expect(verifyReceiptsB.stdout).toContain("Receipt chain valid.");
 
       const durationMs = Math.round(performance.now() - startedAt);
       expect(durationMs).toBeLessThan(4 * 60 * 1000);
@@ -233,11 +299,14 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         `Content hash: ${created.contentHash}`,
         `Producer install: ${created.creatorInstallId}`,
         `Consumer install: ${consumerIdentity.record.installId}`,
+        `Generator: ${created.generator}`,
         "B read before revoke: allowed",
         "A revoked access",
         "B read after revoke: denied",
         `Receipts A: ${eventsA.join(", ")}`,
         `Receipts B: ${eventsB.join(", ")}`,
+        "Receipt chain A: valid",
+        "Receipt chain B: valid",
         "",
         "Receipt summary on A:",
         receiptsAText.stdout.trim(),
@@ -301,4 +370,13 @@ function formatDemoCommand(install: "A" | "B", args: readonly string[]): string 
 function quoteShellArg(value: string): string {
   if (/^[A-Za-z0-9_./:=@-]+$/.test(value)) return value;
   return `"${value.replaceAll("\"", "\\\"")}"`;
+}
+
+function parseAdapterArgs(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed) || !parsed.every((entry) => typeof entry === "string")) {
+    throw new Error("STACY_PUBLIC_DEMO_ADAPTER_ARGS must be a JSON array of strings.");
+  }
+  return parsed;
 }

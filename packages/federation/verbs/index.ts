@@ -2,11 +2,13 @@ import { brainCreateCommand, type BrainCreateDependencies } from "./brain-create
 import { brainShowCommand, type BrainShowDependencies } from "./brain-show.js";
 import {
   contactsAddCommand,
+  contactsExportCommand,
+  contactsImportCommand,
   contactsListCommand,
   contactsShowCommand,
   type ContactsDependencies,
 } from "./contacts.js";
-import { receiptsListCommand, type ReceiptsDependencies } from "./receipts.js";
+import { receiptsListCommand, receiptsVerifyCommand, type ReceiptsDependencies } from "./receipts.js";
 import { revokeCommand, type RevokeDependencies } from "./revoke.js";
 import { runTaskCommand, type RunTaskDependencies } from "./run-task.js";
 import { shareCommand, type ShareDependencies } from "./share.js";
@@ -132,6 +134,33 @@ export function registerFederationCommands(
       await contactsShowCommand(String(name), commandOptions as Parameters<typeof contactsShowCommand>[1], options.contacts);
     });
 
+  contacts
+    .command("export")
+    .description("Export this install as a signed federation contact card")
+    .argument("<name>", "Contact name recipients should save")
+    .requiredOption("--endpoint <url>", "This install's /api/federation endpoint URL")
+    .requiredOption("--revocation-url <url>", "This install's revocation lookup URL")
+    .option("--label <text>", "Human-readable label")
+    .option("--out <path>", "Write the signed contact card to a file")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (name, commandOptions) => {
+      await contactsExportCommand(String(name), commandOptions as Parameters<typeof contactsExportCommand>[1], options.contacts);
+    });
+
+  contacts
+    .command("import")
+    .description("Import and verify a signed federation contact card")
+    .argument("<path>", "Path to a signed contact card JSON file")
+    .option("--as <name>", "Save the contact under a local alias")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (path, commandOptions) => {
+      await contactsImportCommand(String(path), commandOptions as Parameters<typeof contactsImportCommand>[1], options.contacts);
+    });
+
   const receipts = program
     .command("receipts")
     .description("Federation receipt log operations");
@@ -145,6 +174,17 @@ export function registerFederationCommands(
     .option("--db-url <url>", "Database connection string")
     .action(async (commandOptions) => {
       await receiptsListCommand(commandOptions as Parameters<typeof receiptsListCommand>[0], options.receipts);
+    });
+
+  receipts
+    .command("verify")
+    .description("Verify the tamper-evident receipt hash chain")
+    .option("--ko <ko_id>", "Filter receipts by Knowledge Object ID")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await receiptsVerifyCommand(commandOptions as Parameters<typeof receiptsVerifyCommand>[0], options.receipts);
     });
 
   program

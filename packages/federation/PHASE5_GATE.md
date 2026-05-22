@@ -100,7 +100,18 @@ Cross-package wiring checks also passed:
 The post-Phase-5 public-demo layer adds:
 
 - CSV-backed `stacy run "<task>" --input <csv>` KO creation.
-- Federation contact book for `--with-contact meera`.
+- Signed contact-card export/import for peer setup:
+  - `stacy contacts export meera --out meera.contact-card.json`
+  - `stacy contacts import meera.contact-card.json --as meera`
+- Federation contact book resolution for `--with-contact meera`.
+- Optional adapter-backed public demo path:
+  - `pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-smoke`
+- Tamper-evident receipt verification:
+  - `stacy receipts verify --ko <ko_id>`
+- Transport replay hardening:
+  - signed federation message nonce
+  - 60-second signed timestamp replay window
+  - duplicate nonce rejection before storage
 - Public demo script and repeat gate:
   - `pnpm --filter @arpanstacy/stacy-federation demo:public`
   - `STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation demo:public:repeat`

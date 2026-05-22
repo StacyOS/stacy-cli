@@ -116,6 +116,8 @@ function renderContent(content: unknown): string {
 interface DashboardContent {
   readonly title?: string;
   readonly summary?: string;
+  readonly generator?: string;
+  readonly adapterOutput?: string;
   readonly widgets: readonly unknown[];
   readonly input?: unknown;
 }
@@ -146,6 +148,12 @@ function renderDashboardContent(content: DashboardContent): string {
   const lines = [`Dashboard: ${title}`];
   if (typeof content.summary === "string") {
     lines.push(`Summary: ${content.summary}`);
+  }
+  if (typeof content.generator === "string") {
+    lines.push(`Generator: ${content.generator}`);
+  }
+  if (typeof content.adapterOutput === "string" && content.adapterOutput.trim()) {
+    lines.push(`Adapter output: ${content.adapterOutput.trim()}`);
   }
   if (isDashboardInput(content.input)) {
     lines.push(`Input: ${content.input.fileName} (${content.input.rows} rows, ${content.input.contentHash})`);

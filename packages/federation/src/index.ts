@@ -46,11 +46,24 @@ export {
   type FederationContact,
 } from "./contacts/contact-store.js";
 export {
+  CONTACT_CARD_SCHEMA_VERSION,
+  DEFAULT_FEDERATION_TENANT,
+  createSignedContactCard,
+  parseSignedContactCard,
+  verifySignedContactCard,
+  type ContactCardPayload,
+  type ContactCardVerificationResult,
+  type SignedContactCard,
+} from "./contacts/contact-card.js";
+export {
   createDeterministicDashboardContent,
+  parseDashboardSchema,
   parseCsv,
   parseCsvDashboardInput,
   type DashboardContent,
   type DashboardInput,
+  type DashboardSchema,
+  type DashboardSchemaWidget,
   type DashboardWidget,
 } from "./dashboard/dashboard-content.js";
 export {
@@ -157,9 +170,13 @@ export {
 export {
   appendReceipt,
   ensureReceiptTables,
+  hashReceipt,
   listReceipts,
+  verifyReceiptChain,
   type AppendReceiptOptions,
   type FederationReceipt,
   type FederationReceiptEventType,
   type ListReceiptsOptions,
+  type VerifyReceiptChainOptions,
+  type VerifyReceiptChainResult,
 } from "./receipts/receipt-store.js";

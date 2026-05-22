@@ -97,6 +97,8 @@ describe("brainShowCommand", () => {
       content: {
         title: "Phase 2 Dashboard",
         summary: "A compact dashboard summary.",
+        generator: "adapter_command",
+        adapterOutput: "Adapter generated this summary from the CSV.",
         input: {
           fileName: "acme-q2-revenue.csv",
           rows: 3,
@@ -130,6 +132,8 @@ describe("brainShowCommand", () => {
 
     expect(lines.join("\n")).toContain("Dashboard: Phase 2 Dashboard");
     expect(lines.join("\n")).toContain("Summary: A compact dashboard summary.");
+    expect(lines.join("\n")).toContain("Generator: adapter_command");
+    expect(lines.join("\n")).toContain("Adapter output: Adapter generated this summary from the CSV.");
     expect(lines.join("\n")).toContain("Input: acme-q2-revenue.csv (3 rows, sha256:");
     expect(lines.join("\n")).toContain("Signature: verified");
     expect(lines.join("\n")).toContain("Consent: local owner read");

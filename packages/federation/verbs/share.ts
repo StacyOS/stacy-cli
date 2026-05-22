@@ -80,7 +80,7 @@ export async function shareCommand(
       consumerInstallId,
       expiresAt: addDuration(now, options.expires ?? "30d"),
       revocable: options.revocable === true,
-      revocationLookupUrl: contact?.revocationUrl ?? options.revocationUrl,
+      revocationLookupUrl: options.revocationUrl ?? contact?.revocationUrl,
       createdAt: now,
     });
     const endpointUrl = contact?.federationEndpointUrl ?? options.to;

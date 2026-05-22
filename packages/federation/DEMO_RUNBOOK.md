@@ -91,23 +91,48 @@ This executes the literal public demo:
 
 1. Start isolated install A and install B.
 2. Create a signed dashboard KO on A from `demo/acme-q2-revenue.csv`:
-   `stacy run "build a quarterly revenue dashboard from this CSV" --input ...`
-3. Register B as contact `meera`.
+   `stacy run "build a quarterly revenue dashboard from this CSV" --input ... --schema ...`
+3. Export B's signed contact card and import it on A as `meera`.
 4. Share the KO using `stacy share <ko> --with-contact meera`.
 5. Read on B with provenance and signature verification.
 6. Revoke on A.
 7. Confirm B's next read is denied.
 8. Print receipt summaries for both installs.
 
+By default the dashboard generator is deterministic so the demo is reliable
+offline. The public Acme demo passes `demo/acme-dashboard.schema.json` so the
+CSV-to-widget mapping is explicit rather than hardcoded. Without `--schema`,
+Stacy infers a compact dashboard from numeric CSV columns.
+
+To prove the adapter seam with a local fake adapter, run:
+
+```bash
+pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-smoke
+```
+
+To use a real adapter command, set `STACY_PUBLIC_DEMO_ADAPTER` and optionally
+`STACY_PUBLIC_DEMO_ADAPTER_ARGS` as a JSON array of strings:
+
+```bash
+STACY_PUBLIC_DEMO_ADAPTER=claude pnpm --filter @arpanstacy/stacy-federation demo:public
+STACY_PUBLIC_DEMO_ADAPTER=node STACY_PUBLIC_DEMO_ADAPTER_ARGS='["packages/federation/scripts/public-demo-fake-adapter.mjs"]' pnpm --filter @arpanstacy/stacy-federation demo:public
+```
+
 Expected proof:
 
 ```text
+Generator: deterministic_dashboard
 B read before revoke: allowed
 A revoked access
 B read after revoke: denied
+Receipt chain A: valid
+Receipt chain B: valid
 Receipts A includes: create, sign, share, revoke
 Receipts B includes: receive, store, read, deny
 ```
+
+The federation transport message also carries a signed nonce and timestamp. B
+rejects stale or replayed messages before storing the KO or grant.
 
 Before a public presentation, run:
 
@@ -133,19 +158,33 @@ commands it exercises are:
 ```bash
 stacy run "build a quarterly revenue dashboard from this CSV" \
   --input packages/federation/demo/acme-q2-revenue.csv \
+  --schema packages/federation/demo/acme-dashboard.schema.json \
   --ko-id ko_public_revenue_dashboard \
   --json
 
-stacy contacts add meera \
-  --install-id <consumer_install_id> \
+stacy contacts export meera \
   --endpoint <consumer_api>/api/federation \
-  --revocation-url <producer_api>/api/federation/revocations
+  --revocation-url <consumer_api>/api/federation/revocations \
+  --out meera.contact-card.json
 
-stacy share ko_public_revenue_dashboard --with-contact meera --expires 30d --revocable
+stacy contacts import meera.contact-card.json --as meera
+
+stacy share ko_public_revenue_dashboard \
+  --with-contact meera \
+  --revocation-url <producer_api>/api/federation/revocations \
+  --expires 30d \
+  --revocable
 stacy brain show ko_public_revenue_dashboard --as-consumer <consumer_install_id>
 stacy revoke ko_public_revenue_dashboard --reason "Public demo revoke"
 stacy brain show ko_public_revenue_dashboard --as-consumer <consumer_install_id>
 stacy receipts list --ko ko_public_revenue_dashboard
+stacy receipts verify --ko ko_public_revenue_dashboard
+```
+
+`receipts verify` checks the per-KO receipt hash chain. It should report:
+
+```text
+Receipt chain valid. Checked <n> receipt(s).
 ```
 
 ## Demo Storyboard

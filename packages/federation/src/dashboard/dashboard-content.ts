@@ -27,6 +27,19 @@ export interface DashboardContent {
   readonly adapterOutput?: string;
 }
 
+export interface DashboardSchema {
+  readonly title?: string;
+  readonly widgets: readonly DashboardSchemaWidget[];
+}
+
+export interface DashboardSchemaWidget {
+  readonly kind?: "metric" | "risk" | "trend";
+  readonly label: string;
+  readonly column: string;
+  readonly aggregate: "sum" | "average" | "last" | "count";
+  readonly format?: "currency" | "number" | "percent";
+}
+
 export interface DashboardWidget {
   readonly kind: "metric" | "risk" | "trend";
   readonly label: string;
@@ -47,19 +60,12 @@ export function parseCsvDashboardInput(filePath: string, raw: string): Dashboard
 export function createDeterministicDashboardContent(options: {
   readonly task: string;
   readonly input: DashboardInput;
+  readonly schema?: DashboardSchema;
   readonly adapterOutput?: string;
 }): DashboardContent & CanonicalJsonValue {
-  const revenue = sumNumericColumn(options.input.records, "revenue");
-  const pipeline = sumNumericColumn(options.input.records, "pipeline");
-  const customers = lastNumericColumn(options.input.records, "active_customers");
-  const churnRisk = averageNumericColumn(options.input.records, "churn_risk");
-  const title = titleFromTask(options.task);
-  const widgets: DashboardWidget[] = [
-    { kind: "metric", label: "Revenue", value: revenue },
-    { kind: "metric", label: "Pipeline", value: pipeline },
-    { kind: "metric", label: "Active customers", value: customers },
-    { kind: "risk", label: "Average churn risk", value: Number(churnRisk.toFixed(2)) },
-  ];
+  const schema = options.schema ?? inferDashboardSchema(options.input);
+  const title = schema.title?.trim() || titleFromTask(options.task);
+  const widgets = schema.widgets.map((widget) => createWidget(options.input.records, widget));
 
   return {
     kind: "dashboard",
@@ -71,11 +77,27 @@ export function createDeterministicDashboardContent(options: {
       rows: options.input.rows,
     },
     widgets,
-    summary: `${title}: ${options.input.rows} rows, ${formatCurrency(revenue)} revenue, ${formatCurrency(pipeline)} pipeline.`,
+    summary: createDashboardSummary(title, options.input.rows, widgets),
     generator: options.adapterOutput ? "adapter_command" : "deterministic_dashboard",
     generatedAt: new Date(0).toISOString(),
     ...(options.adapterOutput ? { adapterOutput: options.adapterOutput } : {}),
   } as unknown as DashboardContent & CanonicalJsonValue;
+}
+
+export function parseDashboardSchema(raw: string): DashboardSchema {
+  const parsed = JSON.parse(raw) as unknown;
+  if (!isRecord(parsed)) {
+    throw new Error("Dashboard schema must be a JSON object.");
+  }
+  const widgets = parsed.widgets;
+  if (!Array.isArray(widgets) || widgets.length === 0) {
+    throw new Error("Dashboard schema must include a non-empty widgets array.");
+  }
+
+  return {
+    ...(typeof parsed.title === "string" && parsed.title.trim() ? { title: parsed.title.trim() } : {}),
+    widgets: widgets.map((widget, index) => parseSchemaWidget(widget, index)),
+  };
 }
 
 export function parseCsv(raw: string): readonly Record<string, string>[] {
@@ -144,16 +166,144 @@ function averageNumericColumn(records: readonly Record<string, string>[], column
   return sumNumericColumn(records, column) / records.length;
 }
 
+function countPresentColumn(records: readonly Record<string, string>[], column: string): number {
+  return records.filter((record) => String(record[column] ?? "").trim().length > 0).length;
+}
+
+function createWidget(
+  records: readonly Record<string, string>[],
+  widget: DashboardSchemaWidget,
+): DashboardWidget {
+  const rawValue = aggregateColumn(records, widget);
+  return {
+    kind: widget.kind ?? "metric",
+    label: widget.label,
+    value: formatWidgetValue(rawValue, widget.format),
+  };
+}
+
+function aggregateColumn(records: readonly Record<string, string>[], widget: DashboardSchemaWidget): number {
+  if (widget.aggregate === "sum") return sumNumericColumn(records, widget.column);
+  if (widget.aggregate === "average") return averageNumericColumn(records, widget.column);
+  if (widget.aggregate === "last") return lastNumericColumn(records, widget.column);
+  return countPresentColumn(records, widget.column);
+}
+
+function formatWidgetValue(value: number, format: DashboardSchemaWidget["format"]): string | number {
+  if (format === "currency") return formatCurrency(value);
+  if (format === "percent") return Number(value.toFixed(2));
+  return Number(value.toFixed(2));
+}
+
+function inferDashboardSchema(input: DashboardInput): DashboardSchema {
+  const numericColumns = input.columns.filter((column) =>
+    input.records.some((record) => isNumericCell(record[column])),
+  );
+  const widgets = numericColumns.slice(0, 4).map((column): DashboardSchemaWidget => ({
+    kind: column.toLowerCase().includes("risk") ? "risk" : "metric",
+    label: labelFromColumn(column),
+    column,
+    aggregate: inferAggregateForColumn(column),
+    format: column.toLowerCase().includes("risk") ? "percent" : "number",
+  }));
+
+  return {
+    widgets: widgets.length > 0
+      ? widgets
+      : [{
+          kind: "metric",
+          label: "Rows",
+          column: input.columns[0] ?? "",
+          aggregate: "count",
+          format: "number",
+        }],
+  };
+}
+
+function parseSchemaWidget(value: unknown, index: number): DashboardSchemaWidget {
+  if (!isRecord(value)) {
+    throw new Error(`Dashboard schema widget ${index + 1} must be an object.`);
+  }
+  if (typeof value.label !== "string" || !value.label.trim()) {
+    throw new Error(`Dashboard schema widget ${index + 1} must include a label.`);
+  }
+  if (typeof value.column !== "string" || !value.column.trim()) {
+    throw new Error(`Dashboard schema widget ${index + 1} must include a column.`);
+  }
+  if (!isAggregate(value.aggregate)) {
+    throw new Error(`Dashboard schema widget ${index + 1} has an unsupported aggregate.`);
+  }
+  if (value.kind !== undefined && !isWidgetKind(value.kind)) {
+    throw new Error(`Dashboard schema widget ${index + 1} has an unsupported kind.`);
+  }
+  if (value.format !== undefined && !isWidgetFormat(value.format)) {
+    throw new Error(`Dashboard schema widget ${index + 1} has an unsupported format.`);
+  }
+  return {
+    label: value.label.trim(),
+    column: value.column.trim(),
+    aggregate: value.aggregate,
+    ...(value.kind ? { kind: value.kind } : {}),
+    ...(value.format ? { format: value.format } : {}),
+  };
+}
+
+function createDashboardSummary(
+  title: string,
+  rows: number,
+  widgets: readonly DashboardWidget[],
+): string {
+  const widgetSummary = widgets.slice(0, 2).map((widget) => `${widget.label}: ${widget.value}`).join(", ");
+  return widgetSummary ? `${title}: ${rows} rows, ${widgetSummary}.` : `${title}: ${rows} rows.`;
+}
+
 function numberFrom(value: string | undefined): number {
   const parsed = Number(String(value ?? "").replaceAll(/[$,%\s]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function isNumericCell(value: string | undefined): boolean {
+  if (String(value ?? "").trim().length === 0) return false;
+  const parsed = Number(String(value ?? "").replaceAll(/[$,%\s]/g, ""));
+  return Number.isFinite(parsed);
+}
+
+function inferAggregateForColumn(column: string): DashboardSchemaWidget["aggregate"] {
+  const normalized = column.toLowerCase();
+  if (normalized.includes("risk") || normalized.includes("rate") || normalized.includes("ratio")) return "average";
+  if (normalized.includes("active") || normalized.includes("current") || normalized.includes("customer")) return "last";
+  return "sum";
+}
+
 function titleFromTask(task: string): string {
   const cleaned = task.trim().replace(/[.?!]+$/, "");
-  return cleaned.length > 0 ? cleaned[0]!.toUpperCase() + cleaned.slice(1) : "Acme dashboard";
+  return cleaned.length > 0 ? cleaned[0]!.toUpperCase() + cleaned.slice(1) : "Dashboard";
 }
 
 function formatCurrency(value: number): string {
   return `$${Math.round(value).toLocaleString("en-US")}`;
+}
+
+function labelFromColumn(column: string): string {
+  return column
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part[0]!.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAggregate(value: unknown): value is DashboardSchemaWidget["aggregate"] {
+  return value === "sum" || value === "average" || value === "last" || value === "count";
+}
+
+function isWidgetKind(value: unknown): value is DashboardWidget["kind"] {
+  return value === "metric" || value === "risk" || value === "trend";
+}
+
+function isWidgetFormat(value: unknown): value is NonNullable<DashboardSchemaWidget["format"]> {
+  return value === "currency" || value === "number" || value === "percent";
 }
