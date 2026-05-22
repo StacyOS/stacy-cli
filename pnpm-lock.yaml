@@ -73,6 +73,9 @@ importers:
       '@arpanstacy/stacy-db':
         specifier: workspace:*
         version: link:../packages/db
+      '@arpanstacy/stacy-federation':
+        specifier: workspace:*
+        version: link:../packages/federation
       '@arpanstacy/stacy-server':
         specifier: workspace:*
         version: link:../server
@@ -259,6 +262,28 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.12.0)(jiti@2.6.1)(jsdom@28.1.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(tsx@4.21.0)
+
+  packages/federation:
+    dependencies:
+      '@arpanstacy/stacy-db':
+        specifier: workspace:*
+        version: link:../db
+      '@arpanstacy/stacy-shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.3.15)(kysely@0.28.16)(pg@8.18.0)(postgres@3.4.8)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.6.0
+        version: 24.12.0
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -523,6 +548,9 @@ importers:
       '@arpanstacy/stacy-db':
         specifier: workspace:*
         version: link:../packages/db
+      '@arpanstacy/stacy-federation':
+        specifier: workspace:*
+        version: link:../packages/federation
       '@arpanstacy/stacy-plugin-sdk':
         specifier: workspace:*
         version: link:../packages/plugins/sdk

@@ -47,6 +47,7 @@
     "@arpanstacy/stacy-adapter-openclaw-gateway": "workspace:*",
     "@arpanstacy/stacy-adapter-utils": "workspace:*",
     "@arpanstacy/stacy-db": "workspace:*",
+    "@arpanstacy/stacy-federation": "workspace:*",
     "@arpanstacy/stacy-server": "workspace:*",
     "@arpanstacy/stacy-shared": "workspace:*",
     "drizzle-orm": "0.45.2",

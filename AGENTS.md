@@ -84,6 +84,19 @@ Prefer additive updates. Keep `doc/SPEC.md` and `doc/SPEC-implementation.md` ali
 5. Keep repo plan docs dated and centralized.
 When you are creating a plan file in the repository itself, new plan documents belong in `doc/plans/` and should use `YYYY-MM-DD-slug.md` filenames. This does not replace Stacy issue planning: if a Stacy issue asks for a plan, update the issue `plan` document per the `stacy` skill instead of creating a repo markdown file.
 
+## 5A. StacyOS Federation Demo Rules
+
+Federation demo work lives behind a sealed boundary:
+
+- Read `packages/federation/SPEC.md` before changing federation behavior. It is the security model.
+- Keep new federation code inside `packages/federation/`.
+- Cross-package edits are limited to package/workspace wiring, CLI verb registration, the server `/api/federation` route mount, and repo guidance docs unless the task explicitly declares a broader scope.
+- Self-police the diff before handoff: list changed files and flag anything outside the declared federation scope.
+- Run the federation acceptance harness before claiming federation work is done. If it cannot run, report exactly why.
+- Do not modify `stacyvm` for the federation demo. Consume it only as an optional published SDK dependency.
+- Do not add new crypto-path dependencies without explicit justification and review.
+- Consent and revocation must be enforced at read time on the consumer. Do not replace this with producer push semantics.
+
 ## 6. Database Change Workflow
 
 When changing data model:

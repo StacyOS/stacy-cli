@@ -27,6 +27,7 @@ import { registerPluginCommands } from "./commands/client/plugin.js";
 import { registerClientAuthCommands } from "./commands/client/auth.js";
 import { cliVersion } from "./version.js";
 import { applyStacyEnvAliases } from "./config/env-aliases.js";
+import { registerFederationCommands } from "@arpanstacy/stacy-federation/verbs";
 
 const program = new Command();
 applyStacyEnvAliases();
@@ -180,6 +181,7 @@ registerFeedbackCommands(program);
 registerWorktreeCommands(program);
 registerEnvLabCommands(program);
 registerPluginCommands(program);
+registerFederationCommands(program);
 
 const auth = program.command("auth").description("Authentication and bootstrap utilities");
 

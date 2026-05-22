@@ -53,6 +53,7 @@
     "@arpanstacy/stacy-adapter-pi-local": "workspace:*",
     "@arpanstacy/stacy-adapter-utils": "workspace:*",
     "@arpanstacy/stacy-db": "workspace:*",
+    "@arpanstacy/stacy-federation": "workspace:*",
     "@arpanstacy/stacy-plugin-sdk": "workspace:*",
     "@arpanstacy/stacy-shared": "workspace:*",
     "ajv": "^8.18.0",

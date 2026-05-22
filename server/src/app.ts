@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Db } from "@arpanstacy/stacy-db";
+import { lookupRevocationHttp, receiveFederationHttpMessage } from "@arpanstacy/stacy-federation";
 import type { DeploymentExposure, DeploymentMode } from "@arpanstacy/stacy-shared";
 import type { StorageService } from "./storage/types.js";
 import { httpLogger, errorHandler } from "./middleware/index.js";
@@ -211,6 +212,26 @@ export async function createApp(
   api.use(sidebarPreferenceRoutes(db));
   api.use(inboxDismissalRoutes(db));
   api.use(instanceSettingsRoutes(db));
+  api.get("/federation/revocations", async (req, res, next) => {
+    try {
+      const koId = typeof req.query.koId === "string" ? req.query.koId : "";
+      if (!koId) {
+        res.status(400).json({ error: "Missing koId" });
+        return;
+      }
+      const grantId = typeof req.query.grantId === "string" ? req.query.grantId : undefined;
+      res.status(200).json(await lookupRevocationHttp({ db, koId, grantId }));
+    } catch (err) {
+      next(err);
+    }
+  });
+  api.post("/federation", async (req, res, next) => {
+    try {
+      res.status(201).json(await receiveFederationHttpMessage({ db, body: req.body }));
+    } catch (err) {
+      next(err);
+    }
+  });
   if (opts.databaseBackupService) {
     api.use(instanceDatabaseBackupRoutes(opts.databaseBackupService));
   }

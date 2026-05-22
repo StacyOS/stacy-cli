@@ -1,0 +1,34 @@
+{
+  "name": "@arpanstacy/stacy-federation",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./verbs": "./verbs/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "preflight": "node scripts/phase5-preflight.mjs",
+    "demo:check": "pnpm run preflight && pnpm run typecheck && pnpm run test:acceptance && pnpm run smoke:db && pnpm run smoke:server",
+    "demo:repeat": "node scripts/phase5-repeat-demo.mjs",
+    "smoke:db": "STACY_FEDERATION_REAL_DB_SMOKE=1 vitest run src/brain/local-brain.integration.test.ts",
+    "smoke:server": "STACY_FEDERATION_REAL_SERVER_SMOKE=1 vitest run test/harness/real-two-install-smoke.test.ts",
+    "test:acceptance": "vitest run test/acceptance/federation-demo.acceptance.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arpanstacy/stacy-db": "workspace:*",
+    "@arpanstacy/stacy-shared": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
