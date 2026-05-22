@@ -21,8 +21,10 @@ pnpm --filter @arpanstacy/stacy-federation demo:public
   `meera`.
 - `stacy share <ko> --with-contact meera` resolves B's install ID and
   federation endpoint from the verified contact book.
-- A-to-B federation messages carry a signed nonce and signed timestamp; B rejects
-  stale or replayed messages before storage.
+- Federation delivery and revocation lookup URLs require `https://` outside the
+  local loopback demo; public-demo loopback HTTP remains allowed.
+- A-to-B federation messages carry a signed nonce and signed timestamp; B
+  persists accepted nonces and rejects stale or replayed messages before storage.
 - B reads before revoke with provenance and verification.
 - A revokes access.
 - B's next read is denied through read-time revocation enforcement.
@@ -53,7 +55,7 @@ Receipt chain A: valid
 Receipt chain B: valid
 Receipts A: create, sign, share, revoke
 Receipts B: store, receive, read, deny
-Total runtime: 20.31s
+Total runtime: 22.15s
 ```
 
 Latest adapter-smoke result:
@@ -64,7 +66,7 @@ B read before revoke: allowed
 B read after revoke: denied
 Receipt chain A: valid
 Receipt chain B: valid
-Total runtime: 20.34s
+Total runtime: 21.60s
 ```
 
 ## Repeat Gate

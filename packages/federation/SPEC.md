@@ -54,14 +54,21 @@ URL embedded in a revocable share.
 
 ## Federation Transport Hardening
 
+Federation endpoint URLs must use HTTPS outside the local demo loopback path.
+`http://` is accepted only for loopback hostnames such as `127.0.0.1`,
+`127.x.x.x`, `localhost`, and `::1`. The same policy applies to A-to-B
+federation delivery URLs and producer revocation lookup URLs.
+
 Every A-to-B federation KO message includes a signed nonce and signed
 `createdAt` timestamp. Consumers reject messages that are outside the demo replay
-window or reuse a nonce already accepted in the current receiver process.
+window or reuse a nonce already accepted by the receiver install.
 
 For the public N=2 demo:
 
+- loopback HTTP is allowed so the local harness remains copy-pasteable
 - the replay window is 60 seconds
 - the nonce is part of the signed federation message payload
+- accepted nonces are persisted in `federation_received_nonces` with expiry
 - replay checks happen after signature verification and before storage
 - freshness failure must not store the KO, grant, revocation source, or receipts
 

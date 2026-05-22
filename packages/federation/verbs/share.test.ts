@@ -177,6 +177,125 @@ describe("shareCommand", () => {
     });
   });
 
+  it("rejects non-loopback http federation endpoints before delivery", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-share-insecure-"));
+    tempRoots.push(root);
+    const instanceRoot = join(root, "instances", "demo");
+    const configPath = join(instanceRoot, "config.json");
+    const producer = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Insecure delivery" },
+      identity: producer,
+      idGenerator: () => "ko_share_insecure_delivery",
+    });
+    await mkdir(join(instanceRoot, "secrets"), { recursive: true });
+    await writeFile(resolveFederationIdentityPath(instanceRoot), JSON.stringify(producer.record), {
+      mode: 0o600,
+    });
+    await writeFile(configPath, JSON.stringify(testConfig(root)), { mode: 0o600 });
+    let fetchCalled = false;
+
+    await expect(
+      shareCommand(
+        ko.id,
+        {
+          config: configPath,
+          dbUrl: "postgres://example",
+          with: consumer.record.installId,
+          to: "http://stacy.example/api/federation",
+          expires: "30d",
+          revocable: true,
+          json: true,
+        },
+        {
+          createDb: () => dbForRows([
+            [
+              {
+                id: ko.id,
+                signed_payload_json: ko.signedPayload,
+                signer_json: ko.signer,
+                signature: ko.signature,
+                provenance_json: {
+                  source: "local",
+                  creatorInstallId: producer.record.installId,
+                  storedAt: "2026-05-22T00:00:00.000Z",
+                },
+              },
+            ],
+            [],
+            [],
+          ]),
+          fetch: async () => {
+            fetchCalled = true;
+            throw new Error("fetch should not be called");
+          },
+          stdout: { log: () => undefined },
+          now: () => new Date("2026-05-22T00:00:00.000Z"),
+        },
+      ),
+    ).rejects.toThrow("must use https://");
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("rejects non-loopback http revocation lookup URLs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-share-insecure-revocation-"));
+    tempRoots.push(root);
+    const instanceRoot = join(root, "instances", "demo");
+    const configPath = join(instanceRoot, "config.json");
+    const producer = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Insecure revocation" },
+      identity: producer,
+      idGenerator: () => "ko_share_insecure_revocation",
+    });
+    await mkdir(join(instanceRoot, "secrets"), { recursive: true });
+    await writeFile(resolveFederationIdentityPath(instanceRoot), JSON.stringify(producer.record), {
+      mode: 0o600,
+    });
+    await writeFile(configPath, JSON.stringify(testConfig(root)), { mode: 0o600 });
+
+    await expect(
+      shareCommand(
+        ko.id,
+        {
+          config: configPath,
+          dbUrl: "postgres://example",
+          with: consumer.record.installId,
+          to: "https://stacy.example/api/federation",
+          revocationUrl: "http://stacy.example/api/federation/revocations",
+          expires: "30d",
+          revocable: true,
+          json: true,
+        },
+        {
+          createDb: () => dbForRows([
+            [
+              {
+                id: ko.id,
+                signed_payload_json: ko.signedPayload,
+                signer_json: ko.signer,
+                signature: ko.signature,
+                provenance_json: {
+                  source: "local",
+                  creatorInstallId: producer.record.installId,
+                  storedAt: "2026-05-22T00:00:00.000Z",
+                },
+              },
+            ],
+          ]),
+          stdout: { log: () => undefined },
+          now: () => new Date("2026-05-22T00:00:00.000Z"),
+        },
+      ),
+    ).rejects.toThrow("must use https://");
+  });
+
   it("resolves consumer install and endpoints from --with-contact", async () => {
     const root = await mkdtemp(join(tmpdir(), "stacy-federation-share-contact-"));
     tempRoots.push(root);

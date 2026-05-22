@@ -2,6 +2,7 @@ import type { BrainDb } from "../brain/brain-store.js";
 import { readRevocationTombstone, storeRevocationTombstone } from "../consent/revocation-store.js";
 import type { SignedRevocationTombstone } from "../consent/revocation.js";
 import { readRevocationSource } from "./revocation-source-store.js";
+import { assertFederationTransportUrl } from "./transport-policy.js";
 
 type FetchLike = (url: string, init?: { readonly method?: "GET" }) => Promise<{
   readonly ok: boolean;
@@ -48,6 +49,7 @@ export async function syncRevocationFromProducer(
 ): Promise<SignedRevocationTombstone | null> {
   const source = await readRevocationSource({ db: options.db, koId: options.koId });
   if (!source) return null;
+  assertFederationTransportUrl(source.lookupUrl, "revocation lookup");
 
   const url = new URL(source.lookupUrl);
   url.searchParams.set("koId", options.koId);

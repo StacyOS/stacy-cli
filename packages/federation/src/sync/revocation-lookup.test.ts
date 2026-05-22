@@ -79,6 +79,32 @@ describe("revocation lookup", () => {
 
     expect(requestedUrls[0]).toBe("http://127.0.0.1:3100/api/federation/revocations?koId=ko_1");
   });
+
+  it("rejects non-loopback http revocation sources before fetch", async () => {
+    let fetchCalled = false;
+    const db = dbForRows([
+      [],
+      [
+        {
+          ko_id: "ko_1",
+          producer_install_id: "install_producer",
+          lookup_url: "http://stacy.example/api/federation/revocations",
+        },
+      ],
+    ]);
+
+    await expect(
+      syncRevocationFromProducer({
+        db,
+        koId: "ko_1",
+        fetch: async () => {
+          fetchCalled = true;
+          throw new Error("fetch should not be called");
+        },
+      }),
+    ).rejects.toThrow("must use https://");
+    expect(fetchCalled).toBe(false);
+  });
 });
 
 function dbForRows(rows: readonly unknown[]): BrainDb {

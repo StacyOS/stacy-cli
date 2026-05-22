@@ -46,7 +46,7 @@ describe("receiveFederationHttpMessage", () => {
 
     await expect(
       receiveFederationHttpMessage({
-        db: dbForRows([[], [], [], [], [], []]),
+        db: dbForRows([[], [], [], [{ nonce: message.nonce }], [], [], [], [], [], []]),
         body: { message },
         receivedAt: new Date("2026-05-22T00:00:00.000Z"),
       }),

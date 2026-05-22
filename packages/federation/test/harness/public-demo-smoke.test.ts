@@ -95,6 +95,7 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
           ? [
               "--adapter-command",
               publicDemoAdapterCommand,
+              "--ack-egress",
               ...publicDemoAdapterArgs.flatMap((arg) => ["--adapter-arg", arg]),
             ]
           : []),

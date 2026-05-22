@@ -139,14 +139,22 @@ export {
 } from "./brain/read-with-consent.js";
 export {
   FEDERATION_MESSAGE_SCHEMA_VERSION,
+  FEDERATION_MESSAGE_REPLAY_WINDOW_MS,
+  createMemoryFederationReplayGuard,
   createFederationMessage,
   receiveFederationMessage,
   verifyFederationMessageSignature,
   type CreateFederationMessageOptions,
+  type FederationReplayGuard,
   type FederationKnowledgeObjectMessage,
   type FederationKnowledgeObjectMessageSignedPayload,
   type ReceiveFederationMessageOptions,
 } from "./sync/federation-message.js";
+export {
+  claimReceivedNonce,
+  ensureReceivedNonceTables,
+  type ClaimReceivedNonceOptions,
+} from "./sync/received-nonce-store.js";
 export {
   lookupRevocationHttp,
   syncRevocationFromProducer,
@@ -154,6 +162,11 @@ export {
   type LookupRevocationHttpResult,
   type SyncRevocationFromProducerOptions,
 } from "./sync/revocation-lookup.js";
+export {
+  assertFederationTransportUrl,
+  isLoopbackHostname,
+  type FederationTransportPurpose,
+} from "./sync/transport-policy.js";
 export {
   ensureRevocationSourceTables,
   readRevocationSource,

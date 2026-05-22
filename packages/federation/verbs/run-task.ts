@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { basename } from "node:path";
 import { createDb } from "@arpanstacy/stacy-db";
 
 import type { BrainDb } from "../src/brain/brain-store.js";
@@ -15,11 +16,15 @@ import {
   type LocalRuntimeOptions,
 } from "./local-runtime.js";
 
+export const DEFAULT_ADAPTER_TIMEOUT_MS = 60_000;
+
 export interface RunTaskOptions extends LocalRuntimeOptions {
   readonly input?: string;
   readonly schema?: string;
   readonly adapterCommand?: string;
   readonly adapterArg?: string[];
+  readonly adapterTimeoutMs?: string | number;
+  readonly ackEgress?: boolean;
   readonly koId?: string;
   readonly json?: boolean;
 }
@@ -36,6 +41,7 @@ export async function runTaskCommand(
   dependencies: RunTaskDependencies = {},
 ): Promise<void> {
   const stdout = dependencies.stdout ?? console;
+  const env = dependencies.env ?? process.env;
   const runtime = resolveLocalRuntime(options, dependencies);
   const inputPath = options.input?.trim();
   if (!inputPath) {
@@ -47,11 +53,17 @@ export async function runTaskCommand(
   const dashboardSchema = options.schema?.trim()
     ? parseDashboardSchema(await readFile(options.schema.trim(), "utf8"))
     : undefined;
-  const adapterOutput = options.adapterCommand?.trim()
+  const adapterCommand = options.adapterCommand?.trim();
+  if (adapterCommand && !options.ackEgress) {
+    throw new Error("Adapter execution may send input records outside this install. Re-run with --ack-egress to confirm.");
+  }
+  const adapterOutput = adapterCommand
     ? await runAdapterCommand({
-        command: options.adapterCommand.trim(),
+        command: adapterCommand,
         args: options.adapterArg ?? [],
         stdin: JSON.stringify({ task, input: dashboardInput }, null, 2),
+        timeoutMs: parseAdapterTimeoutMs(options.adapterTimeoutMs),
+        allowedAdapters: parseAllowedAdapters(env.STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS),
       })
     : undefined;
   const content = createDeterministicDashboardContent({
@@ -96,10 +108,14 @@ async function runAdapterCommand(options: {
   readonly command: string;
   readonly args: readonly string[];
   readonly stdin: string;
+  readonly timeoutMs: number;
+  readonly allowedAdapters: ReadonlySet<string> | null;
 }): Promise<string> {
+  assertAdapterAllowed(options.command, options.allowedAdapters);
   const child = spawn(options.command, [...options.args], { stdio: ["pipe", "pipe", "pipe"] });
   let stdout = "";
   let stderr = "";
+  let timedOut = false;
   child.stdout?.setEncoding("utf8");
   child.stderr?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
@@ -111,13 +127,50 @@ async function runAdapterCommand(options: {
   child.stdin?.end(options.stdin);
 
   const exitCode = await new Promise<number | null>((resolveExit, reject) => {
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, options.timeoutMs);
     child.on("error", reject);
-    child.on("close", resolveExit);
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      resolveExit(code);
+    });
   });
+  if (timedOut) {
+    throw new Error(`Adapter command timed out after ${options.timeoutMs}ms`);
+  }
   if (exitCode !== 0) {
     throw new Error(`Adapter command failed with exit code ${exitCode ?? "unknown"}: ${stderr.trim()}`);
   }
   return stdout.trim();
+}
+
+function parseAdapterTimeoutMs(value: string | number | undefined): number {
+  if (value === undefined || value === "") return DEFAULT_ADAPTER_TIMEOUT_MS;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error("--adapter-timeout-ms must be a positive integer.");
+  }
+  return parsed;
+}
+
+function parseAllowedAdapters(raw: string | undefined): ReadonlySet<string> | null {
+  const entries = raw
+    ?.split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return entries?.length ? new Set(entries) : null;
+}
+
+function assertAdapterAllowed(command: string, allowedAdapters: ReadonlySet<string> | null): void {
+  if (!allowedAdapters) return;
+  const binaryName = basename(command);
+  if (!allowedAdapters.has(binaryName)) {
+    throw new Error(
+      `Adapter command "${binaryName}" is not allowed. Set STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS to permit it.`,
+    );
+  }
 }
 
 function formatRunTaskText(output: {

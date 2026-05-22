@@ -7,6 +7,7 @@ import { canonicalBytes } from "../crypto/canonical.js";
 import type { InstallIdentity } from "../identity/install-identity.js";
 import type { SignedKnowledgeObject } from "../ko/knowledge-object.js";
 import { appendReceipt } from "../receipts/receipt-store.js";
+import { claimReceivedNonce } from "./received-nonce-store.js";
 import { storeRevocationSource } from "./revocation-source-store.js";
 
 export const FEDERATION_MESSAGE_SCHEMA_VERSION = 1;
@@ -54,7 +55,7 @@ export interface ReceiveFederationMessageOptions {
 }
 
 export interface FederationReplayGuard {
-  claim(key: string, expiresAt: Date, now: Date): boolean;
+  claim(key: string, expiresAt: Date, now: Date): boolean | Promise<boolean>;
 }
 
 export async function createFederationMessage(
@@ -145,11 +146,12 @@ export async function receiveFederationMessage(
     throw new Error("Federation message signature verification failed");
   }
 
-  validateFederationMessageFreshness({
+  await validateFederationMessageFreshness({
+    db: options.db,
     message: options.message,
     receivedAt,
     replayWindowMs: options.replayWindowMs ?? FEDERATION_MESSAGE_REPLAY_WINDOW_MS,
-    replayGuard: options.replayGuard ?? defaultFederationReplayGuard,
+    replayGuard: options.replayGuard,
   });
 
   if (options.message.tenant !== options.message.ko.signedPayload.tenant) {
@@ -261,12 +263,13 @@ export function createMemoryFederationReplayGuard(): FederationReplayGuard {
   };
 }
 
-function validateFederationMessageFreshness(options: {
+async function validateFederationMessageFreshness(options: {
+  readonly db: BrainDb;
   readonly message: FederationKnowledgeObjectMessage;
   readonly receivedAt: Date;
   readonly replayWindowMs: number;
-  readonly replayGuard: FederationReplayGuard;
-}): void {
+  readonly replayGuard?: FederationReplayGuard;
+}): Promise<void> {
   if (typeof options.message.nonce !== "string" || !options.message.nonce.trim()) {
     throw new Error("Federation message nonce is required");
   }
@@ -283,12 +286,19 @@ function validateFederationMessageFreshness(options: {
 
   const replayKey = `${options.message.producerInstallId}:${options.message.nonce}`;
   const expiresAt = new Date(options.receivedAt.getTime() + options.replayWindowMs);
-  if (!options.replayGuard.claim(replayKey, expiresAt, options.receivedAt)) {
+  const claimed = options.replayGuard
+    ? await options.replayGuard.claim(replayKey, expiresAt, options.receivedAt)
+    : await claimReceivedNonce({
+        db: options.db,
+        producerInstallId: options.message.producerInstallId,
+        nonce: options.message.nonce,
+        receivedAt: options.receivedAt,
+        expiresAt,
+      });
+  if (!claimed) {
     throw new Error("Federation message replay detected");
   }
 }
-
-const defaultFederationReplayGuard = createMemoryFederationReplayGuard();
 
 function signedPayloadForMessage(
   message: FederationKnowledgeObjectMessage,

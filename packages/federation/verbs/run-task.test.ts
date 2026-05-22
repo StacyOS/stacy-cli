@@ -59,6 +59,7 @@ describe("runTaskCommand", () => {
         input: csvPath,
         adapterCommand: process.execPath,
         adapterArg: ["-e", "process.stdin.pipe(process.stdout)"],
+        ackEgress: true,
         koId: "ko_adapter_task",
         json: true,
       },
@@ -79,6 +80,158 @@ describe("runTaskCommand", () => {
       },
       contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
     });
+  });
+
+  it("allows adapter commands listed in STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+
+    await runTaskCommand(
+      "summarize this CSV",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", "console.log('allowed adapter')"],
+        ackEgress: true,
+        koId: "ko_allowed_adapter_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        env: { STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS: "node" },
+        createDb: () => ({ execute: async () => [] }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_allowed_adapter_task",
+      generator: "adapter_command",
+    });
+  });
+
+  it("rejects adapter commands outside STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "console.log('should not run')"],
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          env: { STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS: "claude,codex" },
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow('Adapter command "node" is not allowed.');
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("requires explicit egress acknowledgement before sending input to an adapter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "console.log('should not run')"],
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("Adapter execution may send input records outside this install. Re-run with --ack-egress to confirm.");
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("times out a slow adapter before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize slowly",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "setTimeout(() => console.log('too late'), 5000)"],
+          adapterTimeoutMs: 25,
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("Adapter command timed out after 25ms");
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("rejects invalid adapter timeout values before spawning the adapter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "process.exit(0)"],
+          adapterTimeoutMs: "0",
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: () => ({ execute: async () => [] }),
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("--adapter-timeout-ms must be a positive integer.");
   });
 
   it("accepts a dashboard schema for non-Acme CSV columns", async () => {

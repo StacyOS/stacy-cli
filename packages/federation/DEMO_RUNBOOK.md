@@ -111,10 +111,15 @@ pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-smoke
 ```
 
 To use a real adapter command, set `STACY_PUBLIC_DEMO_ADAPTER` and optionally
-`STACY_PUBLIC_DEMO_ADAPTER_ARGS` as a JSON array of strings:
+`STACY_PUBLIC_DEMO_ADAPTER_ARGS` as a JSON array of strings. Adapter execution
+is bounded by `--adapter-timeout-ms`, which defaults to 60000ms and kills the
+adapter process on timeout. For safer demos, set
+`STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS` to a comma-separated list of permitted
+adapter binary names. Because adapter execution can send parsed input records
+outside this install, adapter-backed `stacy run` requires `--ack-egress`:
 
 ```bash
-STACY_PUBLIC_DEMO_ADAPTER=claude pnpm --filter @arpanstacy/stacy-federation demo:public
+STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS=claude STACY_PUBLIC_DEMO_ADAPTER=claude pnpm --filter @arpanstacy/stacy-federation demo:public
 STACY_PUBLIC_DEMO_ADAPTER=node STACY_PUBLIC_DEMO_ADAPTER_ARGS='["packages/federation/scripts/public-demo-fake-adapter.mjs"]' pnpm --filter @arpanstacy/stacy-federation demo:public
 ```
 
@@ -132,7 +137,14 @@ Receipts B includes: receive, store, read, deny
 ```
 
 The federation transport message also carries a signed nonce and timestamp. B
-rejects stale or replayed messages before storing the KO or grant.
+rejects stale or replayed messages before storing the KO or grant. Accepted
+nonces are persisted on B until their replay window expires, so a B-side restart
+does not reopen the same signed message inside the window.
+
+Federation delivery and revocation lookup URLs must use `https://` outside the
+local loopback demo. The runbook commands use `http://127.0.0.1:<port>` because
+both installs run on the same machine; non-loopback `http://` endpoints are
+rejected before delivery or revocation fetch.
 
 Before a public presentation, run:
 
@@ -159,6 +171,8 @@ commands it exercises are:
 stacy run "build a quarterly revenue dashboard from this CSV" \
   --input packages/federation/demo/acme-q2-revenue.csv \
   --schema packages/federation/demo/acme-dashboard.schema.json \
+  --ack-egress \
+  --adapter-timeout-ms 60000 \
   --ko-id ko_public_revenue_dashboard \
   --json
 

@@ -112,6 +112,7 @@ describe("federation KO messages", () => {
         db: consumerDb,
         message,
         receivedAt: new Date("2026-05-22T00:00:00.000Z"),
+        replayGuard: createMemoryFederationReplayGuard(),
       }),
     ).resolves.toMatchObject({
       koId: ko.id,
@@ -268,6 +269,7 @@ describe("federation KO messages", () => {
           ...message,
           consumerInstallId: wrongConsumer.record.installId,
         },
+        replayGuard: createMemoryFederationReplayGuard(),
       }),
     ).rejects.toThrow("signature verification failed");
   });

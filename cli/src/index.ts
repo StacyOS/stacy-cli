@@ -149,6 +149,8 @@ program
   .option("--schema <path>", "Dashboard schema JSON for mapping CSV columns to widgets")
   .option("--adapter-command <command>", "Optional adapter-like command for task generation")
   .option("--adapter-arg <arg>", "Argument passed to --adapter-command; repeat for multiple args", collectOption, [])
+  .option("--adapter-timeout-ms <ms>", "Maximum adapter runtime before it is killed")
+  .option("--ack-egress", "Acknowledge that adapter execution may send input records outside this install", false)
   .option("--ko-id <id>", "Deterministic Knowledge Object ID for demo runs")
   .option("--db-url <url>", "Database connection string")
   .option("--json", "Print raw JSON output", false)

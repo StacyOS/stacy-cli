@@ -12,6 +12,7 @@ import {
   type LocalRuntimeOptions,
 } from "./local-runtime.js";
 import { readContact, resolveContactsPath } from "../src/contacts/contact-store.js";
+import { assertFederationTransportUrl } from "../src/sync/transport-policy.js";
 
 export interface ShareOptions extends LocalRuntimeOptions {
   readonly with?: string;
@@ -73,6 +74,11 @@ export async function shareCommand(
   try {
     const now = dependencies.now?.() ?? new Date();
     const producerIdentity = await loadInstallIdentity(runtime.identityPath);
+    const revocationLookupUrl = options.revocationUrl ?? contact?.revocationUrl;
+    if (revocationLookupUrl) {
+      assertFederationTransportUrl(revocationLookupUrl, "revocation lookup");
+    }
+
     const message = await createFederationMessage({
       db,
       koId,
@@ -80,7 +86,7 @@ export async function shareCommand(
       consumerInstallId,
       expiresAt: addDuration(now, options.expires ?? "30d"),
       revocable: options.revocable === true,
-      revocationLookupUrl: options.revocationUrl ?? contact?.revocationUrl,
+      revocationLookupUrl,
       createdAt: now,
     });
     const endpointUrl = contact?.federationEndpointUrl ?? options.to;
@@ -116,6 +122,7 @@ async function deliverFederationMessage(options: {
   readonly message: FederationKnowledgeObjectMessage;
   readonly fetch: FetchLike;
 }): Promise<ShareDeliveryResult> {
+  assertFederationTransportUrl(options.endpointUrl, "federation delivery");
   const response = await options.fetch(options.endpointUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
