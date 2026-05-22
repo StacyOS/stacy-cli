@@ -108,15 +108,29 @@ The post-Phase-5 public-demo layer adds:
   - `pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-smoke`
 - Tamper-evident receipt verification:
   - `stacy receipts verify --ko <ko_id>`
+- Cross-KO receipt anchoring:
+  - `stacy receipts verify --global`
 - Transport replay hardening:
   - signed federation message nonce
   - 60-second signed timestamp replay window
   - duplicate nonce rejection before storage
+- Optional HTTPS serving for non-loopback federation demos:
+  - `server.tls.enabled`
+  - `server.tls.certPath`
+  - `server.tls.keyPath`
+  - `STACY_SERVER_TLS_*` environment overrides
 - Public demo script and repeat gate:
   - `pnpm --filter @arpanstacy/stacy-federation demo:public`
   - `STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation demo:public:repeat`
 - Receipt summary command:
   - `stacy receipts list --ko <ko_id>`
+
+Phase P public-readiness polish confirms:
+
+- Existing config files do not need a `server.tls` block.
+- TLS-enabled configs parse cleanly with PEM cert/key paths.
+- Release notes no longer claim server TLS is missing.
+- Public demo docs include both per-KO and global receipt verification.
 
 See `PUBLIC_DEMO_GATE.md` for the public-demo proof and latest timing.
 

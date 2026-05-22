@@ -9,7 +9,10 @@ import {
   createDeterministicDashboardContent,
   parseDashboardSchema,
   parseCsvDashboardInput,
+  redactDashboardInputForAdapter,
+  normalizeRedactedColumns,
 } from "../src/dashboard/dashboard-content.js";
+import { parseAdapterDashboardOutput } from "../src/dashboard/adapter-output.js";
 import {
   resolveLocalRuntime,
   type LocalRuntimeDependencies,
@@ -17,13 +20,16 @@ import {
 } from "./local-runtime.js";
 
 export const DEFAULT_ADAPTER_TIMEOUT_MS = 60_000;
+export type AdapterOutputMode = "text" | "json";
 
 export interface RunTaskOptions extends LocalRuntimeOptions {
   readonly input?: string;
   readonly schema?: string;
   readonly adapterCommand?: string;
   readonly adapterArg?: string[];
+  readonly adapterOutput?: string;
   readonly adapterTimeoutMs?: string | number;
+  readonly redactColumn?: string[];
   readonly ackEgress?: boolean;
   readonly koId?: string;
   readonly json?: boolean;
@@ -50,10 +56,16 @@ export async function runTaskCommand(
 
   const rawInput = await readFile(inputPath, "utf8");
   const dashboardInput = parseCsvDashboardInput(inputPath, rawInput);
+  const redactedColumns = normalizeRedactedColumns(
+    dashboardInput.columns,
+    collectRedactedColumns(options.redactColumn, env.STACY_PUBLIC_DEMO_REDACT_COLUMNS),
+  );
+  const adapterInput = redactDashboardInputForAdapter(dashboardInput, redactedColumns);
   const dashboardSchema = options.schema?.trim()
     ? parseDashboardSchema(await readFile(options.schema.trim(), "utf8"))
     : undefined;
   const adapterCommand = options.adapterCommand?.trim();
+  const adapterOutputMode = parseAdapterOutputMode(options.adapterOutput);
   if (adapterCommand && !options.ackEgress) {
     throw new Error("Adapter execution may send input records outside this install. Re-run with --ack-egress to confirm.");
   }
@@ -61,16 +73,21 @@ export async function runTaskCommand(
     ? await runAdapterCommand({
         command: adapterCommand,
         args: options.adapterArg ?? [],
-        stdin: JSON.stringify({ task, input: dashboardInput }, null, 2),
+        stdin: JSON.stringify({ task, input: adapterInput, redactedColumns }, null, 2),
         timeoutMs: parseAdapterTimeoutMs(options.adapterTimeoutMs),
         allowedAdapters: parseAllowedAdapters(env.STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS),
       })
+    : undefined;
+  const adapterDashboard = adapterOutput && adapterOutputMode === "json"
+    ? parseAdapterDashboardOutput(adapterOutput)
     : undefined;
   const content = createDeterministicDashboardContent({
     task,
     input: dashboardInput,
     schema: dashboardSchema,
-    adapterOutput,
+    adapterOutput: adapterOutputMode === "text" ? adapterOutput : undefined,
+    adapterDashboard,
+    redactedColumns,
   });
   const ownsDb = dependencies.createDb === undefined;
   const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
@@ -92,6 +109,7 @@ export async function runTaskCommand(
       tenant: result.ko.signedPayload.tenant,
       task,
       input: content.input,
+      redactedColumns: content.redactedColumns ?? [],
       generator: content.generator,
       contentHash: result.contentHash,
       creatorInstallId: result.creatorInstallId,
@@ -155,12 +173,29 @@ function parseAdapterTimeoutMs(value: string | number | undefined): number {
   return parsed;
 }
 
+function parseAdapterOutputMode(value: string | undefined): AdapterOutputMode {
+  const normalized = (value ?? "text").trim().toLowerCase();
+  if (normalized === "text" || normalized === "json") return normalized;
+  throw new Error("--adapter-output must be either text or json.");
+}
+
 function parseAllowedAdapters(raw: string | undefined): ReadonlySet<string> | null {
   const entries = raw
     ?.split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
   return entries?.length ? new Set(entries) : null;
+}
+
+function collectRedactedColumns(optionColumns: readonly string[] | undefined, envColumns: string | undefined): readonly string[] {
+  const fromOptions = optionColumns ?? [];
+  const fromEnv = envColumns?.split(",") ?? [];
+  return [...fromOptions, ...fromEnv].flatMap((entry) =>
+    entry
+      .split(",")
+      .map((column) => column.trim())
+      .filter(Boolean),
+  );
 }
 
 function assertAdapterAllowed(command: string, allowedAdapters: ReadonlySet<string> | null): void {

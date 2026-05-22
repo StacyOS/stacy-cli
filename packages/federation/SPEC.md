@@ -59,6 +59,12 @@ Federation endpoint URLs must use HTTPS outside the local demo loopback path.
 `127.x.x.x`, `localhost`, and `::1`. The same policy applies to A-to-B
 federation delivery URLs and producer revocation lookup URLs.
 
+The Stacy server can serve HTTPS directly when `server.tls.enabled` is true and
+`server.tls.certPath` / `server.tls.keyPath` point at PEM files, or through the
+matching `STACY_SERVER_TLS_*` environment variables. When TLS is enabled and no
+explicit public base URL is configured, runtime API discovery advertises
+`https://` origins. The local harness remains HTTP loopback by default.
+
 Every A-to-B federation KO message includes a signed nonce and signed
 `createdAt` timestamp. Consumers reject messages that are outside the demo replay
 window or reuse a nonce already accepted by the receiver install.
@@ -106,6 +112,33 @@ Hashing and signing order:
 
 Verification fails if any signed field, content field, hash, signer, or signature is
 changed.
+
+## Public Task Adapter Output
+
+`stacy run "<task>" --input <file>` is deterministic by default. When an adapter
+is supplied, adapter execution must remain bounded by timeout, optional allowlist,
+and explicit `--ack-egress`.
+
+Adapter stdout has two supported contracts:
+
+- `--adapter-output text`: stdout is stored as narrative `adapterOutput`, while
+  dashboard widgets remain deterministic.
+- `--adapter-output json`: stdout must be valid JSON matching the dashboard
+  adapter contract: optional `title`, optional `summary`, non-empty `widgets[]`
+  with `kind`, `label`, and string/number `value`, plus optional string `notes[]`.
+
+Invalid JSON adapter output must fail before KO creation. Valid JSON adapter
+output may own the dashboard title, summary, and widgets, while the KO still
+records the original input file name, row count, and content hash.
+
+Adapter stdin may redact selected CSV columns through `--redact-column` or
+`STACY_PUBLIC_DEMO_REDACT_COLUMNS`. Redaction applies only to the JSON sent to
+the adapter process. The KO still records the original file hash and row count,
+plus `redactedColumns[]` metadata when redaction was used.
+
+CSV input parsing supports UTF-8 text with optional BOM, CRLF or LF line
+endings, quoted commas, escaped quotes, multiline quoted cells, and blank
+trailing lines. Malformed unclosed quoted fields must fail before KO creation.
 
 ## Consent Grant
 
@@ -165,6 +198,16 @@ Receipts are tamper-evident per Knowledge Object. Every new receipt includes the
 previous receipt hash for the same KO and its own canonical SHA-256 receipt hash.
 Verification fails if a receipt is edited, deleted from the middle of the chain,
 or linked to the wrong predecessor.
+
+Receipts are also anchored in an instance-level global chain. Every appended
+receipt advances `federation_receipt_anchors` with the previous global anchor
+hash, anchored receipt id, anchored receipt hash, and its own canonical SHA-256
+anchor hash. The latest anchor hash is mirrored into
+`federation_receipt_chain_head`. Global verification fails if an anchor is
+edited, forked, unlinked, points to a missing or hash-mismatched receipt, or no
+longer matches the instance head. This does not replace the per-KO chain; it
+prevents deleting one KO's entire receipt history without breaking the
+instance-level anchor trail.
 
 ## Read-Time Enforcement
 

@@ -56,6 +56,10 @@ export {
   type SignedContactCard,
 } from "./contacts/contact-card.js";
 export {
+  parseAdapterDashboardOutput,
+  type AdapterDashboardOutput,
+} from "./dashboard/adapter-output.js";
+export {
   createDeterministicDashboardContent,
   parseDashboardSchema,
   parseCsv,
@@ -184,12 +188,17 @@ export {
   appendReceipt,
   ensureReceiptTables,
   hashReceipt,
+  hashReceiptAnchor,
   listReceipts,
+  verifyGlobalReceiptAnchor,
   verifyReceiptChain,
   type AppendReceiptOptions,
   type FederationReceipt,
+  type FederationReceiptAnchor,
   type FederationReceiptEventType,
   type ListReceiptsOptions,
+  type VerifyGlobalReceiptAnchorOptions,
+  type VerifyGlobalReceiptAnchorResult,
   type VerifyReceiptChainOptions,
   type VerifyReceiptChainResult,
 } from "./receipts/receipt-store.js";

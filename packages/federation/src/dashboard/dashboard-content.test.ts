@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   createDeterministicDashboardContent,
+  normalizeRedactedColumns,
   parseDashboardSchema,
   parseCsvDashboardInput,
+  redactDashboardInputForAdapter,
 } from "./dashboard-content.js";
 
 describe("public demo dashboard content", () => {
@@ -72,5 +74,82 @@ describe("public demo dashboard content", () => {
         widgets: [{ label: "Bad", column: "revenue", aggregate: "median" }],
       })),
     ).toThrow("Dashboard schema widget 1 has an unsupported aggregate.");
+  });
+
+  it("redacts selected columns only from adapter input records", () => {
+    const input = parseCsvDashboardInput("customers.csv", [
+      "customer_email,revenue,notes",
+      "a@example.com,100,keep",
+      "b@example.com,150,also keep",
+    ].join("\n"));
+
+    const redacted = redactDashboardInputForAdapter(input, ["customer_email"]);
+
+    expect(redacted).toMatchObject({
+      fileName: "customers.csv",
+      contentHash: input.contentHash,
+      rows: 2,
+      columns: ["revenue", "notes"],
+      records: [
+        { revenue: "100", notes: "keep" },
+        { revenue: "150", notes: "also keep" },
+      ],
+    });
+    expect(input.records[0]).toHaveProperty("customer_email", "a@example.com");
+  });
+
+  it("normalizes redaction requests against CSV header casing", () => {
+    expect(normalizeRedactedColumns(["Customer Email", "Revenue"], ["customer email", "missing", "REVENUE"])).toEqual([
+      "Customer Email",
+      "Revenue",
+    ]);
+  });
+
+  it("parses BOM-prefixed CSV with CRLF line endings", () => {
+    const input = parseCsvDashboardInput("bom.csv", "\uFEFFmonth,revenue\r\n2026-04,100\r\n2026-05,150\r\n");
+
+    expect(input).toMatchObject({
+      rows: 2,
+      columns: ["month", "revenue"],
+      records: [
+        { month: "2026-04", revenue: "100" },
+        { month: "2026-05", revenue: "150" },
+      ],
+    });
+  });
+
+  it("parses quoted commas and escaped quotes", () => {
+    const input = parseCsvDashboardInput("quoted.csv", [
+      "name,notes,revenue",
+      "\"Acme, Inc.\",\"Said \"\"yes\"\"\",100",
+    ].join("\n"));
+
+    expect(input.records).toEqual([
+      { name: "Acme, Inc.", notes: "Said \"yes\"", revenue: "100" },
+    ]);
+  });
+
+  it("parses multiline quoted cells", () => {
+    const input = parseCsvDashboardInput("multiline.csv", [
+      "name,notes,revenue",
+      "\"Acme\",\"line one",
+      "line two\",100",
+    ].join("\n"));
+
+    expect(input.records).toEqual([
+      { name: "Acme", notes: "line one\nline two", revenue: "100" },
+    ]);
+  });
+
+  it("ignores blank trailing lines", () => {
+    const input = parseCsvDashboardInput("trailing.csv", "month,revenue\n2026-04,100\n\n");
+
+    expect(input.records).toEqual([{ month: "2026-04", revenue: "100" }]);
+  });
+
+  it("rejects unclosed quoted CSV cells", () => {
+    expect(() => parseCsvDashboardInput("bad.csv", "name,notes\nAcme,\"unterminated")).toThrow(
+      "CSV input has an unclosed quoted field.",
+    );
   });
 });

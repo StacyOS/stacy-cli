@@ -74,4 +74,30 @@ describe("runtime API discovery", () => {
       "http://host.docker.internal:3102",
     ]);
   });
+
+  it("uses https candidates when TLS is enabled without an explicit public URL", () => {
+    expect(
+      choosePrimaryRuntimeApiUrl({
+        authPublicBaseUrl: null,
+        allowedHostnames: ["stacy.example.test"],
+        bindHost: "0.0.0.0",
+        port: 3443,
+        protocol: "https:",
+      }),
+    ).toBe("https://stacy.example.test:3443");
+
+    expect(
+      buildRuntimeApiCandidateUrls({
+        authPublicBaseUrl: null,
+        allowedHostnames: ["stacy.example.test"],
+        bindHost: "127.0.0.1",
+        port: 3443,
+        protocol: "https:",
+        networkInterfacesMap: {},
+      }),
+    ).toEqual([
+      "https://stacy.example.test:3443",
+      "https://127.0.0.1:3443",
+    ]);
+  });
 });

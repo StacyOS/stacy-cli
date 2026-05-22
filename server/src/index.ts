@@ -1,6 +1,7 @@
 /// <reference path="./types/express.d.ts" />
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -79,9 +80,20 @@ type EmbeddedPostgresCtor = new (opts: {
   onError?: (message: unknown) => void;
 }) => EmbeddedPostgresInstance;
 
+function loadTlsOptions(config: ReturnType<typeof loadConfig>): { key: Buffer; cert: Buffer } | null {
+  if (!config.tlsEnabled) return null;
+  if (!config.tlsCertPath || !config.tlsKeyPath) {
+    throw new Error("TLS is enabled, but server.tls.certPath and server.tls.keyPath are required.");
+  }
+
+  return {
+    cert: readFileSync(config.tlsCertPath),
+    key: readFileSync(config.tlsKeyPath),
+  };
+}
 
 export interface StartedServer {
-  server: ReturnType<typeof createServer>;
+  server: ReturnType<typeof createHttpServer> | ReturnType<typeof createHttpsServer>;
   host: string;
   listenPort: number;
   apiUrl: string;
@@ -620,7 +632,10 @@ export async function startServer(): Promise<StartedServer> {
     resolveSession,
     pluginWorkerManager,
   });
-  const server = createServer(app as unknown as Parameters<typeof createServer>[0]);
+  const tlsOptions = loadTlsOptions(config);
+  const server = tlsOptions
+    ? createHttpsServer(tlsOptions, app as unknown as Parameters<typeof createHttpsServer>[1])
+    : createHttpServer(app as unknown as Parameters<typeof createHttpServer>[0]);
 
   // Increase keep-alive timeouts to safely outlive default idle timeouts
   // of common reverse proxies and load balancers (like AWS ALB, Nginx, or Traefik).
@@ -633,17 +648,20 @@ export async function startServer(): Promise<StartedServer> {
   }
   
   const runtimeListenHost = config.host;
+  const runtimeProtocol = tlsOptions ? "https:" : "http:";
   const runtimeApiUrl = choosePrimaryRuntimeApiUrl({
     authPublicBaseUrl: config.authPublicBaseUrl ?? null,
     allowedHostnames: config.allowedHostnames,
     bindHost: runtimeListenHost,
     port: listenPort,
+    protocol: runtimeProtocol,
   });
   const runtimeApiCandidates = buildRuntimeApiCandidateUrls({
     authPublicBaseUrl: config.authPublicBaseUrl ?? null,
     allowedHostnames: config.allowedHostnames,
     bindHost: runtimeListenHost,
     port: listenPort,
+    protocol: runtimeProtocol,
   });
   const configuredApiUrl = process.env.STACY_API_URL?.trim() || runtimeApiUrl;
   process.env.STACY_LISTEN_HOST = runtimeListenHost;
@@ -841,7 +859,7 @@ export async function startServer(): Promise<StartedServer> {
       logger.info(`Server listening on ${config.host}:${listenPort}`);
       if (process.env.STACY_OPEN_ON_LISTEN === "true") {
         const openHost = config.host === "0.0.0.0" || config.host === "::" ? "127.0.0.1" : config.host;
-        const url = `http://${openHost}:${listenPort}`;
+        const url = `${runtimeProtocol}//${openHost}:${listenPort}`;
         void import("open")
           .then((mod) => mod.default(url))
           .then(() => {
@@ -859,6 +877,7 @@ export async function startServer(): Promise<StartedServer> {
         authReady,
         requestedPort: requestedListenPort,
         listenPort,
+        protocol: runtimeProtocol,
         uiMode,
         db: startupDbInfo,
         migrationSummary,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hashReceipt } from "../src/receipts/receipt-store.js";
+import { hashReceipt, hashReceiptAnchor } from "../src/receipts/receipt-store.js";
 import { receiptsListCommand, receiptsVerifyCommand } from "./receipts.js";
 
 describe("receiptsListCommand", () => {
@@ -94,6 +94,55 @@ describe("receiptsListCommand", () => {
 
     expect(lines.join("\n")).toContain("Reason: receipt hash mismatch");
   });
+
+  it("prints global receipt-anchor verification status", async () => {
+    const lines: string[] = [];
+    const rows = linkedRows([
+      receiptRow("receipt_create", "create", "install_a"),
+      receiptRow("receipt_read", "read", "install_b", "install_a", "ko_other"),
+    ]);
+    const anchors = linkedAnchorRows(rows);
+
+    await receiptsVerifyCommand(
+      { dbUrl: "postgres://example", global: true },
+      {
+        createDb: () => dbForRows([anchors, rows, receiptChainHeadRow(anchors)]),
+        stdout: { log: (line) => lines.push(line) },
+      },
+    );
+
+    expect(lines.join("\n")).toContain("Global receipt anchor valid. Checked 2 anchor(s).");
+  });
+
+  it("fails when global receipt-anchor verification is invalid", async () => {
+    const lines: string[] = [];
+    const rows = linkedRows([
+      receiptRow("receipt_create", "create", "install_a"),
+      receiptRow("receipt_read", "read", "install_b", "install_a", "ko_other"),
+    ]);
+    const anchors = linkedAnchorRows(rows);
+
+    await expect(
+      receiptsVerifyCommand(
+        { dbUrl: "postgres://example", global: true },
+        {
+          createDb: () => dbForRows([anchors, [rows[0]!], receiptChainHeadRow(anchors)]),
+          stdout: { log: (line) => lines.push(line) },
+        },
+      ),
+    ).rejects.toThrow("Global receipt anchor invalid.");
+
+    expect(lines.join("\n")).toContain("Reason: anchored receipt receipt_read is missing");
+  });
+
+  it("rejects mixing --global and --ko", async () => {
+    await expect(
+      receiptsVerifyCommand(
+        { dbUrl: "postgres://example", ko: "ko_public", global: true },
+        { createDb: () => dbForRows([]) },
+      ),
+    ).rejects.toThrow("Pass either --global or --ko, not both.");
+  });
 });
 
 function receiptRow(
@@ -101,12 +150,13 @@ function receiptRow(
   eventType: "create" | "share" | "revoke" | "read" | "deny",
   actorInstallId: string,
   counterpartyInstallId?: string,
+  koId = "ko_public",
 ) {
   return {
     id,
     event_type: eventType,
     tenant: "stacy/acme",
-    ko_id: "ko_public",
+    ko_id: koId,
     actor_install_id: actorInstallId,
     counterparty_install_id: counterpartyInstallId ?? null,
     payload_json: {},
@@ -122,10 +172,39 @@ function dbForRows(rows: readonly unknown[]) {
   return {
     execute: async () => {
       callCount += 1;
-      if (callCount <= 5) return [];
+      if (callCount <= 10) return [];
       return rows[index++] ?? [];
     },
   };
+}
+
+function receiptChainHeadRow(anchorRows: ReturnType<typeof linkedAnchorRows>) {
+  const tail = anchorRows.at(-1);
+  return tail ? [{ id: "instance", anchor_hash: tail.anchor_hash, updated_at: tail.created_at }] : [];
+}
+
+function linkedAnchorRows(rows: ReturnType<typeof linkedRows>) {
+  let previousAnchorHash: string | undefined;
+  return rows.map((row) => {
+    const id = `anchor_${row.id}`;
+    const anchorHash = hashReceiptAnchor({
+      id,
+      previousAnchorHash,
+      receiptId: row.id,
+      receiptHash: row.receipt_hash,
+      createdAt: row.created_at,
+    });
+    const linked = {
+      id,
+      previous_anchor_hash: previousAnchorHash ?? null,
+      receipt_id: row.id,
+      receipt_hash: row.receipt_hash,
+      anchor_hash: anchorHash,
+      created_at: row.created_at,
+    };
+    previousAnchorHash = anchorHash;
+    return linked;
+  });
 }
 
 function linkedRows(rows: ReturnType<typeof receiptRow>[]) {

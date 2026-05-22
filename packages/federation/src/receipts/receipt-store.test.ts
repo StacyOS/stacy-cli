@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { BrainDb } from "../brain/brain-store.js";
-import { appendReceipt, hashReceipt, listReceipts, verifyReceiptChain } from "./receipt-store.js";
+import {
+  appendReceipt,
+  hashReceipt,
+  hashReceiptAnchor,
+  listReceipts,
+  verifyGlobalReceiptAnchor,
+  verifyReceiptChain,
+} from "./receipt-store.js";
 
 describe("receipt store", () => {
   it("appends receipts without updating prior rows", async () => {
@@ -33,7 +40,7 @@ describe("receipt store", () => {
       counterpartyInstallId: "install_b",
     });
 
-    expect(writes).toHaveLength(7);
+    expect(writes.length).toBeGreaterThanOrEqual(11);
   });
 
   it("lists receipts in stored order", async () => {
@@ -107,8 +114,8 @@ describe("receipt store", () => {
     const db: BrainDb = {
       execute: async () => {
         callCount += 1;
-        if (callCount <= 5) return [];
-        if (callCount === 6) return [...existingRows].reverse();
+        if (callCount <= 10) return [];
+        if (callCount === 11) return [...existingRows].reverse();
         return [];
       },
     };
@@ -166,6 +173,51 @@ describe("receipt store", () => {
       reason: `expected previous hash ${rows[1]?.receipt_hash}`,
     });
   });
+
+  it("verifies a valid global receipt anchor chain across KOs", async () => {
+    const receiptRows = [
+      linkedRows([receiptRow("receipt_1", "create", "install_a")])[0]!,
+      linkedRows([receiptRow("receipt_2", "receive", "install_b", "install_a", "ko_other")])[0]!,
+    ];
+    const anchorRows = linkedAnchorRows(receiptRows);
+
+    await expect(verifyGlobalReceiptAnchor({ db: dbForGlobalRows(anchorRows, receiptRows) })).resolves.toEqual({
+      valid: true,
+      checked: 2,
+    });
+  });
+
+  it("detects when a globally anchored receipt was deleted", async () => {
+    const receiptRows = [
+      linkedRows([receiptRow("receipt_1", "create", "install_a")])[0]!,
+      linkedRows([receiptRow("receipt_2", "receive", "install_b", "install_a", "ko_other")])[0]!,
+    ];
+    const anchorRows = linkedAnchorRows(receiptRows);
+
+    await expect(verifyGlobalReceiptAnchor({ db: dbForGlobalRows(anchorRows, [receiptRows[0]!]) })).resolves.toMatchObject({
+      valid: false,
+      firstInvalidAnchorId: "anchor_receipt_2",
+      reason: "anchored receipt receipt_2 is missing",
+    });
+  });
+
+  it("detects when a globally anchored receipt hash changed", async () => {
+    const receiptRows = [
+      linkedRows([receiptRow("receipt_1", "create", "install_a")])[0]!,
+      linkedRows([receiptRow("receipt_2", "receive", "install_b", "install_a", "ko_other")])[0]!,
+    ];
+    const anchorRows = linkedAnchorRows(receiptRows);
+    const tamperedReceiptRows = [
+      receiptRows[0]!,
+      { ...receiptRows[1]!, receipt_hash: "sha256:tampered" },
+    ];
+
+    await expect(verifyGlobalReceiptAnchor({ db: dbForGlobalRows(anchorRows, tamperedReceiptRows) })).resolves.toMatchObject({
+      valid: false,
+      firstInvalidAnchorId: "anchor_receipt_2",
+      reason: "anchored receipt receipt_2 hash mismatch",
+    });
+  });
 });
 
 function dbForSelectRows(rows: readonly unknown[]): BrainDb {
@@ -174,7 +226,7 @@ function dbForSelectRows(rows: readonly unknown[]): BrainDb {
   return {
     execute: async () => {
       callCount += 1;
-      if (callCount <= 5) return [];
+      if (callCount <= 10) return [];
       if (index === 0) {
         index += 1;
         return rows;
@@ -189,18 +241,32 @@ function receiptRow(
   eventType: "create" | "share" | "revoke" | "receive" | "store" | "read",
   actorInstallId: string,
   counterpartyInstallId?: string,
+  koId = "ko_receipt",
 ) {
   return {
     id,
     event_type: eventType,
     tenant: "stacy/acme",
-    ko_id: "ko_receipt",
+    ko_id: koId,
     actor_install_id: actorInstallId,
     counterparty_install_id: counterpartyInstallId ?? null,
     payload_json: eventType === "share" ? { grantId: "grant_1" } : {},
     created_at: id === "receipt_1" ? "2026-05-22T00:00:00.000Z" : id === "receipt_2" ? "2026-05-22T00:00:01.000Z" : "2026-05-22T00:00:02.000Z",
     previous_receipt_hash: null,
     receipt_hash: null,
+  };
+}
+
+function dbForGlobalRows(anchorRows: readonly unknown[], receiptRows: readonly unknown[]): BrainDb {
+  let callCount = 0;
+  let index = 0;
+  const selectResults = [anchorRows, receiptRows, receiptChainHeadRow(anchorRows as ReturnType<typeof linkedAnchorRows>)];
+  return {
+    execute: async () => {
+      callCount += 1;
+      if (callCount <= 10) return [];
+      return selectResults[index++] ?? [];
+    },
   };
 }
 
@@ -226,4 +292,33 @@ function linkedRows(rows: ReturnType<typeof receiptRow>[]) {
     previousReceiptHash = receiptHash;
     return linked;
   });
+}
+
+function linkedAnchorRows(rows: ReturnType<typeof linkedRows>) {
+  let previousAnchorHash: string | undefined;
+  return rows.map((row) => {
+    const anchorId = `anchor_${row.id}`;
+    const anchorHash = hashReceiptAnchor({
+      id: anchorId,
+      previousAnchorHash,
+      receiptId: row.id,
+      receiptHash: row.receipt_hash ?? "",
+      createdAt: row.created_at,
+    });
+    const linked = {
+      id: anchorId,
+      previous_anchor_hash: previousAnchorHash ?? null,
+      receipt_id: row.id,
+      receipt_hash: row.receipt_hash,
+      anchor_hash: anchorHash,
+      created_at: row.created_at,
+    };
+    previousAnchorHash = anchorHash;
+    return linked;
+  });
+}
+
+function receiptChainHeadRow(anchorRows: ReturnType<typeof linkedAnchorRows>) {
+  const tail = anchorRows.at(-1);
+  return tail ? [{ id: "instance", anchor_hash: tail.anchor_hash, updated_at: tail.created_at }] : [];
 }

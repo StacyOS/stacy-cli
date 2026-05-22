@@ -1,7 +1,7 @@
 import { createDb } from "@arpanstacy/stacy-db";
 
 import type { BrainDb } from "../src/brain/brain-store.js";
-import { listReceipts, verifyReceiptChain } from "../src/receipts/receipt-store.js";
+import { listReceipts, verifyGlobalReceiptAnchor, verifyReceiptChain } from "../src/receipts/receipt-store.js";
 import {
   resolveLocalRuntime,
   type LocalRuntimeDependencies,
@@ -10,6 +10,7 @@ import {
 
 export interface ReceiptsListOptions extends LocalRuntimeOptions {
   readonly ko?: string;
+  readonly global?: boolean;
   readonly json?: boolean;
 }
 
@@ -47,21 +48,36 @@ export async function receiptsVerifyCommand(
   const ownsDb = dependencies.createDb === undefined;
   const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
   try {
-    const verification = await verifyReceiptChain({ db, koId: options.ko });
+    if (options.global && options.ko) {
+      throw new Error("Pass either --global or --ko, not both.");
+    }
+
+    const verification = options.global
+      ? await verifyGlobalReceiptAnchor({ db })
+      : await verifyReceiptChain({ db, koId: options.ko });
     if (options.json) {
       stdout.log(JSON.stringify({ verification }, null, 2));
       return;
     }
 
     if (verification.valid) {
-      stdout.log(`Receipt chain valid. Checked ${verification.checked} receipt(s).`);
+      stdout.log(
+        options.global
+          ? `Global receipt anchor valid. Checked ${verification.checked} anchor(s).`
+          : `Receipt chain valid. Checked ${verification.checked} receipt(s).`,
+      );
       return;
     }
 
     const message = [
-      "Receipt chain invalid.",
+      options.global ? "Global receipt anchor invalid." : "Receipt chain invalid.",
       `Checked before failure: ${verification.checked}`,
-      verification.firstInvalidReceiptId ? `First invalid receipt: ${verification.firstInvalidReceiptId}` : undefined,
+      "firstInvalidAnchorId" in verification && verification.firstInvalidAnchorId
+        ? `First invalid anchor: ${verification.firstInvalidAnchorId}`
+        : undefined,
+      "firstInvalidReceiptId" in verification && verification.firstInvalidReceiptId
+        ? `First invalid receipt: ${verification.firstInvalidReceiptId}`
+        : undefined,
       verification.reason ? `Reason: ${verification.reason}` : undefined,
     ].filter(Boolean).join("\n");
     stdout.log(message);

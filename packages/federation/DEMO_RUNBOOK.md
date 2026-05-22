@@ -97,12 +97,17 @@ This executes the literal public demo:
 5. Read on B with provenance and signature verification.
 6. Revoke on A.
 7. Confirm B's next read is denied.
-8. Print receipt summaries for both installs.
+8. Print receipt summaries and verify both per-KO and global receipt chains on
+   both installs.
 
 By default the dashboard generator is deterministic so the demo is reliable
 offline. The public Acme demo passes `demo/acme-dashboard.schema.json` so the
 CSV-to-widget mapping is explicit rather than hardcoded. Without `--schema`,
 Stacy infers a compact dashboard from numeric CSV columns.
+
+CSV input supports UTF-8 with an optional BOM, CRLF or LF line endings, quoted
+commas, escaped quotes, multiline quoted cells, and blank trailing lines. An
+unclosed quoted field fails before KO creation with a clear parser error.
 
 To prove the adapter seam with a local fake adapter, run:
 
@@ -116,7 +121,36 @@ is bounded by `--adapter-timeout-ms`, which defaults to 60000ms and kills the
 adapter process on timeout. For safer demos, set
 `STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS` to a comma-separated list of permitted
 adapter binary names. Because adapter execution can send parsed input records
-outside this install, adapter-backed `stacy run` requires `--ack-egress`:
+outside this install, adapter-backed `stacy run` requires `--ack-egress`.
+
+Adapters can return plain text or validated dashboard JSON. Plain text is stored
+as narrative `adapterOutput`; validated JSON can own the dashboard title,
+summary, and widgets:
+
+```bash
+stacy run "build a dashboard" \
+  --input ./data.csv \
+  --adapter-command ./my-adapter \
+  --adapter-output json \
+  --ack-egress
+```
+
+If the input file contains columns that should not be sent to the adapter, redact
+them from adapter stdin. The signed KO still records the original file hash and
+the list of redacted columns:
+
+```bash
+stacy run "build a dashboard" \
+  --input ./data.csv \
+  --adapter-command ./my-adapter \
+  --adapter-output json \
+  --redact-column customer_email \
+  --redact-column account_owner \
+  --ack-egress
+```
+
+For scripted demos, the same redaction list can be provided as
+`STACY_PUBLIC_DEMO_REDACT_COLUMNS=customer_email,account_owner`.
 
 ```bash
 STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS=claude STACY_PUBLIC_DEMO_ADAPTER=claude pnpm --filter @arpanstacy/stacy-federation demo:public
@@ -132,6 +166,8 @@ A revoked access
 B read after revoke: denied
 Receipt chain A: valid
 Receipt chain B: valid
+Global receipt anchor A: valid
+Global receipt anchor B: valid
 Receipts A includes: create, sign, share, revoke
 Receipts B includes: receive, store, read, deny
 ```
@@ -145,6 +181,33 @@ Federation delivery and revocation lookup URLs must use `https://` outside the
 local loopback demo. The runbook commands use `http://127.0.0.1:<port>` because
 both installs run on the same machine; non-loopback `http://` endpoints are
 rejected before delivery or revocation fetch.
+
+For a non-loopback federation demo, configure the Stacy server with PEM files
+and share `https://` endpoints:
+
+```json
+{
+  "server": {
+    "tls": {
+      "enabled": true,
+      "certPath": "~/.stacy/certs/server.crt",
+      "keyPath": "~/.stacy/certs/server.key"
+    }
+  }
+}
+```
+
+Equivalent environment variables:
+
+```bash
+STACY_SERVER_TLS_ENABLED=true \
+STACY_SERVER_TLS_CERT_PATH=~/.stacy/certs/server.crt \
+STACY_SERVER_TLS_KEY_PATH=~/.stacy/certs/server.key \
+pnpm --filter @arpanstacy/stacy start
+```
+
+When TLS is enabled, Stacy advertises `https://` runtime API candidates unless
+an explicit public base URL overrides them.
 
 Before a public presentation, run:
 
@@ -193,12 +256,20 @@ stacy revoke ko_public_revenue_dashboard --reason "Public demo revoke"
 stacy brain show ko_public_revenue_dashboard --as-consumer <consumer_install_id>
 stacy receipts list --ko ko_public_revenue_dashboard
 stacy receipts verify --ko ko_public_revenue_dashboard
+stacy receipts verify --global
 ```
 
-`receipts verify` checks the per-KO receipt hash chain. It should report:
+`receipts verify --ko` checks the per-KO receipt hash chain. It should report:
 
 ```text
 Receipt chain valid. Checked <n> receipt(s).
+```
+
+`receipts verify --global` checks the instance-level receipt anchor chain across
+all KOs. It should report:
+
+```text
+Global receipt anchor valid. Checked <n> anchor(s).
 ```
 
 ## Demo Storyboard

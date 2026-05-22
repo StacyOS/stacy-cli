@@ -95,6 +95,8 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
           ? [
               "--adapter-command",
               publicDemoAdapterCommand,
+              "--adapter-output",
+              "json",
               "--ack-egress",
               ...publicDemoAdapterArgs.flatMap((arg) => ["--adapter-arg", arg]),
             ]
@@ -133,7 +135,9 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         publicDemoAdapterCommand ? "Generator: adapter_command" : "Generator: deterministic_dashboard",
       );
       if (publicDemoAdapterCommand) {
-        expect(showA.stdout).toContain("Adapter output: Fake adapter summary:");
+        expect(showA.stdout).toContain("Summary: Fake adapter summary:");
+        expect(showA.stdout).toContain("Adapter notes:");
+        expect(showA.stdout).toContain("Adapter output validated against the dashboard JSON contract.");
       }
 
       const shareCommand = [
@@ -262,11 +266,27 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "--ko",
         created.id,
       ];
+      const verifyGlobalReceiptsACommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installA.configPath,
+        "--global",
+      ];
+      const verifyGlobalReceiptsBCommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installB.configPath,
+        "--global",
+      ];
       logStep("10. Show receipts on both installs", [
         formatDemoCommand("A", receiptsATextCommand),
         formatDemoCommand("B", receiptsBTextCommand),
         formatDemoCommand("A", verifyReceiptsACommand),
         formatDemoCommand("B", verifyReceiptsBCommand),
+        formatDemoCommand("A", verifyGlobalReceiptsACommand),
+        formatDemoCommand("B", verifyGlobalReceiptsBCommand),
       ]);
       const receiptsA = await harness.runCli("A", receiptsACommand);
       const receiptsB = await harness.runCli("B", receiptsBCommand);
@@ -274,12 +294,16 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
       const receiptsBText = await harness.runCli("B", receiptsBTextCommand);
       const verifyReceiptsA = await harness.runCli("A", verifyReceiptsACommand);
       const verifyReceiptsB = await harness.runCli("B", verifyReceiptsBCommand);
+      const verifyGlobalReceiptsA = await harness.runCli("A", verifyGlobalReceiptsACommand);
+      const verifyGlobalReceiptsB = await harness.runCli("B", verifyGlobalReceiptsBCommand);
       expectSuccessfulCommand(receiptsA);
       expectSuccessfulCommand(receiptsB);
       expectSuccessfulCommand(receiptsAText);
       expectSuccessfulCommand(receiptsBText);
       expectSuccessfulCommand(verifyReceiptsA);
       expectSuccessfulCommand(verifyReceiptsB);
+      expectSuccessfulCommand(verifyGlobalReceiptsA);
+      expectSuccessfulCommand(verifyGlobalReceiptsB);
       const eventsA = receiptEvents(receiptsA);
       const eventsB = receiptEvents(receiptsB);
       expect(eventsA).toEqual(expect.arrayContaining(["create", "sign", "share", "revoke"]));
@@ -290,6 +314,8 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
       expect(receiptsBText.stdout).toContain("deny:");
       expect(verifyReceiptsA.stdout).toContain("Receipt chain valid.");
       expect(verifyReceiptsB.stdout).toContain("Receipt chain valid.");
+      expect(verifyGlobalReceiptsA.stdout).toContain("Global receipt anchor valid.");
+      expect(verifyGlobalReceiptsB.stdout).toContain("Global receipt anchor valid.");
 
       const durationMs = Math.round(performance.now() - startedAt);
       expect(durationMs).toBeLessThan(4 * 60 * 1000);
@@ -308,6 +334,8 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         `Receipts B: ${eventsB.join(", ")}`,
         "Receipt chain A: valid",
         "Receipt chain B: valid",
+        "Global receipt anchor A: valid",
+        "Global receipt anchor B: valid",
         "",
         "Receipt summary on A:",
         receiptsAText.stdout.trim(),

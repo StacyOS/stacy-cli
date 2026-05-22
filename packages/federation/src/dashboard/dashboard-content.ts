@@ -2,6 +2,7 @@ import { basename } from "node:path";
 
 import type { CanonicalJsonValue } from "../crypto/canonical.js";
 import { sha256Hex } from "../util/hash.js";
+import type { AdapterDashboardOutput } from "./adapter-output.js";
 
 export interface DashboardInput {
   readonly fileName: string;
@@ -25,6 +26,8 @@ export interface DashboardContent {
   readonly generator: "adapter_command" | "deterministic_dashboard";
   readonly generatedAt: string;
   readonly adapterOutput?: string;
+  readonly adapterNotes?: readonly string[];
+  readonly redactedColumns?: readonly string[];
 }
 
 export interface DashboardSchema {
@@ -62,10 +65,13 @@ export function createDeterministicDashboardContent(options: {
   readonly input: DashboardInput;
   readonly schema?: DashboardSchema;
   readonly adapterOutput?: string;
+  readonly adapterDashboard?: AdapterDashboardOutput;
+  readonly redactedColumns?: readonly string[];
 }): DashboardContent & CanonicalJsonValue {
   const schema = options.schema ?? inferDashboardSchema(options.input);
-  const title = schema.title?.trim() || titleFromTask(options.task);
-  const widgets = schema.widgets.map((widget) => createWidget(options.input.records, widget));
+  const title = options.adapterDashboard?.title ?? schema.title?.trim() ?? titleFromTask(options.task);
+  const widgets = options.adapterDashboard?.widgets ?? schema.widgets.map((widget) => createWidget(options.input.records, widget));
+  const summary = options.adapterDashboard?.summary ?? createDashboardSummary(title, options.input.rows, widgets);
 
   return {
     kind: "dashboard",
@@ -77,11 +83,52 @@ export function createDeterministicDashboardContent(options: {
       rows: options.input.rows,
     },
     widgets,
-    summary: createDashboardSummary(title, options.input.rows, widgets),
-    generator: options.adapterOutput ? "adapter_command" : "deterministic_dashboard",
+    summary,
+    generator: options.adapterOutput || options.adapterDashboard ? "adapter_command" : "deterministic_dashboard",
     generatedAt: new Date(0).toISOString(),
     ...(options.adapterOutput ? { adapterOutput: options.adapterOutput } : {}),
+    ...(options.adapterDashboard?.notes?.length ? { adapterNotes: options.adapterDashboard.notes } : {}),
+    ...(options.redactedColumns?.length ? { redactedColumns: options.redactedColumns } : {}),
   } as unknown as DashboardContent & CanonicalJsonValue;
+}
+
+export function redactDashboardInputForAdapter(
+  input: DashboardInput,
+  columns: readonly string[],
+): DashboardInput {
+  const redactedColumns = normalizeRedactedColumns(input.columns, columns);
+  if (redactedColumns.length === 0) return input;
+  const redacted = new Set(redactedColumns);
+  return {
+    ...input,
+    columns: input.columns.filter((column) => !redacted.has(column)),
+    records: input.records.map((record) => {
+      const next: Record<string, string> = {};
+      for (const [key, value] of Object.entries(record)) {
+        if (!redacted.has(key)) {
+          next[key] = value;
+        }
+      }
+      return next;
+    }),
+  };
+}
+
+export function normalizeRedactedColumns(
+  inputColumns: readonly string[],
+  requestedColumns: readonly string[],
+): readonly string[] {
+  const columnsByLowercase = new Map(inputColumns.map((column) => [column.toLowerCase(), column]));
+  const redacted: string[] = [];
+  for (const requested of requestedColumns) {
+    const normalized = requested.trim().toLowerCase();
+    if (!normalized) continue;
+    const column = columnsByLowercase.get(normalized);
+    if (column && !redacted.includes(column)) {
+      redacted.push(column);
+    }
+  }
+  return redacted;
 }
 
 export function parseDashboardSchema(raw: string): DashboardSchema {
@@ -101,7 +148,7 @@ export function parseDashboardSchema(raw: string): DashboardSchema {
 }
 
 export function parseCsv(raw: string): readonly Record<string, string>[] {
-  const rows = parseCsvRows(raw.trim());
+  const rows = parseCsvRows(stripBom(raw).trimEnd());
   if (rows.length === 0) return [];
   const headers = rows[0]!.map((header) => header.trim());
   return rows.slice(1).filter((row) => row.some((cell) => cell.trim())).map((row) => {
@@ -150,7 +197,14 @@ function parseCsvRows(raw: string): string[][] {
 
   row.push(cell);
   rows.push(row);
+  if (quoted) {
+    throw new Error("CSV input has an unclosed quoted field.");
+  }
   return rows;
+}
+
+function stripBom(raw: string): string {
+  return raw.startsWith("\uFEFF") ? raw.slice(1) : raw;
 }
 
 function sumNumericColumn(records: readonly Record<string, string>[], column: string): number {

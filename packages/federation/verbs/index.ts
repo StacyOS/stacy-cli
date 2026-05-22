@@ -180,6 +180,7 @@ export function registerFederationCommands(
     .command("verify")
     .description("Verify the tamper-evident receipt hash chain")
     .option("--ko <ko_id>", "Filter receipts by Knowledge Object ID")
+    .option("--global", "Verify the global instance receipt anchor chain", false)
     .option("--json", "Print raw JSON output", false)
     .option("-c, --config <path>", "Path to config file")
     .option("--db-url <url>", "Database connection string")

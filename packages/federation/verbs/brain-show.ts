@@ -118,6 +118,8 @@ interface DashboardContent {
   readonly summary?: string;
   readonly generator?: string;
   readonly adapterOutput?: string;
+  readonly adapterNotes?: readonly string[];
+  readonly redactedColumns?: readonly string[];
   readonly widgets: readonly unknown[];
   readonly input?: unknown;
 }
@@ -154,6 +156,12 @@ function renderDashboardContent(content: DashboardContent): string {
   }
   if (typeof content.adapterOutput === "string" && content.adapterOutput.trim()) {
     lines.push(`Adapter output: ${content.adapterOutput.trim()}`);
+  }
+  if (Array.isArray(content.adapterNotes) && content.adapterNotes.length > 0) {
+    lines.push("Adapter notes:", ...content.adapterNotes.map((note) => `  - ${String(note)}`));
+  }
+  if (Array.isArray(content.redactedColumns) && content.redactedColumns.length > 0) {
+    lines.push(`Adapter redactions: ${content.redactedColumns.join(", ")}`);
   }
   if (isDashboardInput(content.input)) {
     lines.push(`Input: ${content.input.fileName} (${content.input.rows} rows, ${content.input.contentHash})`);
