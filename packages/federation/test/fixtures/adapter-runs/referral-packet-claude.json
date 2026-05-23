@@ -1,0 +1,30 @@
+{
+  "title": "Northstar Clinic Referral Packet",
+  "patientReference": "N.P.",
+  "referralReason": "Second opinion after abnormal ECG",
+  "clinicalSummary": "Patient N.P. reports intermittent chest tightness with elevated LDL and family history of coronary artery disease. Northstar Clinic is requesting specialist review before changing the current care plan.",
+  "labSnapshot": "LDL 162 mg/dL; hs-CRP 4.8 mg/L; troponin negative",
+  "medications": [
+    "Atorvastatin 20mg",
+    "aspirin 81mg pending specialist review"
+  ],
+  "imagingStatus": "ECG attached; echocardiogram scheduled",
+  "consent": {
+    "expiresAt": "2026-06-22T23:59:59Z",
+    "revocationReason": "Patient withdrew consent"
+  },
+  "attachments": [
+    {
+      "label": "ECG",
+      "status": "attached"
+    },
+    {
+      "label": "Echocardiogram",
+      "status": "scheduled"
+    }
+  ],
+  "notes": [
+    "LLM-authored referral narrative validated against the referral_packet JSON contract.",
+    "Synthetic demo data only; no real protected health information."
+  ]
+}

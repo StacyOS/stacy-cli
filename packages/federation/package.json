@@ -17,10 +17,15 @@
     "demo:repeat": "node scripts/phase5-repeat-demo.mjs",
     "demo:public": "node scripts/phase5-public-demo.mjs",
     "demo:public:adapter-smoke": "STACY_PUBLIC_DEMO_ADAPTER=node STACY_PUBLIC_DEMO_ADAPTER_ARGS='[\"packages/federation/scripts/public-demo-fake-adapter.mjs\"]' node scripts/phase5-public-demo.mjs",
+    "demo:public:adapter-cached": "STACY_PUBLIC_DEMO_ADAPTER=node STACY_PUBLIC_DEMO_ADAPTER_ARGS='[\"packages/federation/scripts/public-demo-cached-adapter.mjs\"]' node scripts/phase5-public-demo.mjs",
+    "demo:public:cached-adapter": "pnpm run demo:public:adapter-cached",
     "demo:public:repeat": "node scripts/phase5-repeat-public-demo.mjs",
     "demo:remote:preflight": "node scripts/phase-t-remote-preflight.mjs",
+    "demo:adversarial": "node scripts/phase2-adversarial-demo.mjs",
+    "reseed:production": "node scripts/reseed-production-demo.mjs",
     "smoke:db": "STACY_FEDERATION_REAL_DB_SMOKE=1 vitest run src/brain/local-brain.integration.test.ts",
     "smoke:server": "STACY_FEDERATION_REAL_SERVER_SMOKE=1 vitest run test/harness/real-two-install-smoke.test.ts",
+    "key-rotation-smoke": "STACY_FEDERATION_REAL_SERVER_SMOKE=1 STACY_FEDERATION_KEY_ROTATION_SMOKE=1 vitest run test/harness/key-rotation-federation-smoke.test.ts",
     "test:acceptance": "vitest run test/acceptance/federation-demo.acceptance.test.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -28,7 +33,8 @@
   "dependencies": {
     "@arpanstacy/stacy-db": "workspace:*",
     "@arpanstacy/stacy-shared": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
