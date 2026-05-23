@@ -42,6 +42,7 @@ import { accessRoutes } from "./routes/access.js";
 import { pluginRoutes } from "./routes/plugins.js";
 import { adapterRoutes } from "./routes/adapters.js";
 import { federationBrainRoutes } from "./routes/federation-brain.js";
+import { federationMetricsRoutes } from "./routes/federation-metrics.js";
 import { pluginUiStaticRoutes } from "./routes/plugin-ui-static.js";
 import { applyUiBranding } from "./ui-branding.js";
 import { logger } from "./middleware/logger.js";
@@ -214,6 +215,9 @@ export async function createApp(
   api.use(inboxDismissalRoutes(db));
   api.use(instanceSettingsRoutes(db));
   api.use("/federation/brain", federationBrainRoutes(db));
+  api.use("/federation/ko", federationBrainRoutes(db));
+  api.use("/federation/v1/ko", federationBrainRoutes(db));
+  api.use("/federation/metrics", federationMetricsRoutes(db));
   api.get("/federation/revocations", async (req, res, next) => {
     try {
       const koId = typeof req.query.koId === "string" ? req.query.koId : "";

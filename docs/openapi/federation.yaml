@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: StacyOS Federation API
+  version: 1.0.0
+  description: Stable public API for reading signed Knowledge Objects with the same consent and revocation enforcement used by the Brain UI.
+paths:
+  /api/federation/v1/ko/{id}:
+    get:
+      summary: Read a Knowledge Object with federation enforcement
+      description: >
+        Returns the same visual-ready read payload used by the federation Brain UI.
+        When `asConsumer` is provided, Stacy syncs producer revocation state and
+        enforces the stored consent grant before returning content.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Knowledge Object ID or content hash.
+        - name: asConsumer
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Consumer install ID for federated read enforcement.
+      responses:
+        "200":
+          description: Allowed or denied read result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationKoReadResponse"
+              examples:
+                allowed:
+                  value:
+                    status: allowed
+                    id: ko_referral_packet
+                    tenant: stacy/acme
+                    contentType: application/vnd.stacy.report+json
+                    contentHash: sha256:abc123
+                    creatorInstallId: install_producer
+                    signerInstallId: install_producer
+                    identities:
+                      producer:
+                        label: Northstar Clinic
+                        installId: install_producer
+                        shortInstallId: install_producer
+                        verified: true
+                    verification:
+                      signature: verified
+                      contentHash: sha256:abc123
+                    consent:
+                      status: enforced
+                      consumerInstallId: install_consumer
+                    content:
+                      kind: report
+                      title: Northstar Clinic Referral Packet
+                      summary: Referral packet ready for review.
+                    receiptVerification:
+                      koChainValid: true
+                      globalAnchorValid: true
+                      checked:
+                        koReceipts: 4
+                        globalAnchors: 8
+                denied:
+                  value:
+                    status: denied
+                    id: ko_referral_packet
+                    reason: Consent grant has been revoked
+                    asConsumer: install_consumer
+                    receiptVerification:
+                      koChainValid: true
+                      globalAnchorValid: true
+                      checked:
+                        koReceipts: 4
+                        globalAnchors: 8
+        "404":
+          description: Knowledge Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/federation/ko/{id}:
+    get:
+      summary: Alias for `/api/federation/v1/ko/{id}`
+      deprecated: true
+      description: >
+        Deprecated unversioned compatibility alias. Responses include
+        `Deprecation: true` and a `Sunset` header. Clients should migrate to
+        `/api/federation/v1/ko/{id}`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: asConsumer
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Allowed or denied read result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationKoReadResponse"
+components:
+  schemas:
+    FederationKoReadResponse:
+      oneOf:
+        - $ref: "#/components/schemas/AllowedKoRead"
+        - $ref: "#/components/schemas/DeniedKoRead"
+    AllowedKoRead:
+      type: object
+      required:
+        - status
+        - id
+        - tenant
+        - contentType
+        - contentHash
+        - creatorInstallId
+        - signerInstallId
+        - verification
+        - consent
+        - content
+        - receipts
+        - receiptVerification
+      properties:
+        status:
+          const: allowed
+        id:
+          type: string
+        tenant:
+          type: string
+        contentType:
+          type: string
+        contentHash:
+          type: string
+        creatorInstallId:
+          type: string
+        signerInstallId:
+          type: string
+        identities:
+          $ref: "#/components/schemas/IdentityMap"
+        asConsumer:
+          type: string
+        provenance:
+          type: object
+          additionalProperties: true
+        verification:
+          type: object
+          required:
+            - signature
+            - contentHash
+          properties:
+            signature:
+              const: verified
+            contentHash:
+              type: string
+        consent:
+          type: object
+          required:
+            - status
+          properties:
+            status:
+              enum:
+                - enforced
+                - local_owner
+            consumerInstallId:
+              type: string
+        content:
+          type: object
+          additionalProperties: true
+        receipts:
+          $ref: "#/components/schemas/ReceiptSummary"
+        verificationReports:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        receiptVerification:
+          $ref: "#/components/schemas/ReceiptVerification"
+    DeniedKoRead:
+      type: object
+      required:
+        - status
+        - id
+        - reason
+        - receipts
+        - receiptVerification
+      properties:
+        status:
+          const: denied
+        id:
+          type: string
+        reason:
+          type: string
+        asConsumer:
+          type: string
+        identities:
+          $ref: "#/components/schemas/IdentityMap"
+        receipts:
+          $ref: "#/components/schemas/ReceiptSummary"
+        verificationReports:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        receiptVerification:
+          $ref: "#/components/schemas/ReceiptVerification"
+    IdentityMap:
+      type: object
+      properties:
+        producer:
+          $ref: "#/components/schemas/IdentityDisplay"
+        signer:
+          $ref: "#/components/schemas/IdentityDisplay"
+        consumer:
+          $ref: "#/components/schemas/IdentityDisplay"
+    IdentityDisplay:
+      type: object
+      required:
+        - label
+        - installId
+        - shortInstallId
+        - verified
+      properties:
+        label:
+          type: string
+        installId:
+          type: string
+        shortInstallId:
+          type: string
+        verified:
+          type: boolean
+        publicKeyFingerprint:
+          type: string
+    ReceiptSummary:
+      type: object
+      required:
+        - total
+        - byEvent
+        - events
+      properties:
+        total:
+          type: integer
+        byEvent:
+          type: object
+          additionalProperties:
+            type: integer
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    ReceiptVerification:
+      type: object
+      required:
+        - koChainValid
+        - globalAnchorValid
+        - checked
+      properties:
+        koChainValid:
+          type: boolean
+        globalAnchorValid:
+          type: boolean
+        checked:
+          type: object
+          properties:
+            koReceipts:
+              type: integer
+            globalAnchors:
+              type: integer
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createHash } from "node:crypto";
 import type { Db } from "@arpanstacy/stacy-db";
 import {
   listReceipts,
@@ -12,12 +13,74 @@ import {
 } from "@arpanstacy/stacy-federation";
 
 type SuccessfulRead = Extract<ReadKnowledgeObjectResult, { ok: true }>;
+const UNVERSIONED_KO_API_SUNSET = "Fri, 21 Aug 2026 00:00:00 GMT";
 
 export function federationBrainRoutes(db: Db) {
   const router = Router();
 
+  router.get("/:koId/events", async (req, res, next) => {
+    try {
+      const koId = req.params.koId?.trim();
+      if (!koId) {
+        res.status(400).json({ error: "Missing koId" });
+        return;
+      }
+
+      const pollMs = parseEventPollMs(req.query.pollMs);
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      res.write(formatSseEvent("ready", {
+        koId,
+        pollMs,
+        createdAt: new Date().toISOString(),
+      }));
+
+      let closed = false;
+      const seenReceiptIds = new Set((await listReceipts({ db, koId })).map((receipt) => receipt.id));
+
+      const poll = async () => {
+        if (closed) return;
+        try {
+          const receipts = await listReceipts({ db, koId });
+          for (const receipt of receipts) {
+            if (seenReceiptIds.has(receipt.id)) continue;
+            seenReceiptIds.add(receipt.id);
+            if (isLiveUiReceiptEvent(receipt.eventType)) {
+              res.write(formatSseEvent("receipt", summarizeReceiptEvent(receipt)));
+            }
+          }
+        } catch (error) {
+          res.write(formatSseEvent("error", {
+            koId,
+            message: error instanceof Error ? error.message : "Unable to poll federation receipts.",
+          }));
+        }
+      };
+
+      const interval = setInterval(() => {
+        void poll();
+      }, pollMs);
+
+      req.on("close", () => {
+        closed = true;
+        clearInterval(interval);
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get("/:koId", async (req, res, next) => {
     try {
+      if (isUnversionedKoApi(req.baseUrl)) {
+        res.setHeader("Deprecation", "true");
+        res.setHeader("Sunset", UNVERSIONED_KO_API_SUNSET);
+        res.setHeader("Link", '</api/federation/v1/ko/{id}>; rel="successor-version"');
+      }
       const koId = req.params.koId?.trim();
       if (!koId) {
         res.status(400).json({ error: "Missing koId" });
@@ -47,6 +110,9 @@ export function federationBrainRoutes(db: Db) {
           id: koId,
           reason: read.reason,
           asConsumer: asConsumer || undefined,
+          identities: {
+            consumer: createIdentityDisplay(asConsumer, "Dr. Meera Patel / Eastside Specialty"),
+          },
           receipts: summarizeReceipts(receipts),
           verificationReports: summarizeVerificationReports(receipts),
           receiptVerification: {
@@ -76,6 +142,40 @@ export function federationBrainRoutes(db: Db) {
   return router;
 }
 
+function isUnversionedKoApi(baseUrl: string): boolean {
+  return /\/api\/federation\/ko$/.test(baseUrl);
+}
+
+function parseEventPollMs(value: unknown): number {
+  if (typeof value !== "string" || !value.trim()) return 500;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 50 || parsed > 10_000) return 500;
+  return parsed;
+}
+
+function formatSseEvent(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function isLiveUiReceiptEvent(eventType: FederationReceipt["eventType"]): boolean {
+  return eventType === "read" ||
+    eventType === "deny" ||
+    eventType === "revoke" ||
+    eventType === "receive" ||
+    eventType === "store";
+}
+
+function summarizeReceiptEvent(receipt: FederationReceipt) {
+  return {
+    id: receipt.id,
+    eventType: receipt.eventType,
+    koId: receipt.koId,
+    actorInstallId: receipt.actorInstallId,
+    counterpartyInstallId: receipt.counterpartyInstallId,
+    createdAt: receipt.createdAt,
+  };
+}
+
 function formatAllowedRead(
   read: SuccessfulRead,
   receipts: readonly FederationReceipt[],
@@ -97,6 +197,11 @@ function formatAllowedRead(
     contentHash: read.verification.contentHash,
     creatorInstallId: read.ko.signedPayload.creatorInstallId,
     signerInstallId: read.ko.signer.installId,
+    identities: {
+      producer: createIdentityDisplay(read.ko.signedPayload.creatorInstallId, "Northstar Clinic", read.ko.signer.publicKeyPem),
+      signer: createIdentityDisplay(read.ko.signer.installId, "Northstar Clinic", read.ko.signer.publicKeyPem),
+      ...(options.asConsumer ? { consumer: createIdentityDisplay(options.asConsumer, "Dr. Meera Patel / Eastside Specialty") } : {}),
+    },
     asConsumer: options.asConsumer,
     provenance: read.provenance,
     verification: {
@@ -106,6 +211,8 @@ function formatAllowedRead(
     consent: {
       status: read.provenance.source === "federated" ? "enforced" : "local_owner",
       consumerInstallId: options.asConsumer,
+      grantId: read.consent?.grantId,
+      recipient: read.consent?.recipient,
     },
     content,
     receipts: summarizeReceipts(receipts),
@@ -119,6 +226,23 @@ function formatAllowedRead(
       },
     },
   };
+}
+
+function createIdentityDisplay(installId: string | undefined, preferredLabel?: string, publicKeyPem?: string) {
+  const normalizedInstallId = installId?.trim() ?? "";
+  return {
+    label: preferredLabel?.trim() || compactInstallId(normalizedInstallId),
+    installId: normalizedInstallId,
+    shortInstallId: compactInstallId(normalizedInstallId),
+    verified: normalizedInstallId.length > 0,
+    ...(publicKeyPem ? { publicKeyFingerprint: `sha256:${createHash("sha256").update(publicKeyPem).digest("hex").slice(0, 16)}` } : {}),
+  };
+}
+
+function compactInstallId(installId: string): string {
+  if (!installId) return "unknown install";
+  if (installId.length <= 22) return installId;
+  return `${installId.slice(0, 14)}...${installId.slice(-6)}`;
 }
 
 function summarizeReceipts(receipts: readonly FederationReceipt[]) {
