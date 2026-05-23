@@ -125,6 +125,7 @@ export const queryKeys = {
   federationBrain: {
     show: (koId: string, asConsumer?: string) =>
       ["federation-brain", koId, asConsumer ?? "__local__"] as const,
+    metrics: ["federation-brain", "metrics"] as const,
   },
   secrets: {
     list: (companyId: string) => ["secrets", companyId] as const,
