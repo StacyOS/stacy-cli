@@ -191,11 +191,77 @@ pnpm smoke:stacy-cli-npm -- --version <published-version> --expected-core <publi
 pnpm release:phase5-gate -- --strict-live
 ```
 
+## Federation Demo
+
+Stacy ships with an executable two-install federation demo that proves the
+protocol layer end-to-end: a signed Knowledge Object created on Install A,
+federated to Install B under per-object consent, read with cryptographic
+verification, revoked on A, then denied on B's next read — with a
+hash-chained receipt trail on both sides and a signed verification report
+attesting to what B actually checked. Every gate is reproducible in under
+thirty seconds on a freshly cloned repo.
+
+**Run the protocol gate (~60-90 s):**
+
+```bash
+pnpm install
+pnpm --filter @arpanstacy/stacy-federation demo:check
+```
+
+Expected: preflight ✓, typecheck ✓, **7 acceptance tests**, **4 real DB
+smoke tests** against embedded Postgres, **4 real two-install server smoke
+tests** with real child processes and HTTP.
+
+**Run the public demo storyboard (~25 s):**
+
+```bash
+pnpm --filter @arpanstacy/stacy-federation demo:public
+```
+
+This runs the literal flow: contact-card exchange → `stacy run` with the
+shipped CSV → `stacy share --with-contact` → federated read → `stacy revoke`
+→ denied next read → receipt chain verification on both installs.
+
+**Run the 3-of-3 repeat gate before any presentation:**
+
+```bash
+STACY_FEDERATION_PUBLIC_DEMO_REPEAT=3 pnpm --filter @arpanstacy/stacy-federation demo:public:repeat
+```
+
+Latest local result: 3/3 passed, slowest run 29.09 s.
+
+**See the React UI on your machine:** the federation brain page at
+`/federation/brain/:koId` renders any signed KO with its provenance, consent
+status, signature verification, receipt chain validity, and any signed
+verification reports attached to it. The full walkthrough — three real
+screenshots, copy-paste reproducer steps, and the keep-alive script that
+seeds a live two-install demo — lives in
+**[docs/stacy/FEDERATION-DEMO.md](docs/stacy/FEDERATION-DEMO.md)**.
+
+What the demo proves:
+
+- **Identity is keypair-anchored**, not registry-anchored — Ed25519 install
+  identities with `installId = "install_" + sha256(publicKeyPem)[0..32]`.
+- **Consent is per-object** — signed grants bind one producer, one consumer,
+  one KO content hash, one scope, one expiry.
+- **Revocation is consumer-pulled** — the producer hosts an endpoint; the
+  consumer queries it at read time. No push, no fan-out.
+- **Audit is tamper-evident** — per-KO hash chain catches in-flight edits;
+  instance-level anchor chain catches wholesale deletions.
+- **Transport is hardened** — every federation message carries a signed
+  nonce and timestamp; replays inside a 60-second window are rejected
+  against a Postgres-backed nonce log; production endpoints require HTTPS.
+- **Verification reports** — consumers issue signed attestations of what
+  they verified about a KO (signature, content-shape contract, CSV
+  reconciliation, deterministic reconstruction), persisted as Knowledge
+  Objects in their own right.
+
 ## Documentation
 
 - [Quickstart](docs/start/quickstart.md)
 - [What is Stacy?](docs/start/what-is-stacy.md)
 - [Architecture](docs/stacy/ARCHITECTURE.md)
+- [Federation demo walkthrough](docs/stacy/FEDERATION-DEMO.md)
 - [Self-hosted operations](docs/stacy/SELF-HOSTED-OPERATIONS.md)
 - [Public CLI packaging](docs/stacy/PUBLIC-CLI-PACKAGING.md)
 - [Phase 5 release notes](docs/stacy/PHASE-5.md)
