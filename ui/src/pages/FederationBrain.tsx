@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 function isDashboardContent(content: unknown): content is FederationBrainDashboardContent {
   return (
@@ -671,14 +672,19 @@ function CheckList({
       <span>{tone === "failed" ? "Failed" : "Warnings"}: </span>
       <span className="inline-flex flex-wrap gap-1">
         {checks.map((check) => (
-          <span
-            key={check}
-            className="cursor-help rounded-sm border border-current/30 px-1 font-mono"
-            title={describeFederationCheck(check)}
-            aria-label={describeFederationCheck(check)}
-          >
-            {check}
-          </span>
+          <Tooltip key={check}>
+            <TooltipTrigger asChild>
+              <span
+                className="cursor-help rounded-sm border border-current/30 px-1 font-mono"
+                aria-label={describeFederationCheck(check)}
+              >
+                {check}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+              {describeFederationCheck(check)}
+            </TooltipContent>
+          </Tooltip>
         ))}
       </span>
     </div>

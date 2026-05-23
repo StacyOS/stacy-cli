@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FederationBrain } from "./FederationBrain";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const mockFederationBrainApi = vi.hoisted(() => ({
   show: vi.fn(),
@@ -182,9 +183,9 @@ describe("FederationBrain", () => {
 
     await act(async () => {
       root.render(
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}><TooltipProvider>
           <FederationBrain />
-        </QueryClientProvider>,
+        </TooltipProvider></QueryClientProvider>,
       );
     });
     await flushReact();
@@ -200,8 +201,8 @@ describe("FederationBrain", () => {
     expect(container.textContent).toContain("grant_group_referral");
     expect(container.textContent).toContain("group: group_eastside_specialty / clinician");
     expect(container.textContent).toContain("verified");
-    expect(container.querySelector("[title='Stored input metadata matches the source file name, hash, and row count supplied for verification.']")).not.toBeNull();
-    expect(container.querySelector("[title='Check ID: future_check, no description registered.']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Stored input metadata matches the source file name, hash, and row count supplied for verification.']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Check ID: future_check, no description registered.']")).not.toBeNull();
     expect(container.textContent).toContain("Live updates");
     expect(container.textContent).toContain("Federation health");
     expect(container.textContent).toContain("Roundtrip p50");
@@ -241,9 +242,9 @@ describe("FederationBrain", () => {
 
     await act(async () => {
       root.render(
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}><TooltipProvider>
           <FederationBrain />
-        </QueryClientProvider>,
+        </TooltipProvider></QueryClientProvider>,
       );
     });
     await flushReact();
@@ -310,9 +311,9 @@ describe("FederationBrain", () => {
 
     await act(async () => {
       root.render(
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}><TooltipProvider>
           <FederationBrain />
-        </QueryClientProvider>,
+        </TooltipProvider></QueryClientProvider>,
       );
     });
     await flushReact();
@@ -385,9 +386,9 @@ describe("FederationBrain", () => {
 
     await act(async () => {
       root.render(
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}><TooltipProvider>
           <FederationBrain />
-        </QueryClientProvider>,
+        </TooltipProvider></QueryClientProvider>,
       );
     });
     await flushReact();
@@ -489,9 +490,9 @@ describe("FederationBrain", () => {
 
     await act(async () => {
       root.render(
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}><TooltipProvider>
           <FederationBrain />
-        </QueryClientProvider>,
+        </TooltipProvider></QueryClientProvider>,
       );
     });
     await flushReact();
