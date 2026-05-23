@@ -35,6 +35,27 @@ export {
 } from "./identity/install-identity.js";
 export { resolveFederationIdentityPath } from "./identity/paths.js";
 export {
+  KEY_TRANSITION_SCHEMA_VERSION,
+  createKeyTransition,
+  deriveInstallIdFromPublicKey,
+  hashKeyTransitionPayload,
+  verifyKeyTransition,
+  verifyKeyTransitionChain,
+  type CreateKeyTransitionOptions,
+  type KeyTransitionChainVerificationResult,
+  type KeyTransitionSigner,
+  type KeyTransitionUnsignedPayload,
+  type KeyTransitionVerificationResult,
+  type SignedKeyTransition,
+} from "./identity/key-transition.js";
+export {
+  ensureKeyTransitionTables,
+  listKeyTransitions,
+  storeKeyTransition,
+  type ListKeyTransitionsOptions,
+  type StoreKeyTransitionOptions,
+} from "./identity/key-transition-store.js";
+export {
   addContact,
   listContacts,
   normalizeContactName,
@@ -48,12 +69,17 @@ export {
 export {
   CONTACT_CARD_SCHEMA_VERSION,
   DEFAULT_FEDERATION_TENANT,
+  createSignedContactShareLink,
   createSignedContactCard,
   parseSignedContactCard,
+  parseSignedContactShareLink,
+  verifyContactShareLink,
   verifySignedContactCard,
   type ContactCardPayload,
   type ContactCardVerificationResult,
+  type ContactShareLinkPayload,
   type SignedContactCard,
+  type SignedContactShareLink,
 } from "./contacts/contact-card.js";
 export {
   parseAdapterOutput,
@@ -79,6 +105,7 @@ export {
   type DashboardSchema,
   type DashboardSchemaWidget,
   type DashboardWidget,
+  type ReferralPacketContent,
   type ReportContent,
   type ReportSection,
   type TableContent,
@@ -105,6 +132,7 @@ export {
   isConsentGrantScope,
   verifyConsentGrant,
   type ConsentGrantScope,
+  type ConsentGrantRecipient,
   type ConsentGrantSignedPayload,
   type ConsentGrantUnsignedPayload,
   type ConsentGrantVerificationResult,
@@ -119,6 +147,40 @@ export {
   type WriteConsentEnforcementResult,
 } from "./consent/enforcement.js";
 export {
+  DELEGATION_GRANT_SCHEMA_VERSION,
+  MAX_DELEGATION_DEPTH,
+  createDelegationGrant,
+  enforceDelegationChainDepth,
+  enforceDelegationGrant,
+  verifyDelegationGrant,
+  type CreateDelegationGrantOptions,
+  type DelegationEnforcementResult,
+  type DelegationGrantSignedPayload,
+  type DelegationGrantUnsignedPayload,
+  type DelegationGrantVerificationResult,
+  type SignedDelegationGrant,
+} from "./consent/delegation.js";
+export {
+  GROUP_ROSTER_SCHEMA_VERSION,
+  createGroupRoster,
+  groupRosterIncludesInstall,
+  normalizeGroupId,
+  verifyGroupRoster,
+  type CreateGroupRosterOptions,
+  type GroupRosterMember,
+  type GroupRosterSignedPayload,
+  type GroupRosterUnsignedPayload,
+  type GroupRosterVerificationResult,
+  type SignedGroupRoster,
+} from "./consent/group-roster.js";
+export {
+  ensureGroupRosterTables,
+  readGroupRoster,
+  storeGroupRoster,
+  type ReadGroupRosterOptions,
+  type StoreGroupRosterOptions,
+} from "./consent/group-roster-store.js";
+export {
   REVOCATION_TOMBSTONE_SCHEMA_VERSION,
   createRevocationTombstone,
   verifyRevocationTombstone,
@@ -129,6 +191,28 @@ export {
   type SignedRevocationTombstone,
 } from "./consent/revocation.js";
 export {
+  WITNESS_REVOCATION_SCHEMA_VERSION,
+  createWitnessedRevocation,
+  enforceWitnessRevocationPolicy,
+  hashWitnessedRevocationPayload,
+  verifyWitnessedRevocation,
+  witnessIdFromPublicKey,
+  type CreateWitnessedRevocationOptions,
+  type SignedWitnessedRevocation,
+  type WitnessIdentity,
+  type WitnessPolicyEnforcementResult,
+  type WitnessRevocationPolicy,
+  type WitnessedRevocationUnsignedPayload,
+  type WitnessedRevocationVerificationResult,
+} from "./consent/witnessed-revocation.js";
+export {
+  ensureWitnessedRevocationTables,
+  listWitnessedRevocations,
+  storeWitnessedRevocation,
+  type ListWitnessedRevocationsOptions,
+  type StoreWitnessedRevocationOptions,
+} from "./consent/witnessed-revocation-store.js";
+export {
   ensureRevocationTombstoneTables,
   readRevocationTombstone,
   storeRevocationTombstone,
@@ -137,8 +221,10 @@ export {
 } from "./consent/revocation-store.js";
 export {
   ensureConsentGrantTables,
+  listConsentGrantsForKo,
   readConsentGrant,
   storeConsentGrant,
+  type ListConsentGrantsForKoOptions,
   type ReadConsentGrantOptions,
   type StoreConsentGrantOptions,
 } from "./consent/grant-store.js";
@@ -182,6 +268,12 @@ export {
   type VerificationReportContent,
   type VerificationVerdict,
 } from "./verification/verification-report.js";
+export {
+  CONTENT_CONTRACT_COMPATIBILITY,
+  validateKnowledgeContentContract,
+  type ContentContractKind,
+  type ContentContractValidation,
+} from "./verification/content-contract.js";
 export {
   readKnowledgeObjectWithConsent,
   type ReadKnowledgeObjectWithConsentOptions,

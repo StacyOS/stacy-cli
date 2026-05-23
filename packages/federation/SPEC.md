@@ -52,6 +52,23 @@ Contact cards are discovery metadata only. They do not grant consent, do not
 change KO signing semantics, and do not replace the producer revocation lookup
 URL embedded in a revocable share.
 
+## Contact Share Links
+
+A contact share link is a short-lived signed envelope around a signed contact
+card. The link payload contains the card, created timestamp, and expiry
+timestamp, then signs those canonical bytes with the same install Ed25519 key.
+
+Import-link verification must reject links where:
+
+- the share-link signature is invalid
+- the share-link signer does not match the nested contact-card signer
+- the link is expired at import time
+- the nested contact card fails contact-card verification
+
+Share links are a transport convenience for exchanging contact cards through
+email, chat, QR code, or another out-of-band channel. They do not grant consent
+and must still be followed by an explicit per-object share.
+
 ## Federation Transport Hardening
 
 Federation endpoint URLs must use HTTPS outside the local demo loopback path.
@@ -154,7 +171,9 @@ trailing lines. Malformed unclosed quoted fields must fail before KO creation.
 ## Consent Grant
 
 A consent grant is a signed object authorizing one consumer install to exercise a
-bounded capability against one KO.
+bounded capability against one KO. The original v1 grant shape targeted one
+install through `consumerInstallId`; product-ready grants may also carry a
+`recipient` object so the target can be an install or a signed group roster.
 
 Minimum payload:
 
@@ -163,7 +182,11 @@ Minimum payload:
 - tenant
 - KO id or content hash
 - producer install id
-- consumer install id
+- consumer install id or group id, retained as `consumerInstallId` for storage
+  compatibility
+- recipient:
+  - `{ type: "install", id: <install_id> }`
+  - `{ type: "group", id: <group_id>, role?: <role_name> }`
 - scope: one of `read`, `write`, or `admin`
 - expiry timestamp
 - revocable flag
@@ -172,20 +195,36 @@ Minimum payload:
 Scope semantics for the public demo roadmap:
 
 - `read`: consumer can read the federated KO while the grant is valid.
-- `write`: consumer can read the federated KO and, in Phase S, create a new
-  consumer-signed derived KO that references the original. The original remains
-  immutable and producer-signed; write never lets the consumer mutate A's KO.
+- `write`: consumer can read the federated KO and create a new consumer-signed
+  derived KO that references the original. Product meaning: an annotation,
+  response, revision proposal, or counter-KO. The original remains immutable and
+  producer-signed; write never lets the consumer mutate A's KO.
 - `admin`: reserved for future delegation/admin operations. For now it includes
   read capability but does not enable re-sharing, revocation by the consumer, key
   rotation, or producer-side mutation.
 
 Read access requires a valid, unexpired grant matching the consumer, producer,
 tenant, KO hash, and a scope that includes read capability (`read`, `write`, or
-`admin`). `write` is implemented as derived-KO creation in Phase S. `admin`
+`admin`). `write` is implemented as derived-KO creation. `admin`
 remains signed and verifiable but reserved until the corresponding SPEC revision
 and tests land.
 
-Derived KO semantics for Phase S:
+Group grant semantics:
+
+- a group id must start with `group_`
+- the group grant recipient must point at a signed group roster
+- the roster must be signed by the producer install that signed the grant
+- the roster tenant must match the grant tenant
+- the reading install must appear in the roster, and must match the requested
+  role when the grant recipient includes a role
+- removing a member from the latest signed roster denies that install's next read
+
+Role grant semantics are intentionally narrow in this phase: roles are labels on
+signed roster members, not standalone identities. A role-targeted grant is
+therefore enforced by checking membership in the producer-signed roster plus a
+matching `member.role` value.
+
+Derived KO semantics:
 
 - a derived KO is a new signed Knowledge Object created by the consumer install
 - it must reference the original KO id, original content hash, producer install id,
@@ -194,7 +233,81 @@ Derived KO semantics for Phase S:
 - producer revocation of the source grant must deny future derived writes, while
   already-created derived KOs remain independently signed artifacts
 - `stacy brain derive <source_ko_id> --content-json <json>` is the user-facing
-  Phase S operation for creating a derived KO
+  operation for creating a derived KO
+
+## Group Roster
+
+A group roster is a producer-signed object binding a human-readable group label
+to install members and optional role labels.
+
+Minimum payload:
+
+- object kind: `group_roster`
+- schema version
+- tenant
+- group id
+- label
+- members: `{ installId, label?, role? }[]`
+- created timestamp
+- roster hash
+
+Rosters do not grant access by themselves. They are membership evidence used by
+group-targeted consent grants. Tampering with membership, label, group id, tenant,
+or creation timestamp must break the roster hash or signature.
+
+### Group Roster Updates
+
+Read-time enforcement uses the latest producer-signed roster available for the
+granted group. If a producer removes an install from the latest roster, that
+install's next read fails with `Consumer not in producer's latest group roster`
+and appends a `deny` receipt. If a producer adds an install to the latest roster,
+that install can read on its next attempt as long as the grant, role, expiry, KO
+binding, and revocation checks also pass.
+
+## Delegation Grant
+
+A delegation grant is a consumer-signed object that records an intended re-share
+from a delegated consumer to another install or group. It is bound to:
+
+- tenant
+- KO id and content hash
+- producer install id
+- delegate install id
+- recipient install or group
+- source grant id
+- scope
+- expiry
+- revocability
+- delegation hash
+
+Delegation verification checks the delegate signature, hash, KO binding,
+producer binding, delegate binding, expiry, and optional producer revocation
+tombstone targeting the delegation id.
+
+Delegation depth is capped at 4 signed delegation grants. A chain with depth 5
+or greater must fail with: `Delegation chain depth 5 exceeds the limit of 4.`
+The depth cap prevents unbounded re-share chains while keeping simple
+department/team handoffs possible.
+
+Product rule: consumers must not re-share producer KOs unless a verified
+delegation grant authorizes that action. The signed delegation object and
+revocation checks exist in this phase; the public `stacy share` command still
+rejects `--scope admin` until the full delegated delivery path is wired.
+
+## Content Contract Versioning
+
+Signed KO content contracts are versioned independently from the cryptographic KO
+envelope. Verification policy:
+
+- content hash and signature checks run before content-contract checks
+- old signed KOs are never rewritten during migration
+- missing `schemaVersion` on legacy `dashboard`, `report`, and `table` content is
+  treated as v1
+- `referral_packet` supports schema versions 1 and 2
+- unknown versions fail verification clearly with `content_contract_version`
+
+The compatibility matrix lives in `docs/federation-schema-compatibility.md` and
+is enforced by `validateKnowledgeContentContract`.
 
 ## Revocation Tombstone
 
@@ -246,6 +359,71 @@ longer matches the instance head. This does not replace the per-KO chain; it
 prevents deleting one KO's entire receipt history without breaking the
 instance-level anchor trail.
 
+## Install Key Rotation
+
+Install keys can rotate without invalidating historical Knowledge Objects. Old
+KOs continue to verify against the signer embedded in their envelope. Continuity
+between the old install id and new install id is proven by a dual-signed key
+transition object.
+
+Minimum transition payload:
+
+- object kind: `install_key_transition`
+- schema version
+- old install id and old public key
+- new install id and new public key
+- effective timestamp
+- created timestamp
+- optional reason
+
+The transition is canonicalized once, then signed by both the old private key and
+the new private key. Verification requires:
+
+1. Old and new install ids derive from their public keys.
+2. The old signature verifies with the old public key.
+3. The new countersignature verifies with the new public key.
+4. The transition id matches the canonical payload hash.
+5. Multi-step chains link each transition's old install id to the previous
+   transition's new install id.
+
+`stacy identity rotate` stores the transition before replacing the active
+identity file and writes a local backup of the previous identity. `stacy identity
+verify-chain` verifies all recorded transitions for the install database.
+
+## Witnessed Revocation
+
+High-stakes KOs can require external witness evidence before a revocation is
+accepted as authoritative by the consumer. The producer still creates the normal
+revocation tombstone. One or more witness identities then sign an attestation
+over that tombstone.
+
+Minimum witnessed revocation payload:
+
+- object kind: `witnessed_revocation`
+- schema version
+- tenant
+- KO id and content hash
+- tombstone id and tombstone hash
+- producer install id
+- witness id and label
+- witnessed timestamp
+
+Witness ids are derived from the witness public key:
+`witness_${sha256(publicKeyPem)[0..32]}`. Verification requires the witnessed
+payload to bind exactly to a valid producer tombstone, the witness id to derive
+from the witness public key, and the witness signature to verify over the
+canonical witnessed payload.
+
+Consumers can enforce one of two revocation policies:
+
+- `producer_only`: the producer tombstone alone is sufficient.
+- `witnessed`: the tombstone must be accompanied by at least N valid witness
+  attestations, optionally from a trusted witness allowlist.
+
+If the witness threshold is not met, the consumer does not treat the tombstone as
+accepted under that policy. This is a policy layer on top of the existing
+producer-signed tombstone; it does not change tombstone format.
+
 ## Read-Time Enforcement
 
 `brain show` and every federated read path must:
@@ -264,9 +442,7 @@ instance-level anchor trail.
 
 - no blockchain or data availability layer
 - no schema registry
-- no delegation chains
 - no multi-install coordination kernel
-- no key rotation for the 90-day demo
 - no StacyVM changes
 
 ## Acceptance Contract
