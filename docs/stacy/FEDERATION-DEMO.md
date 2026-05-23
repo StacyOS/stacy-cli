@@ -488,9 +488,10 @@ This produces `ui/dist/`, which the Stacy server picks up automatically when `se
 
 #### Step 2 — Save the keep-alive runner
 
-Save this file as `/tmp/keep-alive-demo.mjs`:
+Write `/tmp/keep-alive-demo.mjs` in one command by pasting the heredoc below into your terminal. The single quotes around `'EOF'` are critical — they tell the shell not to expand the `${...}` template literals or the backticks inside the script. Without them the file would be silently corrupted.
 
-```js
+```bash
+cat > /tmp/keep-alive-demo.mjs <<'EOF'
 // Long-lived federation demo: spins up two installs, populates state, keeps servers up.
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
@@ -644,7 +645,39 @@ async function main() {
 }
 
 main();
+EOF
 ```
+
+**Verify the file wrote correctly:**
+
+```bash
+wc -l /tmp/keep-alive-demo.mjs
+head -5 /tmp/keep-alive-demo.mjs
+```
+
+Expected:
+
+```text
+     142 /tmp/keep-alive-demo.mjs
+// Long-lived federation demo: spins up two installs, populates state, keeps servers up.
+import { resolve, join } from "node:path";
+import { homedir } from "node:os";
+
+const REPO_ROOT = resolve(homedir(), "dev/stacy-cli");      // adjust to your clone path
+```
+
+If the line count is wildly off or `head` shows shell-expanded garbage, you used unquoted `EOF`. Delete the file and re-run with the single quotes around `'EOF'`.
+
+**If your clone is NOT at `~/dev/stacy-cli`,** edit just the `REPO_ROOT` line in place:
+
+```bash
+# macOS:
+sed -i.bak 's|dev/stacy-cli|<your-path-relative-to-home>|' /tmp/keep-alive-demo.mjs
+# Linux:
+sed -i      's|dev/stacy-cli|<your-path-relative-to-home>|' /tmp/keep-alive-demo.mjs
+```
+
+For example, if you cloned to `~/code/stacy-cli`, replace `<your-path-relative-to-home>` with `code/stacy-cli`.
 
 #### Step 3 — Run the keep-alive script
 
