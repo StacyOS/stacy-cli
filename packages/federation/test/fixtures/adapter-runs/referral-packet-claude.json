@@ -1,30 +1,38 @@
 {
   "title": "Northstar Clinic Referral Packet",
   "patientReference": "N.P.",
-  "referralReason": "Second opinion after abnormal ECG",
-  "clinicalSummary": "Patient N.P. reports intermittent chest tightness with elevated LDL and family history of coronary artery disease. Northstar Clinic is requesting specialist review before changing the current care plan.",
-  "labSnapshot": "LDL 162 mg/dL; hs-CRP 4.8 mg/L; troponin negative",
+  "referralReason": "Second opinion requested following abnormal ECG; rule out unstable presentation before adjusting current statin and antiplatelet regimen.",
+  "clinicalSummary": "Adult patient under care at Northstar Clinic presents with intermittent, exertional chest tightness over the past six weeks, no associated radiation, no diaphoresis, no rest pain. Risk profile is notable for LDL 162 mg/dL despite atorvastatin 20mg, hs-CRP elevated at 4.8 mg/L, and a first-degree family history of premature coronary artery disease. Resting ECG shows non-specific ST changes; troponin is negative on the most recent draw. Northstar requests specialist review prior to either escalating lipid therapy or initiating aspirin 81mg, both of which are currently held pending the consult. Patient is hemodynamically stable and ambulatory.",
+  "labSnapshot": "LDL 162 mg/dL (target <100); hs-CRP 4.8 mg/L (elevated); troponin negative; HDL 41 mg/dL; HbA1c 5.6%; eGFR within normal limits.",
   "medications": [
-    "Atorvastatin 20mg",
-    "aspirin 81mg pending specialist review"
+    "Atorvastatin 20mg PO daily (current)",
+    "Aspirin 81mg PO daily — held pending specialist review",
+    "No anticoagulation",
+    "No antianginals at this time"
   ],
-  "imagingStatus": "ECG attached; echocardiogram scheduled",
+  "imagingStatus": "12-lead ECG attached. Outpatient transthoracic echocardiogram scheduled within the next 10 days. No prior coronary imaging on file.",
   "consent": {
     "expiresAt": "2026-06-22T23:59:59Z",
-    "revocationReason": "Patient withdrew consent"
+    "revocationReason": "Patient withdrew consent; referral packet must be denied on subsequent reads."
   },
   "attachments": [
     {
-      "label": "ECG",
-      "status": "attached"
+      "label": "12-lead ECG",
+      "status": "attached — captured 2026-05-22 at Northstar Clinic"
     },
     {
-      "label": "Echocardiogram",
-      "status": "scheduled"
+      "label": "Transthoracic echocardiogram",
+      "status": "scheduled — appointment booked with Eastside cardiology imaging"
+    },
+    {
+      "label": "Lipid and inflammation panel",
+      "status": "attached — drawn 2026-05-21, see labSnapshot above"
     }
   ],
   "notes": [
     "LLM-authored referral narrative validated against the referral_packet JSON contract.",
-    "Synthetic demo data only; no real protected health information."
+    "Authored by Anthropic Claude (Claude Code conversational pipeline) on 2026-05-23. This fixture replaces the prior synthetic capture so the cached adapter path reflects characteristic LLM phrasing rather than a templated placeholder.",
+    "All clinical details are synthetic. No real protected health information is present. Patient identifier 'N.P.' is a non-resolvable two-letter code for demo purposes only.",
+    "Regenerate via `pnpm --filter @arpanstacy/stacy-federation capture:claude` (live API) or `pnpm --filter @arpanstacy/stacy-federation capture:claude-cli` (logged-in claude -p) so the resulting JSON remains content-addressed against the demo CSV."
   ]
 }

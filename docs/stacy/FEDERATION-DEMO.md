@@ -68,13 +68,34 @@ The cached fixture lives at:
 packages/federation/test/fixtures/adapter-runs/referral-packet-claude.json
 ```
 
-To refresh it with a real adapter, set the adapter environment variables and run
-the capture script:
+### 4. Live Claude Adapter
+
+Calls a real Anthropic Claude endpoint end-to-end and uses its output as the
+referral packet content. Useful for showing "the AI actually produced this"
+on stage, blog, or video.
 
 ```bash
-STACY_PUBLIC_DEMO_ADAPTER=claude \
-STACY_PUBLIC_DEMO_ADAPTER_ARGS='["--some-safe-json-mode"]' \
-node packages/federation/scripts/capture-real-adapter.mjs \
+ANTHROPIC_API_KEY=sk-ant-... pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-live
+```
+
+The wrapper script at
+`packages/federation/scripts/claude-cli-adapter.mjs` accepts two credentials
+paths:
+
+- `ANTHROPIC_API_KEY` (preferred for CI / scripted demos) — calls the
+  Messages API directly via `fetch`.
+- Local `claude -p` (OAuth session) — used as fallback if no API key is set.
+  Requires `claude` on PATH and Claude Code credits for non-interactive use.
+
+To refresh the cached fixture from a real Claude response:
+
+```bash
+# Using ANTHROPIC_API_KEY:
+ANTHROPIC_API_KEY=sk-ant-... pnpm --filter @arpanstacy/stacy-federation capture:claude \
+  packages/federation/test/fixtures/adapter-runs/referral-packet-claude.json
+
+# Using the logged-in claude CLI:
+pnpm --filter @arpanstacy/stacy-federation capture:claude-cli \
   packages/federation/test/fixtures/adapter-runs/referral-packet-claude.json
 ```
 
