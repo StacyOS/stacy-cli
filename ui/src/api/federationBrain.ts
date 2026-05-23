@@ -36,10 +36,22 @@ export interface FederationBrainReceiptSummary {
   }[];
 }
 
+export interface FederationBrainVerificationReport {
+  readonly verificationKoId: string;
+  readonly verificationContentHash: string;
+  readonly verdict: "pass" | "fail";
+  readonly failedChecks: readonly string[];
+  readonly warningChecks: readonly string[];
+  readonly verifierInstallId: string;
+  readonly createdAt: string;
+  readonly receiptHash: string;
+}
+
 export interface FederationBrainReadBase {
   readonly id: string;
   readonly asConsumer?: string;
   readonly receipts: FederationBrainReceiptSummary;
+  readonly verificationReports: readonly FederationBrainVerificationReport[];
   readonly receiptVerification: {
     readonly koChainValid: boolean;
     readonly globalAnchorValid: boolean;

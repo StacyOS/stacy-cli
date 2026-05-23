@@ -48,6 +48,7 @@ export function federationBrainRoutes(db: Db) {
           reason: read.reason,
           asConsumer: asConsumer || undefined,
           receipts: summarizeReceipts(receipts),
+          verificationReports: summarizeVerificationReports(receipts),
           receiptVerification: {
             koChainValid: chain.valid,
             globalAnchorValid: globalAnchor.valid,
@@ -108,6 +109,7 @@ function formatAllowedRead(
     },
     content,
     receipts: summarizeReceipts(receipts),
+    verificationReports: summarizeVerificationReports(receipts),
     receiptVerification: {
       koChainValid: options.koChainValid,
       globalAnchorValid: options.globalAnchorValid,
@@ -138,4 +140,32 @@ function summarizeReceipts(receipts: readonly FederationReceipt[]) {
       previousReceiptHash: receipt.previousReceiptHash,
     })),
   };
+}
+
+function summarizeVerificationReports(receipts: readonly FederationReceipt[]) {
+  return receipts
+    .filter((receipt) => receipt.eventType === "verify")
+    .map((receipt) => {
+      const payload = receipt.payload;
+      return {
+        verificationKoId: stringPayload(payload.verificationKoId),
+        verificationContentHash: stringPayload(payload.verificationContentHash),
+        verdict: payload.verdict === "fail" ? "fail" : "pass",
+        failedChecks: stringArrayPayload(payload.failedChecks),
+        warningChecks: stringArrayPayload(payload.warningChecks),
+        verifierInstallId: receipt.actorInstallId,
+        createdAt: receipt.createdAt,
+        receiptHash: receipt.receiptHash,
+      };
+    })
+    .filter((report) => report.verificationKoId.length > 0)
+    .reverse();
+}
+
+function stringPayload(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function stringArrayPayload(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }

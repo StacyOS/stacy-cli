@@ -1,6 +1,7 @@
 import { brainDeriveCommand, type BrainDeriveDependencies } from "./brain-derive.js";
 import { brainCreateCommand, type BrainCreateDependencies } from "./brain-create.js";
 import { brainShowCommand, type BrainShowDependencies } from "./brain-show.js";
+import { brainVerifyCommand, type BrainVerifyDependencies } from "./brain-verify.js";
 import {
   contactsAddCommand,
   contactsExportCommand,
@@ -28,6 +29,7 @@ export const federationCliCommands = {
   brainCreate: "create",
   brainDerive: "derive",
   brainShow: "show",
+  brainVerify: "verify",
   share: "share",
   revoke: "revoke",
 } as const;
@@ -36,6 +38,7 @@ export interface RegisterFederationCommandsOptions {
   readonly brainCreate?: BrainCreateDependencies;
   readonly brainDerive?: BrainDeriveDependencies;
   readonly brainShow?: BrainShowDependencies;
+  readonly brainVerify?: BrainVerifyDependencies;
   readonly share?: ShareDependencies;
   readonly revoke?: RevokeDependencies;
   readonly contacts?: ContactsDependencies;
@@ -94,6 +97,24 @@ export function registerFederationCommands(
         String(sourceKoId),
         commandOptions as Parameters<typeof brainDeriveCommand>[1],
         options.brainDerive,
+      );
+    });
+
+  brain
+    .command(federationCliCommands.brainVerify)
+    .description("Create a signed verification report for a Knowledge Object")
+    .argument("<source_ko_id>", "Knowledge Object ID to verify")
+    .option("--input <path>", "Original input file used by the Knowledge Object")
+    .option("--schema <path>", "Dashboard schema used for deterministic reconciliation")
+    .option("--ko-id <id>", "Deterministic verification Knowledge Object ID for harness runs")
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .option("--json", "Print raw JSON output", false)
+    .action(async (sourceKoId, commandOptions) => {
+      await brainVerifyCommand(
+        String(sourceKoId),
+        commandOptions as Parameters<typeof brainVerifyCommand>[1],
+        options.brainVerify,
       );
     });
 

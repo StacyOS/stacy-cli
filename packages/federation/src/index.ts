@@ -168,6 +168,21 @@ export {
   type DerivedKnowledgeObjectContent,
 } from "./brain/derived-brain.js";
 export {
+  createVerificationKnowledgeObject,
+  type CreateVerificationKnowledgeObjectOptions,
+  type CreateVerificationKnowledgeObjectResult,
+} from "./brain/verification-brain.js";
+export {
+  VERIFICATION_REPORT_CONTENT_TYPE,
+  VERIFICATION_REPORT_SCHEMA_VERSION,
+  createVerificationReportContent,
+  type CreateVerificationReportOptions,
+  type VerificationCheck,
+  type VerificationCheckStatus,
+  type VerificationReportContent,
+  type VerificationVerdict,
+} from "./verification/verification-report.js";
+export {
   readKnowledgeObjectWithConsent,
   type ReadKnowledgeObjectWithConsentOptions,
 } from "./brain/read-with-consent.js";

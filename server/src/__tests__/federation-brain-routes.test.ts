@@ -36,6 +36,23 @@ describe("federationBrainRoutes", () => {
         createdAt: "2026-05-22T00:00:00.000Z",
         receiptHash: "sha256:receipt",
       },
+      {
+        id: "receipt_verify",
+        eventType: "verify",
+        tenant: "stacy/acme",
+        koId: "ko_demo",
+        actorInstallId: "install_verifier",
+        counterpartyInstallId: "install_a",
+        payload: {
+          verificationKoId: "ko_verification",
+          verificationContentHash: "sha256:verification",
+          verdict: "pass",
+          failedChecks: [],
+          warningChecks: ["deterministic_reconciliation"],
+        },
+        createdAt: "2026-05-22T00:00:01.000Z",
+        receiptHash: "sha256:verify_receipt",
+      },
     ]);
     federationMocks.verifyReceiptChain.mockResolvedValue({ valid: true, checked: 1 });
     federationMocks.verifyGlobalReceiptAnchor.mockResolvedValue({ valid: true, checked: 3 });
@@ -80,13 +97,22 @@ describe("federationBrainRoutes", () => {
       verification: { signature: "verified" },
       consent: { status: "local_owner" },
       receipts: {
-        total: 1,
-        byEvent: { read: 1 },
+        total: 2,
+        byEvent: { read: 1, verify: 1 },
       },
       receiptVerification: {
         koChainValid: true,
         globalAnchorValid: true,
       },
+      verificationReports: [
+        {
+          verificationKoId: "ko_verification",
+          verificationContentHash: "sha256:verification",
+          verdict: "pass",
+          warningChecks: ["deterministic_reconciliation"],
+          verifierInstallId: "install_verifier",
+        },
+      ],
     });
   });
 
@@ -109,7 +135,7 @@ describe("federationBrainRoutes", () => {
       reason: "revoked",
       asConsumer: "install_b",
       receipts: {
-        total: 1,
+        total: 2,
       },
     });
   });

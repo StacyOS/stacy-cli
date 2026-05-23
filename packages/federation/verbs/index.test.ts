@@ -54,6 +54,7 @@ describe("federation CLI registration", () => {
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainCreate);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainDerive);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainShow);
+    expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainVerify);
 
     const contacts = program.children.find((child) => child.nameAndArgs === "contacts");
     expect(contacts?.children.map((child) => child.nameAndArgs)).toEqual(

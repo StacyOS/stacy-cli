@@ -2,7 +2,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BadgeCheck, Database, FileJson, Lock, ReceiptText, ShieldCheck } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "@/lib/router";
-import { federationBrainApi, type FederationBrainDashboardContent, type FederationBrainRead } from "../api/federationBrain";
+import {
+  federationBrainApi,
+  type FederationBrainDashboardContent,
+  type FederationBrainRead,
+  type FederationBrainVerificationReport,
+} from "../api/federationBrain";
 import { queryKeys } from "../lib/queryKeys";
 import { cn } from "../lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -192,6 +197,10 @@ function AllowedState({
         </Card>
       )}
 
+      {read.verificationReports.length > 0 ? (
+        <VerificationReportsPanel reports={read.verificationReports} />
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <ProofPanel read={read} />
         <ReceiptPanel
@@ -226,6 +235,9 @@ function DeniedState({ read }: { read: Extract<FederationBrainRead, { status: "d
         koChainValid={read.receiptVerification.koChainValid}
         globalAnchorValid={read.receiptVerification.globalAnchorValid}
       />
+      {read.verificationReports.length > 0 ? (
+        <VerificationReportsPanel reports={read.verificationReports} />
+      ) : null}
     </div>
   );
 }
@@ -270,6 +282,47 @@ function ProofPanel({ read }: { read: Extract<FederationBrainRead, { status: "al
         <KeyValue label="Creator install" value={read.creatorInstallId} />
         <KeyValue label="Signer install" value={read.signerInstallId} />
         <KeyValue label="Stored at" value={read.provenance.storedAt} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function VerificationReportsPanel({ reports }: { reports: readonly FederationBrainVerificationReport[] }) {
+  return (
+    <Card className="rounded-md">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="h-4 w-4" />
+          Verification reports
+        </CardTitle>
+        <CardDescription>Signed correctness checks attached to this Knowledge Object.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {reports.map((report) => (
+          <div key={`${report.verificationKoId}-${report.receiptHash}`} className="border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Badge variant={report.verdict === "pass" ? "default" : "destructive"}>
+                Verdict {report.verdict}
+              </Badge>
+              <span className="font-mono text-xs text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</span>
+            </div>
+            <div className="mt-3 space-y-2">
+              <KeyValue label="Report KO" value={report.verificationKoId} />
+              <KeyValue label="Verifier" value={report.verifierInstallId} />
+              <KeyValue label="Report hash" value={compactHash(report.verificationContentHash)} />
+            </div>
+            {report.failedChecks.length > 0 || report.warningChecks.length > 0 ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {report.failedChecks.length > 0 ? (
+                  <div className="text-xs text-red-300">Failed: {report.failedChecks.join(", ")}</div>
+                ) : null}
+                {report.warningChecks.length > 0 ? (
+                  <div className="text-xs text-amber-300">Warnings: {report.warningChecks.join(", ")}</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
