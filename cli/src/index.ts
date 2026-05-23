@@ -150,6 +150,7 @@ program
   .option("--adapter-command <command>", "Optional adapter-like command for task generation")
   .option("--adapter-arg <arg>", "Argument passed to --adapter-command; repeat for multiple args", collectOption, [])
   .option("--adapter-output <mode>", "Adapter output contract: text or json", "text")
+  .option("--output-kind <kind>", "Knowledge Object content contract: dashboard, report, or table", "dashboard")
   .option("--adapter-timeout-ms <ms>", "Maximum adapter runtime before it is killed")
   .option("--redact-column <name>", "Column removed from adapter stdin; repeat or comma-separate", collectOption, [])
   .option("--ack-egress", "Acknowledge that adapter execution may send input records outside this install", false)

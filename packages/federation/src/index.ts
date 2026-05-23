@@ -56,11 +56,21 @@ export {
   type SignedContactCard,
 } from "./contacts/contact-card.js";
 export {
+  parseAdapterOutput,
   parseAdapterDashboardOutput,
+  parseAdapterReportOutput,
+  parseAdapterTableOutput,
+  type AdapterOutputKind,
   type AdapterDashboardOutput,
+  type AdapterReportOutput,
+  type AdapterReportSection,
+  type AdapterTableOutput,
+  type AdapterTableRow,
 } from "./dashboard/adapter-output.js";
 export {
   createDeterministicDashboardContent,
+  createDeterministicReportContent,
+  createDeterministicTableContent,
   parseDashboardSchema,
   parseCsv,
   parseCsvDashboardInput,
@@ -69,6 +79,9 @@ export {
   type DashboardSchema,
   type DashboardSchemaWidget,
   type DashboardWidget,
+  type ReportContent,
+  type ReportSection,
+  type TableContent,
 } from "./dashboard/dashboard-content.js";
 export {
   KNOWLEDGE_OBJECT_SCHEMA_VERSION,
@@ -82,9 +95,16 @@ export {
 } from "./ko/knowledge-object.js";
 export {
   CONSENT_GRANT_SCHEMA_VERSION,
+  CONSENT_GRANT_SCOPE_ADMIN,
   CONSENT_GRANT_SCOPE_READ,
+  CONSENT_GRANT_SCOPE_WRITE,
+  CONSENT_GRANT_SCOPES,
+  consentGrantScopeIncludesRead,
+  consentGrantScopeIncludesWrite,
   createConsentGrant,
+  isConsentGrantScope,
   verifyConsentGrant,
+  type ConsentGrantScope,
   type ConsentGrantSignedPayload,
   type ConsentGrantUnsignedPayload,
   type ConsentGrantVerificationResult,
@@ -93,8 +113,10 @@ export {
 } from "./consent/grant.js";
 export {
   enforceReadConsent,
+  enforceWriteConsent,
   type EnforceReadConsentOptions,
   type ReadConsentEnforcementResult,
+  type WriteConsentEnforcementResult,
 } from "./consent/enforcement.js";
 export {
   REVOCATION_TOMBSTONE_SCHEMA_VERSION,
@@ -137,6 +159,14 @@ export {
   type CreateLocalKnowledgeObjectOptions,
   type CreateLocalKnowledgeObjectResult,
 } from "./brain/local-brain.js";
+export {
+  DERIVED_KO_CONTENT_SCHEMA_VERSION,
+  DERIVED_KO_CONTENT_TYPE,
+  createDerivedKnowledgeObject,
+  type CreateDerivedKnowledgeObjectOptions,
+  type CreateDerivedKnowledgeObjectResult,
+  type DerivedKnowledgeObjectContent,
+} from "./brain/derived-brain.js";
 export {
   readKnowledgeObjectWithConsent,
   type ReadKnowledgeObjectWithConsentOptions,

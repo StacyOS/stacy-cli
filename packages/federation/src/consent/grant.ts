@@ -6,6 +6,15 @@ import { sha256Hex } from "../util/hash.js";
 
 export const CONSENT_GRANT_SCHEMA_VERSION = 1;
 export const CONSENT_GRANT_SCOPE_READ = "read";
+export const CONSENT_GRANT_SCOPE_WRITE = "write";
+export const CONSENT_GRANT_SCOPE_ADMIN = "admin";
+export const CONSENT_GRANT_SCOPES = [
+  CONSENT_GRANT_SCOPE_READ,
+  CONSENT_GRANT_SCOPE_WRITE,
+  CONSENT_GRANT_SCOPE_ADMIN,
+] as const;
+
+export type ConsentGrantScope = typeof CONSENT_GRANT_SCOPES[number];
 
 export interface ConsentGrantUnsignedPayload {
   readonly kind: "consent_grant";
@@ -15,7 +24,7 @@ export interface ConsentGrantUnsignedPayload {
   readonly koContentHash: string;
   readonly producerInstallId: string;
   readonly consumerInstallId: string;
-  readonly scope: typeof CONSENT_GRANT_SCOPE_READ;
+  readonly scope: ConsentGrantScope;
   readonly expiresAt: string;
   readonly revocable: boolean;
   readonly createdAt: string;
@@ -41,6 +50,7 @@ export interface CreateConsentGrantOptions {
   readonly koContentHash: string;
   readonly producerIdentity: InstallIdentity;
   readonly consumerInstallId: string;
+  readonly scope?: ConsentGrantScope;
   readonly expiresAt: Date;
   readonly revocable: boolean;
   readonly createdAt?: Date;
@@ -62,7 +72,7 @@ export function createConsentGrant(
     koContentHash: options.koContentHash,
     producerInstallId: options.producerIdentity.record.installId,
     consumerInstallId: options.consumerInstallId,
-    scope: CONSENT_GRANT_SCOPE_READ,
+    scope: options.scope ?? CONSENT_GRANT_SCOPE_READ,
     expiresAt: options.expiresAt.toISOString(),
     revocable: options.revocable,
     createdAt: (options.createdAt ?? new Date()).toISOString(),
@@ -104,7 +114,7 @@ export function verifyConsentGrant(
       };
     }
 
-    if (grant.signedPayload.scope !== CONSENT_GRANT_SCOPE_READ) {
+    if (!isConsentGrantScope(grant.signedPayload.scope)) {
       return { ok: false, reason: "Consent grant has unsupported scope" };
     }
 
@@ -149,6 +159,22 @@ export function verifyConsentGrant(
       reason: error instanceof Error ? error.message : "Consent grant verification failed",
     };
   }
+}
+
+export function isConsentGrantScope(value: unknown): value is ConsentGrantScope {
+  return typeof value === "string" && CONSENT_GRANT_SCOPES.includes(value as ConsentGrantScope);
+}
+
+export function consentGrantScopeIncludesRead(scope: ConsentGrantScope): boolean {
+  return (
+    scope === CONSENT_GRANT_SCOPE_READ ||
+    scope === CONSENT_GRANT_SCOPE_WRITE ||
+    scope === CONSENT_GRANT_SCOPE_ADMIN
+  );
+}
+
+export function consentGrantScopeIncludesWrite(scope: ConsentGrantScope): boolean {
+  return scope === CONSENT_GRANT_SCOPE_WRITE || scope === CONSENT_GRANT_SCOPE_ADMIN;
 }
 
 function formatGrantHash(hash: string): string {

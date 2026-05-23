@@ -2,7 +2,7 @@ import { randomUUID, sign, verify } from "node:crypto";
 
 import { readKnowledgeObject, storeKnowledgeObject, type BrainDb } from "../brain/brain-store.js";
 import { storeConsentGrant } from "../consent/grant-store.js";
-import { createConsentGrant, type SignedConsentGrant } from "../consent/grant.js";
+import { createConsentGrant, type ConsentGrantScope, type SignedConsentGrant } from "../consent/grant.js";
 import { canonicalBytes } from "../crypto/canonical.js";
 import type { InstallIdentity } from "../identity/install-identity.js";
 import type { SignedKnowledgeObject } from "../ko/knowledge-object.js";
@@ -39,6 +39,7 @@ export interface CreateFederationMessageOptions {
   readonly koId: string;
   readonly producerIdentity: InstallIdentity;
   readonly consumerInstallId: string;
+  readonly scope?: ConsentGrantScope;
   readonly expiresAt: Date;
   readonly revocable: boolean;
   readonly revocationLookupUrl?: string;
@@ -81,6 +82,7 @@ export async function createFederationMessage(
     koContentHash: read.ko.signedPayload.contentHash,
     producerIdentity: options.producerIdentity,
     consumerInstallId: options.consumerInstallId,
+    scope: options.scope,
     expiresAt: options.expiresAt,
     revocable: options.revocable,
     createdAt,
@@ -96,6 +98,7 @@ export async function createFederationMessage(
     counterpartyInstallId: options.consumerInstallId,
     payload: {
       grantId: grant.id,
+      scope: grant.signedPayload.scope,
       contentHash: read.ko.signedPayload.contentHash,
       expiresAt: grant.signedPayload.expiresAt,
     },

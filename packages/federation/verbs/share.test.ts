@@ -386,9 +386,85 @@ describe("shareCommand", () => {
       shareCommand("ko", {
         dbUrl: "postgres://example",
         with: "install_consumer",
-        scope: "write",
+        scope: "owner",
       }),
-    ).rejects.toThrow("only supports --scope read");
+    ).rejects.toThrow("Unsupported consent scope");
+  });
+
+  it("creates a write-scope grant for Phase S derived KOs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-share-write-"));
+    tempRoots.push(root);
+    const instanceRoot = join(root, "instances", "demo");
+    const configPath = join(instanceRoot, "config.json");
+    const producer = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Write share" },
+      identity: producer,
+      idGenerator: () => "ko_share_write",
+    });
+    await mkdir(join(instanceRoot, "secrets"), { recursive: true });
+    await writeFile(resolveFederationIdentityPath(instanceRoot), JSON.stringify(producer.record), {
+      mode: 0o600,
+    });
+    await writeFile(configPath, JSON.stringify(testConfig(root)), { mode: 0o600 });
+    const lines: string[] = [];
+
+    await shareCommand(
+      ko.id,
+      {
+        config: configPath,
+        dbUrl: "postgres://example",
+        with: consumer.record.installId,
+        scope: "write",
+        expires: "30d",
+        revocable: true,
+        json: true,
+      },
+      {
+        createDb: () => dbForRows([
+          [
+            {
+              id: ko.id,
+              signed_payload_json: ko.signedPayload,
+              signer_json: ko.signer,
+              signature: ko.signature,
+              provenance_json: {
+                source: "local",
+                creatorInstallId: producer.record.installId,
+                storedAt: "2026-05-22T00:00:00.000Z",
+              },
+            },
+          ],
+          [],
+          [],
+        ]),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      message: {
+        grant: {
+          signedPayload: {
+            scope: "write",
+          },
+        },
+      },
+    });
+  });
+
+  it("keeps admin share behavior reserved", async () => {
+    await expect(
+      shareCommand("ko", {
+        dbUrl: "postgres://example",
+        with: "install_consumer",
+        scope: "admin",
+      }),
+    ).rejects.toThrow("admin");
   });
 });
 

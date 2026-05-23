@@ -1,5 +1,7 @@
 import type { DashboardWidget } from "./dashboard-content.js";
 
+export type AdapterOutputKind = "dashboard" | "report" | "table";
+
 export interface AdapterDashboardOutput {
   readonly title?: string;
   readonly summary?: string;
@@ -7,17 +9,42 @@ export interface AdapterDashboardOutput {
   readonly notes?: readonly string[];
 }
 
-export function parseAdapterDashboardOutput(raw: string): AdapterDashboardOutput {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("Adapter dashboard output must be valid JSON.");
-  }
+export interface AdapterReportOutput {
+  readonly title?: string;
+  readonly summary: string;
+  readonly sections?: readonly AdapterReportSection[];
+  readonly notes?: readonly string[];
+}
 
-  if (!isRecord(parsed)) {
-    throw new Error("Adapter dashboard output must be a JSON object.");
-  }
+export interface AdapterReportSection {
+  readonly heading: string;
+  readonly body: string;
+}
+
+export interface AdapterTableOutput {
+  readonly title?: string;
+  readonly summary?: string;
+  readonly columns: readonly string[];
+  readonly rows: readonly AdapterTableRow[];
+  readonly notes?: readonly string[];
+}
+
+export type AdapterTableCell = string | number | boolean | null;
+export type AdapterTableRow = Readonly<Record<string, AdapterTableCell>>;
+
+export type ParsedAdapterOutput =
+  | AdapterDashboardOutput
+  | AdapterReportOutput
+  | AdapterTableOutput;
+
+export function parseAdapterOutput(raw: string, kind: AdapterOutputKind): ParsedAdapterOutput {
+  if (kind === "dashboard") return parseAdapterDashboardOutput(raw);
+  if (kind === "report") return parseAdapterReportOutput(raw);
+  return parseAdapterTableOutput(raw);
+}
+
+export function parseAdapterDashboardOutput(raw: string): AdapterDashboardOutput {
+  const parsed = parseAdapterJsonObject(raw, "dashboard");
 
   const widgets = parsed.widgets;
   if (!Array.isArray(widgets) || widgets.length === 0) {
@@ -28,6 +55,45 @@ export function parseAdapterDashboardOutput(raw: string): AdapterDashboardOutput
     ...(typeof parsed.title === "string" && parsed.title.trim() ? { title: parsed.title.trim() } : {}),
     ...(typeof parsed.summary === "string" && parsed.summary.trim() ? { summary: parsed.summary.trim() } : {}),
     widgets: widgets.map((widget, index) => parseAdapterWidget(widget, index)),
+    ...(parsed.notes === undefined ? {} : { notes: parseAdapterNotes(parsed.notes) }),
+  };
+}
+
+export function parseAdapterReportOutput(raw: string): AdapterReportOutput {
+  const parsed = parseAdapterJsonObject(raw, "report");
+  if (typeof parsed.summary !== "string" || !parsed.summary.trim()) {
+    throw new Error("Adapter report output must include a non-empty summary.");
+  }
+
+  return {
+    ...(typeof parsed.title === "string" && parsed.title.trim() ? { title: parsed.title.trim() } : {}),
+    summary: parsed.summary.trim(),
+    ...(parsed.sections === undefined ? {} : { sections: parseAdapterReportSections(parsed.sections) }),
+    ...(parsed.notes === undefined ? {} : { notes: parseAdapterNotes(parsed.notes) }),
+  };
+}
+
+export function parseAdapterTableOutput(raw: string): AdapterTableOutput {
+  const parsed = parseAdapterJsonObject(raw, "table");
+  if (!Array.isArray(parsed.columns) || parsed.columns.length === 0) {
+    throw new Error("Adapter table output must include a non-empty columns array.");
+  }
+  if (!Array.isArray(parsed.rows) || parsed.rows.length === 0) {
+    throw new Error("Adapter table output must include a non-empty rows array.");
+  }
+
+  const columns = parsed.columns.map((column, index) => {
+    if (typeof column !== "string" || !column.trim()) {
+      throw new Error(`Adapter table output column ${index + 1} must be a non-empty string.`);
+    }
+    return column.trim();
+  });
+
+  return {
+    ...(typeof parsed.title === "string" && parsed.title.trim() ? { title: parsed.title.trim() } : {}),
+    ...(typeof parsed.summary === "string" && parsed.summary.trim() ? { summary: parsed.summary.trim() } : {}),
+    columns,
+    rows: parsed.rows.map((row, index) => parseAdapterTableRow(row, index, columns)),
     ...(parsed.notes === undefined ? {} : { notes: parseAdapterNotes(parsed.notes) }),
   };
 }
@@ -63,6 +129,60 @@ function parseAdapterNotes(value: unknown): readonly string[] {
     }
     return note.trim();
   });
+}
+
+function parseAdapterReportSections(value: unknown): readonly AdapterReportSection[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Adapter report output sections must be an array.");
+  }
+  return value.map((section, index) => {
+    if (!isRecord(section)) {
+      throw new Error(`Adapter report section ${index + 1} must be an object.`);
+    }
+    if (typeof section.heading !== "string" || !section.heading.trim()) {
+      throw new Error(`Adapter report section ${index + 1} must include a heading.`);
+    }
+    if (typeof section.body !== "string" || !section.body.trim()) {
+      throw new Error(`Adapter report section ${index + 1} must include a body.`);
+    }
+    return {
+      heading: section.heading.trim(),
+      body: section.body.trim(),
+    };
+  });
+}
+
+function parseAdapterTableRow(value: unknown, index: number, columns: readonly string[]): AdapterTableRow {
+  if (!isRecord(value)) {
+    throw new Error(`Adapter table output row ${index + 1} must be an object.`);
+  }
+  const row: Record<string, AdapterTableCell> = {};
+  for (const column of columns) {
+    const cell = value[column];
+    if (!isTableCell(cell)) {
+      throw new Error(`Adapter table output row ${index + 1} column "${column}" has an unsupported value.`);
+    }
+    row[column] = cell;
+  }
+  return row;
+}
+
+function isTableCell(value: unknown): value is AdapterTableCell {
+  return value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function parseAdapterJsonObject(raw: string, kind: AdapterOutputKind): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Adapter ${kind} output must be valid JSON.`);
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error(`Adapter ${kind} output must be a JSON object.`);
+  }
+  return parsed;
 }
 
 function isWidgetKind(value: unknown): value is DashboardWidget["kind"] {

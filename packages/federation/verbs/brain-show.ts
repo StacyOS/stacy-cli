@@ -109,6 +109,9 @@ function renderContent(content: unknown): string {
   if (isDashboardContent(content)) {
     return renderDashboardContent(content);
   }
+  if (isDerivedKnowledgeObjectContent(content)) {
+    return renderDerivedKnowledgeObjectContent(content);
+  }
 
   return JSON.stringify(content, null, 2);
 }
@@ -178,4 +181,40 @@ function isDashboardInput(input: unknown): input is { readonly fileName: string;
     typeof (input as { rows?: unknown }).rows === "number" &&
     typeof (input as { contentHash?: unknown }).contentHash === "string"
   );
+}
+
+interface DerivedKnowledgeObjectContent {
+  readonly kind: "derived_knowledge_object";
+  readonly source?: {
+    readonly koId?: string;
+    readonly koContentHash?: string;
+    readonly producerInstallId?: string;
+    readonly grantId?: string;
+    readonly grantScope?: string;
+  };
+  readonly createdByConsumerInstallId?: string;
+  readonly derivedContent?: unknown;
+}
+
+function isDerivedKnowledgeObjectContent(content: unknown): content is DerivedKnowledgeObjectContent {
+  return (
+    typeof content === "object" &&
+    content !== null &&
+    !Array.isArray(content) &&
+    (content as { kind?: unknown }).kind === "derived_knowledge_object"
+  );
+}
+
+function renderDerivedKnowledgeObjectContent(content: DerivedKnowledgeObjectContent): string {
+  const source = content.source ?? {};
+  return [
+    "Derived Knowledge Object",
+    `Source KO: ${source.koId ?? "unknown"}`,
+    `Source content hash: ${source.koContentHash ?? "unknown"}`,
+    `Producer install: ${source.producerInstallId ?? "unknown"}`,
+    `Grant: ${source.grantId ?? "unknown"} (${source.grantScope ?? "unknown"})`,
+    `Consumer install: ${content.createdByConsumerInstallId ?? "unknown"}`,
+    "Derived content:",
+    JSON.stringify(content.derivedContent ?? null, null, 2),
+  ].join("\n");
 }

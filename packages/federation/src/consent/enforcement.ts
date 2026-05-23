@@ -1,5 +1,10 @@
 import type { SignedKnowledgeObject } from "../ko/knowledge-object.js";
-import { type SignedConsentGrant, verifyConsentGrant } from "./grant.js";
+import {
+  consentGrantScopeIncludesRead,
+  consentGrantScopeIncludesWrite,
+  type SignedConsentGrant,
+  verifyConsentGrant,
+} from "./grant.js";
 import {
   type SignedRevocationTombstone,
   verifyRevocationTombstone,
@@ -17,9 +22,41 @@ export type ReadConsentEnforcementResult =
   | { readonly ok: true; readonly grantId: string }
   | { readonly ok: false; readonly reason: string };
 
+export type WriteConsentEnforcementResult =
+  | { readonly ok: true; readonly grantId: string }
+  | { readonly ok: false; readonly reason: string };
+
 export function enforceReadConsent(
   options: EnforceReadConsentOptions,
 ): ReadConsentEnforcementResult {
+  const coverage = enforceConsentCoverage(options);
+  if (!coverage.ok) return coverage;
+
+  if (!consentGrantScopeIncludesRead(coverage.grant.signedPayload.scope)) {
+    return { ok: false, reason: "Consent grant does not include read scope" };
+  }
+
+  return { ok: true, grantId: coverage.grant.id };
+}
+
+export function enforceWriteConsent(
+  options: EnforceReadConsentOptions,
+): WriteConsentEnforcementResult {
+  const coverage = enforceConsentCoverage(options);
+  if (!coverage.ok) return coverage;
+
+  if (!consentGrantScopeIncludesWrite(coverage.grant.signedPayload.scope)) {
+    return { ok: false, reason: "Consent grant does not include write scope" };
+  }
+
+  return { ok: true, grantId: coverage.grant.id };
+}
+
+function enforceConsentCoverage(
+  options: EnforceReadConsentOptions,
+):
+  | { readonly ok: true; readonly grant: SignedConsentGrant }
+  | { readonly ok: false; readonly reason: string } {
   if (!options.grant) {
     return { ok: false, reason: "Missing consent grant" };
   }
@@ -89,5 +126,5 @@ export function enforceReadConsent(
     return { ok: false, reason: "Consent grant has been revoked" };
   }
 
-  return { ok: true, grantId: options.grant.id };
+  return { ok: true, grant: options.grant };
 }

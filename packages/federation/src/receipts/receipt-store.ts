@@ -13,7 +13,8 @@ export type FederationReceiptEventType =
   | "store"
   | "read"
   | "deny"
-  | "revoke";
+  | "revoke"
+  | "derive";
 
 export interface FederationReceipt {
   readonly id: string;

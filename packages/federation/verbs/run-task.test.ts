@@ -136,6 +136,180 @@ describe("runTaskCommand", () => {
     });
   });
 
+  it("creates a deterministic report KO from CSV input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "write a quarterly revenue report",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "report",
+        koId: "ko_report_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_report_task",
+      outputKind: "report",
+      generator: "deterministic_report",
+    });
+    expect(createdContents[0]).toMatchObject({
+      kind: "report",
+      summary: "Write a quarterly revenue report: analyzed 2 row(s) across 5 column(s).",
+      sections: [
+        { heading: "Input", body: "input.csv contains 2 row(s) and 5 column(s)." },
+        { heading: "Columns", body: "month, revenue, pipeline, active_customers, churn_risk" },
+      ],
+    });
+  });
+
+  it("accepts schema-validated adapter report JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "write a quarterly revenue report",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "report",
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Report',",
+          "summary:'Adapter owns this report.',",
+          "sections:[{heading:'Signal',body:'Pipeline is expanding.'}],",
+          "notes:['Report contract validated.']",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_report_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(createdContents[0]).toMatchObject({
+      kind: "report",
+      title: "Adapter Report",
+      summary: "Adapter owns this report.",
+      sections: [{ heading: "Signal", body: "Pipeline is expanding." }],
+      adapterNotes: ["Report contract validated."],
+      generator: "adapter_command",
+    });
+  });
+
+  it("creates a table KO from CSV input and adapter-owned table JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "prepare a clean revenue table",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "table",
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Table',",
+          "columns:['month','score'],",
+          "rows:[{month:'2026-04',score:1},{month:'2026-05',score:2}],",
+          "summary:'Adapter owns this table.'",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_table_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(createdContents[0]).toMatchObject({
+      kind: "table",
+      title: "Adapter Table",
+      columns: ["month", "score"],
+      rows: [{ month: "2026-04", score: 1 }, { month: "2026-05", score: 2 }],
+      summary: "Adapter owns this table.",
+      generator: "adapter_command",
+    });
+  });
+
+  it("rejects unsupported task output kinds before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          outputKind: "graph",
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("--output-kind must be dashboard, report, or table.");
+
+    expect(openedConnections).toEqual([]);
+  });
+
   it("redacts selected columns from adapter stdin while recording KO redaction metadata", async () => {
     const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
     tempRoots.push(root);

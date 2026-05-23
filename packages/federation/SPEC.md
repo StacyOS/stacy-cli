@@ -119,17 +119,28 @@ changed.
 is supplied, adapter execution must remain bounded by timeout, optional allowlist,
 and explicit `--ack-egress`.
 
-Adapter stdout has two supported contracts:
+Task KOs support three public content contracts selected with
+`--output-kind dashboard|report|table`. The default is `dashboard`, preserving
+the public demo storyboard.
+
+Adapter stdout has two supported modes:
 
 - `--adapter-output text`: stdout is stored as narrative `adapterOutput`, while
-  dashboard widgets remain deterministic.
-- `--adapter-output json`: stdout must be valid JSON matching the dashboard
-  adapter contract: optional `title`, optional `summary`, non-empty `widgets[]`
-  with `kind`, `label`, and string/number `value`, plus optional string `notes[]`.
+  the selected KO content remains deterministic.
+- `--adapter-output json`: stdout must be valid JSON matching the selected
+  `--output-kind` contract:
+  - `dashboard`: optional `title`, optional `summary`, non-empty `widgets[]`
+    with `kind`, `label`, and string/number `value`, plus optional string
+    `notes[]`.
+  - `report`: non-empty `summary`, optional `title`, optional `sections[]`
+    with non-empty `heading` and `body`, plus optional string `notes[]`.
+  - `table`: non-empty `columns[]`, non-empty `rows[]`, each row object
+    containing string/number/boolean/null values for the declared columns, plus
+    optional `title`, `summary`, and string `notes[]`.
 
 Invalid JSON adapter output must fail before KO creation. Valid JSON adapter
-output may own the dashboard title, summary, and widgets, while the KO still
-records the original input file name, row count, and content hash.
+output may own the selected content surface while the KO still records the
+original input file name, row count, and content hash.
 
 Adapter stdin may redact selected CSV columns through `--redact-column` or
 `STACY_PUBLIC_DEMO_REDACT_COLUMNS`. Redaction applies only to the JSON sent to
@@ -142,7 +153,8 @@ trailing lines. Malformed unclosed quoted fields must fail before KO creation.
 
 ## Consent Grant
 
-A consent grant is a signed object authorizing one consumer install to read one KO.
+A consent grant is a signed object authorizing one consumer install to exercise a
+bounded capability against one KO.
 
 Minimum payload:
 
@@ -152,13 +164,37 @@ Minimum payload:
 - KO id or content hash
 - producer install id
 - consumer install id
-- scope: `read`
+- scope: one of `read`, `write`, or `admin`
 - expiry timestamp
 - revocable flag
 - created timestamp
 
-Read access requires a valid, unexpired grant matching the consumer, producer, tenant,
-KO hash, and `read` scope.
+Scope semantics for the public demo roadmap:
+
+- `read`: consumer can read the federated KO while the grant is valid.
+- `write`: consumer can read the federated KO and, in Phase S, create a new
+  consumer-signed derived KO that references the original. The original remains
+  immutable and producer-signed; write never lets the consumer mutate A's KO.
+- `admin`: reserved for future delegation/admin operations. For now it includes
+  read capability but does not enable re-sharing, revocation by the consumer, key
+  rotation, or producer-side mutation.
+
+Read access requires a valid, unexpired grant matching the consumer, producer,
+tenant, KO hash, and a scope that includes read capability (`read`, `write`, or
+`admin`). `write` is implemented as derived-KO creation in Phase S. `admin`
+remains signed and verifiable but reserved until the corresponding SPEC revision
+and tests land.
+
+Derived KO semantics for Phase S:
+
+- a derived KO is a new signed Knowledge Object created by the consumer install
+- it must reference the original KO id, original content hash, producer install id,
+  and grant id in signed content/provenance
+- it must not overwrite the original KO or change its content hash/signature
+- producer revocation of the source grant must deny future derived writes, while
+  already-created derived KOs remain independently signed artifacts
+- `stacy brain derive <source_ko_id> --content-json <json>` is the user-facing
+  Phase S operation for creating a derived KO
 
 ## Revocation Tombstone
 
@@ -190,6 +226,7 @@ Minimum receipt events:
 - read
 - deny
 - revoke
+- derive
 
 Receipt records must survive restart and must never be updated in place through the
 federation package API.

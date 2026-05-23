@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { createInstallIdentity } from "../identity/install-identity.js";
 import { createKnowledgeObject } from "../ko/knowledge-object.js";
-import { createConsentGrant } from "./grant.js";
-import { enforceReadConsent } from "./enforcement.js";
+import { CONSENT_GRANT_SCOPES, createConsentGrant } from "./grant.js";
+import { enforceReadConsent, enforceWriteConsent } from "./enforcement.js";
 import { createRevocationTombstone } from "./revocation.js";
 
 describe("read-time consent enforcement", () => {
@@ -56,6 +56,80 @@ describe("read-time consent enforcement", () => {
         now: new Date("2026-05-22T00:00:00.000Z"),
       }),
     ).toEqual({ ok: true, grantId: "grant_private" });
+  });
+
+  it.each(CONSENT_GRANT_SCOPES)("allows read when a %s grant includes read capability", (scope) => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Private" },
+      identity: producer,
+      idGenerator: () => "ko_private",
+    });
+    const grant = createConsentGrant({
+      tenant: "stacy/acme",
+      koId: ko.id,
+      koContentHash: ko.signedPayload.contentHash,
+      producerIdentity: producer,
+      consumerInstallId: consumer.record.installId,
+      scope,
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      idGenerator: () => `grant_${scope}`,
+    });
+
+    expect(
+      enforceReadConsent({
+        ko,
+        grant,
+        consumerInstallId: consumer.record.installId,
+        now: new Date("2026-05-22T00:00:00.000Z"),
+      }),
+    ).toEqual({ ok: true, grantId: `grant_${scope}` });
+  });
+
+  it.each([
+    ["read", false],
+    ["write", true],
+    ["admin", true],
+  ] as const)("enforces write capability for %s grants", (scope, allowed) => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Private" },
+      identity: producer,
+      idGenerator: () => "ko_private",
+    });
+    const grant = createConsentGrant({
+      tenant: "stacy/acme",
+      koId: ko.id,
+      koContentHash: ko.signedPayload.contentHash,
+      producerIdentity: producer,
+      consumerInstallId: consumer.record.installId,
+      scope,
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      idGenerator: () => `grant_${scope}`,
+    });
+
+    const result = enforceWriteConsent({
+      ko,
+      grant,
+      consumerInstallId: consumer.record.installId,
+      now: new Date("2026-05-22T00:00:00.000Z"),
+    });
+
+    expect(result).toEqual(
+      allowed
+        ? { ok: true, grantId: `grant_${scope}` }
+        : { ok: false, reason: "Consent grant does not include write scope" },
+    );
   });
 
   type GrantOverride = {

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { createInstallIdentity } from "../identity/install-identity.js";
 import {
+  CONSENT_GRANT_SCOPES,
+  consentGrantScopeIncludesRead,
   createConsentGrant,
+  isConsentGrantScope,
   type SignedConsentGrant,
   verifyConsentGrant,
 } from "./grant.js";
@@ -40,12 +43,43 @@ describe("signed consent grants", () => {
     });
   });
 
+  it.each(CONSENT_GRANT_SCOPES)("creates and verifies a signed %s grant", (scope) => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const grant = createConsentGrant({
+      tenant: "stacy/acme",
+      koId: "ko_123",
+      koContentHash: "sha256:abc",
+      producerIdentity: producer,
+      consumerInstallId: consumer.record.installId,
+      scope,
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+    });
+
+    expect(grant.signedPayload.scope).toBe(scope);
+    expect(verifyConsentGrant(grant)).toEqual({
+      ok: true,
+      grantHash: grant.signedPayload.grantHash,
+    });
+  });
+
+  it("defines the Phase R scope vocabulary and read-capability lattice", () => {
+    expect(CONSENT_GRANT_SCOPES).toEqual(["read", "write", "admin"]);
+    expect(isConsentGrantScope("read")).toBe(true);
+    expect(isConsentGrantScope("write")).toBe(true);
+    expect(isConsentGrantScope("admin")).toBe(true);
+    expect(isConsentGrantScope("owner")).toBe(false);
+    expect(CONSENT_GRANT_SCOPES.every((scope) => consentGrantScopeIncludesRead(scope))).toBe(true);
+  });
+
   it.each([
     [
       "scope",
       (grant: SignedConsentGrant): SignedConsentGrant => ({
         ...grant,
-        signedPayload: { ...grant.signedPayload, scope: "write" as "read" },
+        signedPayload: { ...grant.signedPayload, scope: "owner" as "read" },
       }),
     ],
     [

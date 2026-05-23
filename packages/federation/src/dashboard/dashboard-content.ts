@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 import type { CanonicalJsonValue } from "../crypto/canonical.js";
 import { sha256Hex } from "../util/hash.js";
-import type { AdapterDashboardOutput } from "./adapter-output.js";
+import type { AdapterDashboardOutput, AdapterReportOutput, AdapterTableOutput } from "./adapter-output.js";
 
 export interface DashboardInput {
   readonly fileName: string;
@@ -49,6 +49,46 @@ export interface DashboardWidget {
   readonly value: string | number;
 }
 
+export interface ReportContent {
+  readonly kind: "report";
+  readonly title: string;
+  readonly task: string;
+  readonly input: {
+    readonly fileName: string;
+    readonly contentHash: string;
+    readonly rows: number;
+  };
+  readonly summary: string;
+  readonly sections: readonly ReportSection[];
+  readonly generator: "adapter_command" | "deterministic_report";
+  readonly generatedAt: string;
+  readonly adapterNotes?: readonly string[];
+  readonly redactedColumns?: readonly string[];
+}
+
+export interface ReportSection {
+  readonly heading: string;
+  readonly body: string;
+}
+
+export interface TableContent {
+  readonly kind: "table";
+  readonly title: string;
+  readonly task: string;
+  readonly input: {
+    readonly fileName: string;
+    readonly contentHash: string;
+    readonly rows: number;
+  };
+  readonly columns: readonly string[];
+  readonly rows: readonly Record<string, string | number | boolean | null>[];
+  readonly summary: string;
+  readonly generator: "adapter_command" | "deterministic_table";
+  readonly generatedAt: string;
+  readonly adapterNotes?: readonly string[];
+  readonly redactedColumns?: readonly string[];
+}
+
 export function parseCsvDashboardInput(filePath: string, raw: string): DashboardInput {
   const records = parseCsv(raw);
   return {
@@ -90,6 +130,64 @@ export function createDeterministicDashboardContent(options: {
     ...(options.adapterDashboard?.notes?.length ? { adapterNotes: options.adapterDashboard.notes } : {}),
     ...(options.redactedColumns?.length ? { redactedColumns: options.redactedColumns } : {}),
   } as unknown as DashboardContent & CanonicalJsonValue;
+}
+
+export function createDeterministicReportContent(options: {
+  readonly task: string;
+  readonly input: DashboardInput;
+  readonly adapterReport?: AdapterReportOutput;
+  readonly redactedColumns?: readonly string[];
+}): ReportContent & CanonicalJsonValue {
+  const title = options.adapterReport?.title ?? titleFromTask(options.task);
+  const sections = options.adapterReport?.sections ?? createDeterministicReportSections(options.input);
+  const summary = options.adapterReport?.summary ?? createReportSummary(title, options.input.rows, options.input.columns);
+
+  return {
+    kind: "report",
+    title,
+    task: options.task,
+    input: {
+      fileName: options.input.fileName,
+      contentHash: options.input.contentHash,
+      rows: options.input.rows,
+    },
+    summary,
+    sections,
+    generator: options.adapterReport ? "adapter_command" : "deterministic_report",
+    generatedAt: new Date(0).toISOString(),
+    ...(options.adapterReport?.notes?.length ? { adapterNotes: options.adapterReport.notes } : {}),
+    ...(options.redactedColumns?.length ? { redactedColumns: options.redactedColumns } : {}),
+  } as unknown as ReportContent & CanonicalJsonValue;
+}
+
+export function createDeterministicTableContent(options: {
+  readonly task: string;
+  readonly input: DashboardInput;
+  readonly adapterTable?: AdapterTableOutput;
+  readonly redactedColumns?: readonly string[];
+}): TableContent & CanonicalJsonValue {
+  const title = options.adapterTable?.title ?? titleFromTask(options.task);
+  const columns = options.adapterTable?.columns ?? options.input.columns;
+  const rows = options.adapterTable?.rows ?? options.input.records;
+  const summary = options.adapterTable?.summary ?? `${title}: ${rows.length} row(s), ${columns.length} column(s).`;
+
+  return {
+    kind: "table",
+    title,
+    task: options.task,
+    input: {
+      fileName: options.input.fileName,
+      contentHash: options.input.contentHash,
+      rows: options.input.rows,
+    },
+    columns,
+    rows,
+    summary,
+    generator: options.adapterTable ? "adapter_command" : "deterministic_table",
+    generatedAt: new Date(0).toISOString(),
+    ...(options.adapterTable?.notes?.length ? { adapterNotes: options.adapterTable.notes } : {}),
+    ...(options.redactedColumns?.length ? { redactedColumns: options.redactedColumns } : {}),
+  } as unknown as TableContent & CanonicalJsonValue;
 }
 
 export function redactDashboardInputForAdapter(
@@ -309,6 +407,23 @@ function createDashboardSummary(
 ): string {
   const widgetSummary = widgets.slice(0, 2).map((widget) => `${widget.label}: ${widget.value}`).join(", ");
   return widgetSummary ? `${title}: ${rows} rows, ${widgetSummary}.` : `${title}: ${rows} rows.`;
+}
+
+function createDeterministicReportSections(input: DashboardInput): readonly ReportSection[] {
+  return [
+    {
+      heading: "Input",
+      body: `${input.fileName} contains ${input.rows} row(s) and ${input.columns.length} column(s).`,
+    },
+    {
+      heading: "Columns",
+      body: input.columns.length > 0 ? input.columns.join(", ") : "No columns were detected.",
+    },
+  ];
+}
+
+function createReportSummary(title: string, rows: number, columns: readonly string[]): string {
+  return `${title}: analyzed ${rows} row(s) across ${columns.length} column(s).`;
 }
 
 function numberFrom(value: string | undefined): number {

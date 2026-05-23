@@ -123,14 +123,33 @@ adapter process on timeout. For safer demos, set
 adapter binary names. Because adapter execution can send parsed input records
 outside this install, adapter-backed `stacy run` requires `--ack-egress`.
 
-Adapters can return plain text or validated dashboard JSON. Plain text is stored
-as narrative `adapterOutput`; validated JSON can own the dashboard title,
-summary, and widgets:
+Adapters can return plain text or validated JSON. Plain text is stored as
+narrative `adapterOutput`; validated JSON can own the selected KO content
+contract. `dashboard` is the default output kind, while `report` and `table`
+are available for adapter-generated reports and structured tables:
 
 ```bash
 stacy run "build a dashboard" \
   --input ./data.csv \
   --adapter-command ./my-adapter \
+  --adapter-output json \
+  --ack-egress
+```
+
+```bash
+stacy run "write a board report" \
+  --input ./data.csv \
+  --output-kind report \
+  --adapter-command ./my-report-adapter \
+  --adapter-output json \
+  --ack-egress
+```
+
+```bash
+stacy run "normalize this CSV into a table" \
+  --input ./data.csv \
+  --output-kind table \
+  --adapter-command ./my-table-adapter \
   --adapter-output json \
   --ack-egress
 ```
@@ -203,7 +222,7 @@ Equivalent environment variables:
 STACY_SERVER_TLS_ENABLED=true \
 STACY_SERVER_TLS_CERT_PATH=~/.stacy/certs/server.crt \
 STACY_SERVER_TLS_KEY_PATH=~/.stacy/certs/server.key \
-pnpm --filter @arpanstacy/stacy start
+pnpm --filter @arpanstacy/stacy dev -- run
 ```
 
 When TLS is enabled, Stacy advertises `https://` runtime API candidates unless
@@ -270,6 +289,177 @@ all KOs. It should report:
 
 ```text
 Global receipt anchor valid. Checked <n> anchor(s).
+```
+
+## Two-Machine HTTPS Demo
+
+Phase T runs the same story across two real machines. Use one terminal on the
+producer machine A and one terminal on the consumer machine B.
+
+Prerequisites:
+
+- Both machines are on the same branch and have run `pnpm install`.
+- Both Stacy servers are reachable through HTTPS.
+- Each config has TLS enabled, either through `server.tls` or
+  `STACY_SERVER_TLS_*`.
+- The producer base URL and consumer base URL are stable for the demo.
+
+### 1. Start Both Installs
+
+On machine A:
+
+```bash
+STACY_SERVER_TLS_ENABLED=true \
+STACY_SERVER_TLS_CERT_PATH=/path/to/producer.crt \
+STACY_SERVER_TLS_KEY_PATH=/path/to/producer.key \
+pnpm --filter @arpanstacy/stacy dev -- run --config /path/to/producer/config.json
+```
+
+On machine B:
+
+```bash
+STACY_SERVER_TLS_ENABLED=true \
+STACY_SERVER_TLS_CERT_PATH=/path/to/consumer.crt \
+STACY_SERVER_TLS_KEY_PATH=/path/to/consumer.key \
+pnpm --filter @arpanstacy/stacy dev -- run --config /path/to/consumer/config.json
+```
+
+### 2. Verify Remote Reachability
+
+From either checkout:
+
+```bash
+STACY_FEDERATION_REMOTE_PRODUCER_BASE_URL=https://producer.example.com \
+STACY_FEDERATION_REMOTE_CONSUMER_BASE_URL=https://consumer.example.com \
+pnpm --filter @arpanstacy/stacy-federation demo:remote:preflight
+```
+
+For a private test with self-signed certs, add:
+
+```bash
+STACY_FEDERATION_REMOTE_ALLOW_SELF_SIGNED=1
+```
+
+Do not use `http://` for non-loopback hosts. The federation CLI rejects
+plaintext remote delivery and revocation URLs.
+
+### 3. Export B's Signed Contact Card
+
+On machine B:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- contacts export meera \
+  --config /path/to/consumer/config.json \
+  --endpoint https://consumer.example.com/api/federation \
+  --revocation-url https://consumer.example.com/api/federation/revocations \
+  --label "Meera's Stacy install" \
+  --out meera.contact-card.json
+```
+
+Move `meera.contact-card.json` to machine A. Email, Signal, USB, or any file
+transfer is fine; import verifies the card signature and install-id binding.
+
+### 4. Import B On A
+
+On machine A:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- contacts import meera.contact-card.json \
+  --config /path/to/producer/config.json \
+  --as meera \
+  --json
+```
+
+Save the printed `installId`; B will use it as the consumer id when reading.
+
+### 5. Create The CSV-Backed KO On A
+
+On machine A:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- run "build a quarterly revenue dashboard from this CSV" \
+  --config /path/to/producer/config.json \
+  --input packages/federation/demo/acme-q2-revenue.csv \
+  --schema packages/federation/demo/acme-dashboard.schema.json \
+  --ko-id ko_public_revenue_dashboard \
+  --json
+```
+
+### 6. Share From A To B
+
+On machine A:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- share ko_public_revenue_dashboard \
+  --config /path/to/producer/config.json \
+  --with-contact meera \
+  --revocation-url https://producer.example.com/api/federation/revocations \
+  --expires 30d \
+  --revocable \
+  --json
+```
+
+The JSON output should show delivery status `201`.
+
+### 7. Read On B
+
+On machine B:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- brain show ko_public_revenue_dashboard \
+  --config /path/to/consumer/config.json \
+  --as-consumer <consumer_install_id>
+```
+
+Expected proof:
+
+```text
+Signature: verified
+Consent: enforced on read
+Dashboard: Acme Q2 Revenue Dashboard
+```
+
+### 8. Revoke On A, Then Read Again On B
+
+On machine A:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- revoke ko_public_revenue_dashboard \
+  --config /path/to/producer/config.json \
+  --reason "Two-machine demo revoke" \
+  --json
+```
+
+On machine B:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- brain show ko_public_revenue_dashboard \
+  --config /path/to/consumer/config.json \
+  --as-consumer <consumer_install_id>
+```
+
+Expected final proof:
+
+```text
+Consent grant has been revoked
+```
+
+### 9. Verify Receipts
+
+Run on both machines:
+
+```bash
+pnpm --filter @arpanstacy/stacy dev -- receipts list \
+  --config /path/to/config.json \
+  --ko ko_public_revenue_dashboard
+
+pnpm --filter @arpanstacy/stacy dev -- receipts verify \
+  --config /path/to/config.json \
+  --ko ko_public_revenue_dashboard
+
+pnpm --filter @arpanstacy/stacy dev -- receipts verify \
+  --config /path/to/config.json \
+  --global
 ```
 
 ## Demo Storyboard

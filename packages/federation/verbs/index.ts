@@ -1,3 +1,4 @@
+import { brainDeriveCommand, type BrainDeriveDependencies } from "./brain-derive.js";
 import { brainCreateCommand, type BrainCreateDependencies } from "./brain-create.js";
 import { brainShowCommand, type BrainShowDependencies } from "./brain-show.js";
 import {
@@ -25,6 +26,7 @@ interface CommandLike {
 export const federationCliCommands = {
   brain: "brain",
   brainCreate: "create",
+  brainDerive: "derive",
   brainShow: "show",
   share: "share",
   revoke: "revoke",
@@ -32,6 +34,7 @@ export const federationCliCommands = {
 
 export interface RegisterFederationCommandsOptions {
   readonly brainCreate?: BrainCreateDependencies;
+  readonly brainDerive?: BrainDeriveDependencies;
   readonly brainShow?: BrainShowDependencies;
   readonly share?: ShareDependencies;
   readonly revoke?: RevokeDependencies;
@@ -76,6 +79,24 @@ export function registerFederationCommands(
       await brainShowCommand(String(koId), commandOptions as Parameters<typeof brainShowCommand>[1], options.brainShow);
     });
 
+  brain
+    .command(federationCliCommands.brainDerive)
+    .description("Create a consumer-signed derived Knowledge Object from a write-granted federated KO")
+    .argument("<source_ko_id>", "Federated source Knowledge Object ID")
+    .requiredOption("--content-json <json>", "Derived Knowledge Object content as JSON")
+    .option("--content-type <type>", "Derived Knowledge Object content type")
+    .option("--ko-id <id>", "Deterministic Knowledge Object ID for harness runs")
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .option("--json", "Print raw JSON output", false)
+    .action(async (sourceKoId, commandOptions) => {
+      await brainDeriveCommand(
+        String(sourceKoId),
+        commandOptions as Parameters<typeof brainDeriveCommand>[1],
+        options.brainDerive,
+      );
+    });
+
   program
     .command(federationCliCommands.share)
     .description("Federate a signed Knowledge Object with per-object consent")
@@ -84,7 +105,7 @@ export function registerFederationCommands(
     .option("--with-contact <name>", "Consumer contact name from the federation contacts book")
     .option("--to <url>", "Consumer /api/federation endpoint URL")
     .option("--revocation-url <url>", "Producer revocation lookup URL for consumer next-read checks")
-    .option("--scope <scope>", "Consent scope", "read")
+    .option("--scope <scope>", "Consent scope: read or write; admin is reserved", "read")
     .option("--expires <duration>", "Consent expiry duration", "30d")
     .option("--revocable", "Mark the consent grant revocable", false)
     .option("--json", "Print raw JSON output", false)

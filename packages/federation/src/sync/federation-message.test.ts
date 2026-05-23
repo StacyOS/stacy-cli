@@ -69,6 +69,49 @@ describe("federation KO messages", () => {
     expect(verifyFederationMessageSignature(message)).toBe(true);
   });
 
+  it("can create a signed federation message with a Phase R write-scope grant", async () => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/acme",
+      contentType: "application/json",
+      content: { title: "Share for derived work" },
+      identity: producer,
+      idGenerator: () => "ko_write_share",
+    });
+    const db = dbForRows([
+      [
+        {
+          id: ko.id,
+          signed_payload_json: ko.signedPayload,
+          signer_json: ko.signer,
+          signature: ko.signature,
+          provenance_json: {
+            source: "local",
+            creatorInstallId: producer.record.installId,
+            storedAt: "2026-05-22T00:00:00.000Z",
+          },
+        },
+      ],
+      [],
+      [],
+    ]);
+
+    const message = await createFederationMessage({
+      db,
+      koId: ko.id,
+      producerIdentity: producer,
+      consumerInstallId: consumer.record.installId,
+      scope: "write",
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+    });
+
+    expect(message.grant.signedPayload.scope).toBe("write");
+    expect(verifyFederationMessageSignature(message)).toBe(true);
+  });
+
   it("receives a KO+grant message as federated state", async () => {
     const producer = createInstallIdentity();
     const consumer = createInstallIdentity();

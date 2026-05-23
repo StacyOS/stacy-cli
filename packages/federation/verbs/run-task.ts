@@ -5,14 +5,26 @@ import { createDb } from "@arpanstacy/stacy-db";
 
 import type { BrainDb } from "../src/brain/brain-store.js";
 import { createLocalKnowledgeObject } from "../src/brain/local-brain.js";
+import type { CanonicalJsonValue } from "../src/crypto/canonical.js";
 import {
   createDeterministicDashboardContent,
+  createDeterministicReportContent,
+  createDeterministicTableContent,
   parseDashboardSchema,
   parseCsvDashboardInput,
   redactDashboardInputForAdapter,
   normalizeRedactedColumns,
+  type DashboardContent,
+  type ReportContent,
+  type TableContent,
 } from "../src/dashboard/dashboard-content.js";
-import { parseAdapterDashboardOutput } from "../src/dashboard/adapter-output.js";
+import {
+  parseAdapterOutput,
+  type AdapterDashboardOutput,
+  type AdapterOutputKind,
+  type AdapterReportOutput,
+  type AdapterTableOutput,
+} from "../src/dashboard/adapter-output.js";
 import {
   resolveLocalRuntime,
   type LocalRuntimeDependencies,
@@ -28,6 +40,7 @@ export interface RunTaskOptions extends LocalRuntimeOptions {
   readonly adapterCommand?: string;
   readonly adapterArg?: string[];
   readonly adapterOutput?: string;
+  readonly outputKind?: string;
   readonly adapterTimeoutMs?: string | number;
   readonly redactColumn?: string[];
   readonly ackEgress?: boolean;
@@ -66,6 +79,7 @@ export async function runTaskCommand(
     : undefined;
   const adapterCommand = options.adapterCommand?.trim();
   const adapterOutputMode = parseAdapterOutputMode(options.adapterOutput);
+  const outputKind = parseOutputKind(options.outputKind);
   if (adapterCommand && !options.ackEgress) {
     throw new Error("Adapter execution may send input records outside this install. Re-run with --ack-egress to confirm.");
   }
@@ -73,20 +87,21 @@ export async function runTaskCommand(
     ? await runAdapterCommand({
         command: adapterCommand,
         args: options.adapterArg ?? [],
-        stdin: JSON.stringify({ task, input: adapterInput, redactedColumns }, null, 2),
+        stdin: JSON.stringify({ task, outputKind, input: adapterInput, redactedColumns }, null, 2),
         timeoutMs: parseAdapterTimeoutMs(options.adapterTimeoutMs),
         allowedAdapters: parseAllowedAdapters(env.STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS),
       })
     : undefined;
-  const adapterDashboard = adapterOutput && adapterOutputMode === "json"
-    ? parseAdapterDashboardOutput(adapterOutput)
+  const adapterContract = adapterOutput && adapterOutputMode === "json"
+    ? parseAdapterOutput(adapterOutput, outputKind)
     : undefined;
-  const content = createDeterministicDashboardContent({
+  const content = createTaskContent({
     task,
     input: dashboardInput,
     schema: dashboardSchema,
+    outputKind,
     adapterOutput: adapterOutputMode === "text" ? adapterOutput : undefined,
-    adapterDashboard,
+    adapterContract,
     redactedColumns,
   });
   const ownsDb = dependencies.createDb === undefined;
@@ -108,6 +123,7 @@ export async function runTaskCommand(
       id: result.ko.id,
       tenant: result.ko.signedPayload.tenant,
       task,
+      outputKind,
       input: content.input,
       redactedColumns: content.redactedColumns ?? [],
       generator: content.generator,
@@ -179,6 +195,47 @@ function parseAdapterOutputMode(value: string | undefined): AdapterOutputMode {
   throw new Error("--adapter-output must be either text or json.");
 }
 
+function parseOutputKind(value: string | undefined): AdapterOutputKind {
+  const normalized = (value ?? "dashboard").trim().toLowerCase();
+  if (normalized === "dashboard" || normalized === "report" || normalized === "table") return normalized;
+  throw new Error("--output-kind must be dashboard, report, or table.");
+}
+
+function createTaskContent(options: {
+  readonly task: string;
+  readonly input: Parameters<typeof createDeterministicDashboardContent>[0]["input"];
+  readonly schema?: Parameters<typeof createDeterministicDashboardContent>[0]["schema"];
+  readonly outputKind: AdapterOutputKind;
+  readonly adapterOutput?: string;
+  readonly adapterContract?: ReturnType<typeof parseAdapterOutput>;
+  readonly redactedColumns?: readonly string[];
+}): (DashboardContent | ReportContent | TableContent) & CanonicalJsonValue {
+  if (options.outputKind === "dashboard") {
+    return createDeterministicDashboardContent({
+      task: options.task,
+      input: options.input,
+      schema: options.schema,
+      adapterOutput: options.adapterOutput,
+      adapterDashboard: options.adapterContract as AdapterDashboardOutput | undefined,
+      redactedColumns: options.redactedColumns,
+    });
+  }
+  if (options.outputKind === "report") {
+    return createDeterministicReportContent({
+      task: options.task,
+      input: options.input,
+      adapterReport: options.adapterContract as AdapterReportOutput | undefined,
+      redactedColumns: options.redactedColumns,
+    });
+  }
+  return createDeterministicTableContent({
+    task: options.task,
+    input: options.input,
+    adapterTable: options.adapterContract as AdapterTableOutput | undefined,
+    redactedColumns: options.redactedColumns,
+  });
+}
+
 function parseAllowedAdapters(raw: string | undefined): ReadonlySet<string> | null {
   const entries = raw
     ?.split(",")
@@ -211,6 +268,7 @@ function assertAdapterAllowed(command: string, allowedAdapters: ReadonlySet<stri
 function formatRunTaskText(output: {
   readonly id: string;
   readonly task: string;
+  readonly outputKind?: string;
   readonly generator?: string;
   readonly contentHash: string;
   readonly creatorInstallId: string;
@@ -218,6 +276,7 @@ function formatRunTaskText(output: {
   return [
     `Created public demo Knowledge Object: ${output.id}`,
     `Task: ${output.task}`,
+    ...(output.outputKind ? [`Output kind: ${output.outputKind}`] : []),
     ...(output.generator ? [`Generator: ${output.generator}`] : []),
     `Content hash: ${output.contentHash}`,
     `Creator install: ${output.creatorInstallId}`,

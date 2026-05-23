@@ -2,6 +2,7 @@ import { createDb } from "@arpanstacy/stacy-db";
 
 import type { BrainDb } from "../src/brain/brain-store.js";
 import { loadInstallIdentity } from "../src/identity/install-identity.js";
+import { isConsentGrantScope, type ConsentGrantScope } from "../src/consent/grant.js";
 import {
   createFederationMessage,
   type FederationKnowledgeObjectMessage,
@@ -50,8 +51,11 @@ export async function shareCommand(
   options: ShareOptions,
   dependencies: ShareDependencies = {},
 ): Promise<void> {
-  if ((options.scope ?? "read") !== "read") {
-    throw new Error("Phase 3 only supports --scope read");
+  const scope = parseShareScope(options.scope);
+  if (scope === "admin") {
+    throw new Error(
+      "Consent scope \"admin\" is reserved for future delegation/admin behavior.",
+    );
   }
 
   const runtime = resolveLocalRuntime(options, dependencies);
@@ -84,6 +88,7 @@ export async function shareCommand(
       koId,
       producerIdentity,
       consumerInstallId,
+      scope,
       expiresAt: addDuration(now, options.expires ?? "30d"),
       revocable: options.revocable === true,
       revocationLookupUrl,
@@ -153,6 +158,7 @@ function formatShareJson(
     grantId: message.grant.id,
     producerInstallId: message.producerInstallId,
     consumerInstallId: message.consumerInstallId,
+    scope: message.grant.signedPayload.scope,
     expiresAt: message.grant.signedPayload.expiresAt,
     delivery,
   };
@@ -167,6 +173,7 @@ function formatShareText(
     `Grant: ${message.grant.id}`,
     `Producer: ${message.producerInstallId}`,
     `Consumer: ${message.consumerInstallId}`,
+    `Scope: ${message.grant.signedPayload.scope}`,
     `Expires: ${message.grant.signedPayload.expiresAt}`,
   ];
 
@@ -175,6 +182,14 @@ function formatShareText(
   }
 
   return lines.join("\n");
+}
+
+function parseShareScope(scope: string | undefined): ConsentGrantScope {
+  const value = scope?.trim() || "read";
+  if (!isConsentGrantScope(value)) {
+    throw new Error(`Unsupported consent scope "${value}". Use read, write, or admin.`);
+  }
+  return value;
 }
 
 function addDuration(now: Date, duration: string): Date {
