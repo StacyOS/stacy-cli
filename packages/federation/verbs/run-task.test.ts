@@ -305,7 +305,7 @@ describe("runTaskCommand", () => {
           stdout: { log: () => undefined },
         },
       ),
-    ).rejects.toThrow("--output-kind must be dashboard, report, or table.");
+    ).rejects.toThrow("--output-kind must be dashboard, report, table, or referral_packet.");
 
     expect(openedConnections).toEqual([]);
   });
@@ -386,6 +386,114 @@ describe("runTaskCommand", () => {
         fileName: "customers.csv",
         rows: 2,
       },
+    });
+  });
+
+  it("creates a deterministic referral packet KO from healthcare CSV input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = join(root, "referral-packet.csv");
+    await writeFile(csvPath, [
+      "patient_ref,referral_reason,clinical_summary,lab_snapshot,medications,imaging_status,consent_expires,revocation_reason",
+      "N.P.,Second opinion after abnormal ECG,\"Intermittent chest tightness, elevated LDL\",\"LDL 162 mg/dL; troponin negative\",\"Atorvastatin 20mg; aspirin 81mg\",\"ECG attached\",2026-06-22T23:59:59Z,Patient withdrew consent",
+    ].join("\n"), "utf8");
+    const lines: string[] = [];
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "Northstar Clinic Referral Packet",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "referral_packet",
+        koId: "ko_referral_packet",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_referral_packet",
+      outputKind: "referral_packet",
+      generator: "deterministic_referral_packet",
+    });
+    expect(createdContents[0]).toMatchObject({
+      kind: "referral_packet",
+      patientReference: "N.P.",
+      referralReason: "Second opinion after abnormal ECG",
+      labSnapshot: "LDL 162 mg/dL; troponin negative",
+      medications: ["Atorvastatin 20mg", "aspirin 81mg"],
+      consent: {
+        expiresAt: "2026-06-22T23:59:59Z",
+        revocationReason: "Patient withdrew consent",
+      },
+    });
+  });
+
+  it("accepts schema-validated adapter referral packet JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "Northstar Clinic Referral Packet",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "referral_packet",
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Referral Packet',",
+          "patientReference:'N.P.',",
+          "referralReason:'Second opinion after abnormal ECG',",
+          "clinicalSummary:'Patient has intermittent chest tightness.',",
+          "labSnapshot:'LDL 162 mg/dL; troponin negative',",
+          "medications:['Atorvastatin 20mg','aspirin 81mg'],",
+          "imagingStatus:'ECG attached',",
+          "consent:{expiresAt:'2026-06-22T23:59:59Z',revocationReason:'Patient withdrew consent'},",
+          "attachments:[{label:'ECG',status:'attached'}],",
+          "notes:['Referral packet contract validated.']",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_referral_packet",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(createdContents[0]).toMatchObject({
+      kind: "referral_packet",
+      title: "Adapter Referral Packet",
+      patientReference: "N.P.",
+      referralReason: "Second opinion after abnormal ECG",
+      generator: "adapter_command",
+      adapterNotes: ["Referral packet contract validated."],
     });
   });
 

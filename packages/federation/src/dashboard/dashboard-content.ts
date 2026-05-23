@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 import type { CanonicalJsonValue } from "../crypto/canonical.js";
 import { sha256Hex } from "../util/hash.js";
-import type { AdapterDashboardOutput, AdapterReportOutput, AdapterTableOutput } from "./adapter-output.js";
+import type { AdapterDashboardOutput, AdapterReferralPacketOutput, AdapterReportOutput, AdapterTableOutput } from "./adapter-output.js";
 
 export interface DashboardInput {
   readonly fileName: string;
@@ -84,6 +84,37 @@ export interface TableContent {
   readonly rows: readonly Record<string, string | number | boolean | null>[];
   readonly summary: string;
   readonly generator: "adapter_command" | "deterministic_table";
+  readonly generatedAt: string;
+  readonly adapterNotes?: readonly string[];
+  readonly redactedColumns?: readonly string[];
+}
+
+export interface ReferralPacketContent {
+  readonly kind: "referral_packet";
+  readonly schemaVersion: 1;
+  readonly title: string;
+  readonly task: string;
+  readonly input: {
+    readonly fileName: string;
+    readonly contentHash: string;
+    readonly rows: number;
+  };
+  readonly patientReference: string;
+  readonly referralReason: string;
+  readonly clinicalSummary: string;
+  readonly labSnapshot: string;
+  readonly medications: readonly string[];
+  readonly imagingStatus: string;
+  readonly consent: {
+    readonly expiresAt: string;
+    readonly revocationReason: string;
+  };
+  readonly attachments: readonly {
+    readonly label: string;
+    readonly status: string;
+  }[];
+  readonly summary: string;
+  readonly generator: "adapter_command" | "deterministic_referral_packet";
   readonly generatedAt: string;
   readonly adapterNotes?: readonly string[];
   readonly redactedColumns?: readonly string[];
@@ -188,6 +219,56 @@ export function createDeterministicTableContent(options: {
     ...(options.adapterTable?.notes?.length ? { adapterNotes: options.adapterTable.notes } : {}),
     ...(options.redactedColumns?.length ? { redactedColumns: options.redactedColumns } : {}),
   } as unknown as TableContent & CanonicalJsonValue;
+}
+
+export function createDeterministicReferralPacketContent(options: {
+  readonly task: string;
+  readonly input: DashboardInput;
+  readonly adapterReferralPacket?: AdapterReferralPacketOutput;
+  readonly redactedColumns?: readonly string[];
+}): ReferralPacketContent & CanonicalJsonValue {
+  const record = options.input.records[0] ?? {};
+  const adapter = options.adapterReferralPacket;
+  const patientReference = adapter?.patientReference ?? valueFromRecord(record, "patient_ref", "patient", "patient_reference");
+  const referralReason = adapter?.referralReason ?? valueFromRecord(record, "referral_reason", "reason");
+  const clinicalSummary = adapter?.clinicalSummary ?? valueFromRecord(record, "clinical_summary", "summary");
+  const labSnapshot = adapter?.labSnapshot ?? valueFromRecord(record, "lab_snapshot", "labs");
+  const medications = adapter?.medications ?? splitList(valueFromRecord(record, "medications", "medication_list"));
+  const imagingStatus = adapter?.imagingStatus ?? valueFromRecord(record, "imaging_status", "imaging");
+  const consentExpiresAt = adapter?.consent.expiresAt ?? valueFromRecord(record, "consent_expires", "consent_expires_at");
+  const revocationReason = adapter?.consent.revocationReason ?? valueFromRecord(record, "revocation_reason");
+  const title = adapter?.title ?? "Northstar Clinic Referral Packet";
+
+  return {
+    kind: "referral_packet",
+    schemaVersion: 1,
+    title,
+    task: options.task,
+    input: {
+      fileName: options.input.fileName,
+      contentHash: options.input.contentHash,
+      rows: options.input.rows,
+    },
+    patientReference,
+    referralReason,
+    clinicalSummary,
+    labSnapshot,
+    medications,
+    imagingStatus,
+    consent: {
+      expiresAt: consentExpiresAt,
+      revocationReason,
+    },
+    attachments: adapter?.attachments ?? [
+      { label: "Lab snapshot", status: labSnapshot || "not provided" },
+      { label: "Imaging", status: imagingStatus || "not provided" },
+    ],
+    summary: `${title}: ${referralReason || "referral reason not provided"} for patient ${patientReference || "unknown"}.`,
+    generator: adapter ? "adapter_command" : "deterministic_referral_packet",
+    generatedAt: new Date(0).toISOString(),
+    ...(adapter?.notes?.length ? { adapterNotes: adapter.notes } : {}),
+    ...(options.redactedColumns?.length ? { redactedColumns: options.redactedColumns } : {}),
+  } as unknown as ReferralPacketContent & CanonicalJsonValue;
 }
 
 export function redactDashboardInputForAdapter(
@@ -424,6 +505,22 @@ function createDeterministicReportSections(input: DashboardInput): readonly Repo
 
 function createReportSummary(title: string, rows: number, columns: readonly string[]): string {
   return `${title}: analyzed ${rows} row(s) across ${columns.length} column(s).`;
+}
+
+function valueFromRecord(record: Record<string, string>, ...keys: readonly string[]): string {
+  const byLowercase = new Map(Object.entries(record).map(([key, value]) => [key.toLowerCase(), value]));
+  for (const key of keys) {
+    const value = byLowercase.get(key.toLowerCase())?.trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function splitList(value: string): readonly string[] {
+  return value
+    .split(/[;\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function numberFrom(value: string | undefined): number {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createDeterministicDashboardContent,
+  createDeterministicReferralPacketContent,
   normalizeRedactedColumns,
   parseDashboardSchema,
   parseCsvDashboardInput,
@@ -151,5 +152,33 @@ describe("public demo dashboard content", () => {
     expect(() => parseCsvDashboardInput("bad.csv", "name,notes\nAcme,\"unterminated")).toThrow(
       "CSV input has an unclosed quoted field.",
     );
+  });
+
+  it("derives deterministic referral packet content from healthcare CSV input", () => {
+    const input = parseCsvDashboardInput("referral-packet.csv", [
+      "patient_ref,referral_reason,clinical_summary,lab_snapshot,medications,imaging_status,consent_expires,revocation_reason",
+      "N.P.,Second opinion after abnormal ECG,Chest tightness,LDL 162 mg/dL,\"Atorvastatin 20mg; aspirin 81mg\",ECG attached,2026-06-22T23:59:59Z,Patient withdrew consent",
+    ].join("\n"));
+
+    const content = createDeterministicReferralPacketContent({
+      task: "Northstar Clinic Referral Packet",
+      input,
+    });
+
+    expect(content).toMatchObject({
+      kind: "referral_packet",
+      schemaVersion: 1,
+      patientReference: "N.P.",
+      referralReason: "Second opinion after abnormal ECG",
+      clinicalSummary: "Chest tightness",
+      labSnapshot: "LDL 162 mg/dL",
+      medications: ["Atorvastatin 20mg", "aspirin 81mg"],
+      imagingStatus: "ECG attached",
+      consent: {
+        expiresAt: "2026-06-22T23:59:59Z",
+        revocationReason: "Patient withdrew consent",
+      },
+      generator: "deterministic_referral_packet",
+    });
   });
 });

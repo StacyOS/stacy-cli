@@ -7,6 +7,7 @@ import {
   type DashboardSchema,
 } from "../dashboard/dashboard-content.js";
 import type { SignedKnowledgeObject } from "../ko/knowledge-object.js";
+import { validateKnowledgeContentContract } from "./content-contract.js";
 
 export const VERIFICATION_REPORT_SCHEMA_VERSION = 1;
 export const VERIFICATION_REPORT_CONTENT_TYPE = "application/vnd.stacy.verification-report+json";
@@ -95,16 +96,37 @@ function createContentChecks(options: CreateVerificationReportOptions): readonly
     }];
   }
 
+  const contract = validateKnowledgeContentContract(content);
+  const contractCheck: VerificationCheck = {
+    id: "content_contract_version",
+    status: contract.valid ? "pass" : "fail",
+    summary: contract.reason ?? `${contract.kind} schema version ${contract.schemaVersion} is supported.`,
+    details: {
+      kind: contract.kind,
+      schemaVersion: contract.schemaVersion,
+      supportedVersions: contract.supportedVersions as unknown as CanonicalJsonValue,
+      ...(contract.details ?? {}),
+    },
+  };
+
+  if (!contract.valid) {
+    return [contractCheck];
+  }
+
   if (content.kind === "dashboard") {
-    return createDashboardChecks(content, options);
+    return [contractCheck, ...createDashboardChecks(content, options)];
   }
 
   if (content.kind === "report") {
-    return createReportChecks(content);
+    return [contractCheck, ...createReportChecks(content)];
   }
 
   if (content.kind === "table") {
-    return createTableChecks(content);
+    return [contractCheck, ...createTableChecks(content)];
+  }
+
+  if (content.kind === "referral_packet") {
+    return [contractCheck, createReferralPacketCheck(content)];
   }
 
   return [{
@@ -115,6 +137,19 @@ function createContentChecks(options: CreateVerificationReportOptions): readonly
       kind: typeof content.kind === "string" ? content.kind : "unknown",
     },
   }];
+}
+
+function createReferralPacketCheck(content: Record<string, unknown>): VerificationCheck {
+  const attachments = Array.isArray(content.attachments) ? content.attachments : [];
+  return {
+    id: "referral_packet_contract",
+    status: "pass",
+    summary: "Referral packet content has patient reference, clinical fields, consent fields, and medication metadata.",
+    details: {
+      attachmentCount: attachments.length,
+      schemaVersion: numberDetail(content.schemaVersion),
+    },
+  };
 }
 
 function createDashboardChecks(

@@ -24,7 +24,7 @@ pnpm --filter @arpanstacy/stacy-federation demo:public
 - Adapter stdin supports `--redact-column` and
   `STACY_PUBLIC_DEMO_REDACT_COLUMNS`; redaction affects adapter input only and
   is recorded on the signed KO.
-- B exports a signed contact card, and A verifies/imports it as contact
+- B creates a short-lived signed contact share link, and A verifies/imports it as contact
   `meera`.
 - `stacy share <ko> --with-contact meera` resolves B's install ID and
   federation endpoint from the verified contact book.

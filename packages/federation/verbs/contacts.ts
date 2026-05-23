@@ -7,8 +7,10 @@ import {
   resolveContactsPath,
 } from "../src/contacts/contact-store.js";
 import {
+  createSignedContactShareLink,
   createSignedContactCard,
   parseSignedContactCard,
+  verifyContactShareLink,
   verifySignedContactCard,
 } from "../src/contacts/contact-card.js";
 import { ensureInstallIdentity } from "../src/identity/install-identity.js";
@@ -43,6 +45,20 @@ export interface ContactsExportOptions extends LocalRuntimeOptions {
 }
 
 export interface ContactsImportOptions extends LocalRuntimeOptions {
+  readonly as?: string;
+  readonly json?: boolean;
+}
+
+export interface ContactsShareLinkOptions extends LocalRuntimeOptions {
+  readonly endpoint: string;
+  readonly revocationUrl: string;
+  readonly label?: string;
+  readonly expires?: string;
+  readonly baseUrl?: string;
+  readonly json?: boolean;
+}
+
+export interface ContactsImportLinkOptions extends LocalRuntimeOptions {
   readonly as?: string;
   readonly json?: boolean;
 }
@@ -143,6 +159,55 @@ export async function contactsImportCommand(
   stdout.log(options.json ? JSON.stringify(imported, null, 2) : formatContact(imported));
 }
 
+export async function contactsShareLinkCommand(
+  name: string,
+  options: ContactsShareLinkOptions,
+  dependencies: ContactsDependencies = {},
+): Promise<void> {
+  const stdout = dependencies.stdout ?? console;
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const now = dependencies.now?.() ?? new Date();
+  const identity = await ensureInstallIdentity({
+    path: runtime.identityPath,
+    now,
+  });
+  const expiresAt = addDuration(now, options.expires ?? "15m");
+  const link = createSignedContactShareLink({
+    identity,
+    name,
+    label: options.label,
+    federationEndpointUrl: options.endpoint,
+    revocationUrl: options.revocationUrl,
+    createdAt: now,
+    expiresAt,
+    baseUrl: options.baseUrl,
+  });
+
+  if (options.json) {
+    stdout.log(JSON.stringify({ link, expiresAt: expiresAt.toISOString() }, null, 2));
+    return;
+  }
+  stdout.log([`Contact share link: ${link}`, `Expires: ${expiresAt.toISOString()}`].join("\n"));
+}
+
+export async function contactsImportLinkCommand(
+  link: string,
+  options: ContactsImportLinkOptions,
+  dependencies: ContactsDependencies = {},
+): Promise<void> {
+  const stdout = dependencies.stdout ?? console;
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const verification = verifyContactShareLink(link, { now: dependencies.now?.() });
+  if (!verification.ok) {
+    throw new Error(verification.reason);
+  }
+  const imported = await addContact(resolveContactsPath(runtime.instanceRoot), {
+    ...verification.contact,
+    ...(options.as?.trim() ? { name: options.as.trim() } : {}),
+  });
+  stdout.log(options.json ? JSON.stringify(imported, null, 2) : formatContact(imported));
+}
+
 function formatContact(contact: {
   readonly name: string;
   readonly label: string;
@@ -156,4 +221,17 @@ function formatContact(contact: {
     `Endpoint: ${contact.federationEndpointUrl}`,
     `Revocations: ${contact.revocationUrl}`,
   ].join("\n");
+}
+
+function addDuration(now: Date, duration: string): Date {
+  const match = duration.trim().match(/^(\d+)([dhm])$/);
+  if (!match) {
+    throw new Error("Invalid --expires duration. Use values like 7d, 12h, or 15m.");
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const multiplier =
+    unit === "d" ? 24 * 60 * 60 * 1000 : unit === "h" ? 60 * 60 * 1000 : 60 * 1000;
+  return new Date(now.getTime() + amount * multiplier);
 }

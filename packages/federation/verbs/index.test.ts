@@ -49,6 +49,7 @@ describe("federation CLI registration", () => {
     expect(topLevelCommands).toContain(federationCliCommands.revoke);
     expect(topLevelCommands).toContain("contacts");
     expect(topLevelCommands).toContain("receipts");
+    expect(topLevelCommands).toContain("identity");
 
     const brain = program.children.find((child) => child.nameAndArgs === federationCliCommands.brain);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainCreate);
@@ -58,11 +59,16 @@ describe("federation CLI registration", () => {
 
     const contacts = program.children.find((child) => child.nameAndArgs === "contacts");
     expect(contacts?.children.map((child) => child.nameAndArgs)).toEqual(
-      expect.arrayContaining(["add", "list", "show", "export", "import"]),
+      expect.arrayContaining(["add", "list", "show", "export", "import", "share-link", "import-link"]),
     );
 
     const receipts = program.children.find((child) => child.nameAndArgs === "receipts");
     expect(receipts?.children.map((child) => child.nameAndArgs)).toEqual(expect.arrayContaining(["list", "verify"]));
+
+    const identity = program.children.find((child) => child.nameAndArgs === "identity");
+    expect(identity?.children.map((child) => child.nameAndArgs)).toEqual(
+      expect.arrayContaining(["rotate", "verify-chain"]),
+    );
   });
 
   it("wires brain show to the Phase 2 implementation", async () => {

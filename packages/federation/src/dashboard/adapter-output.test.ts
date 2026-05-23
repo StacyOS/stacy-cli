@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseAdapterDashboardOutput,
   parseAdapterOutput,
+  parseAdapterReferralPacketOutput,
   parseAdapterReportOutput,
   parseAdapterTableOutput,
 } from "./adapter-output.js";
@@ -102,5 +103,61 @@ describe("adapter dashboard output", () => {
       columns: ["a"],
       rows: [{ a: null }],
     });
+  });
+
+  it("accepts a valid adapter-owned referral packet", () => {
+    expect(
+      parseAdapterReferralPacketOutput(JSON.stringify({
+        title: "Northstar Clinic Referral Packet",
+        patientReference: "N.P.",
+        referralReason: "Second opinion after abnormal ECG",
+        clinicalSummary: "Intermittent chest tightness.",
+        labSnapshot: "LDL 162 mg/dL; troponin negative",
+        medications: ["Atorvastatin 20mg", "aspirin 81mg"],
+        imagingStatus: "ECG attached",
+        consent: {
+          expiresAt: "2026-06-22T23:59:59Z",
+          revocationReason: "Patient withdrew consent",
+        },
+        attachments: [{ label: "ECG", status: "attached" }],
+        notes: ["Referral contract validated."],
+      })),
+    ).toEqual({
+      title: "Northstar Clinic Referral Packet",
+      patientReference: "N.P.",
+      referralReason: "Second opinion after abnormal ECG",
+      clinicalSummary: "Intermittent chest tightness.",
+      labSnapshot: "LDL 162 mg/dL; troponin negative",
+      medications: ["Atorvastatin 20mg", "aspirin 81mg"],
+      imagingStatus: "ECG attached",
+      consent: {
+        expiresAt: "2026-06-22T23:59:59Z",
+        revocationReason: "Patient withdrew consent",
+      },
+      attachments: [{ label: "ECG", status: "attached" }],
+      notes: ["Referral contract validated."],
+    });
+  });
+
+  it("rejects invalid adapter referral packets", () => {
+    expect(() => parseAdapterReferralPacketOutput(JSON.stringify({
+      patientReference: "N.P.",
+      referralReason: "Second opinion",
+      clinicalSummary: "Summary",
+      labSnapshot: "Labs",
+      medications: [],
+      imagingStatus: "ECG attached",
+      consent: { expiresAt: "2026-06-22T23:59:59Z", revocationReason: "Patient withdrew consent" },
+    }))).toThrow("medications must be a non-empty array");
+
+    expect(() => parseAdapterReferralPacketOutput(JSON.stringify({
+      patientReference: "N.P.",
+      referralReason: "Second opinion",
+      clinicalSummary: "Summary",
+      labSnapshot: "Labs",
+      medications: ["Atorvastatin"],
+      imagingStatus: "ECG attached",
+      consent: { expiresAt: "not-a-date", revocationReason: "Patient withdrew consent" },
+    }))).toThrow("consent.expiresAt must be an ISO timestamp");
   });
 });

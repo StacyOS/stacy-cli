@@ -56,6 +56,8 @@ program
   .option("-c, --config <path>", "Path to config file")
   .option("-d, --data-dir <path>", DATA_DIR_OPTION_HELP)
   .option("--bind <mode>", "Quickstart reachability preset (loopback, lan, tailnet)")
+  .option("--federation-demo", "Show local federation demo next steps during onboarding", false)
+  .option("--federation-peer-link <url>", "Import a signed federation contact share link during onboarding")
   .option("-y, --yes", "Accept quickstart defaults (trusted local loopback unless --bind is set) and start immediately", false)
   .option("--run", "Start Stacy immediately after saving config", false)
   .action(onboard);

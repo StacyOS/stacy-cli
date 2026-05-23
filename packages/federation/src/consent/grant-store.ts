@@ -15,6 +15,11 @@ export interface ReadConsentGrantOptions {
   readonly consumerInstallId: string;
 }
 
+export interface ListConsentGrantsForKoOptions {
+  readonly db: BrainDb;
+  readonly koId: string;
+}
+
 interface ConsentGrantRow {
   readonly id: string;
   readonly signed_payload_json: unknown;
@@ -133,6 +138,35 @@ export async function readConsentGrant(
     signer: row.signer_json as SignedConsentGrant["signer"],
     signature: row.signature,
   };
+}
+
+export async function listConsentGrantsForKo(
+  options: ListConsentGrantsForKoOptions,
+): Promise<readonly SignedConsentGrant[]> {
+  let rows: readonly ConsentGrantRow[];
+  try {
+    rows = normalizeRows<ConsentGrantRow>(
+      await options.db.execute(sql`
+        SELECT id, signed_payload_json, signer_json, signature
+        FROM federation_consent_grants
+        WHERE ko_id = ${options.koId}
+        ORDER BY expires_at DESC
+      `),
+    );
+  } catch (error) {
+    if (isUndefinedTableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    signedPayload: row.signed_payload_json as SignedConsentGrant["signedPayload"],
+    signer: row.signer_json as SignedConsentGrant["signer"],
+    signature: row.signature,
+  }));
 }
 
 function normalizeRows<T>(result: unknown): readonly T[] {

@@ -6,11 +6,18 @@ import {
   contactsAddCommand,
   contactsExportCommand,
   contactsImportCommand,
+  contactsImportLinkCommand,
   contactsListCommand,
+  contactsShareLinkCommand,
   contactsShowCommand,
   type ContactsDependencies,
 } from "./contacts.js";
 import { receiptsListCommand, receiptsVerifyCommand, type ReceiptsDependencies } from "./receipts.js";
+import {
+  identityRotateCommand,
+  identityVerifyChainCommand,
+  type IdentityDependencies,
+} from "./identity.js";
 import { revokeCommand, type RevokeDependencies } from "./revoke.js";
 import { runTaskCommand, type RunTaskDependencies } from "./run-task.js";
 import { shareCommand, type ShareDependencies } from "./share.js";
@@ -43,6 +50,7 @@ export interface RegisterFederationCommandsOptions {
   readonly revoke?: RevokeDependencies;
   readonly contacts?: ContactsDependencies;
   readonly receipts?: ReceiptsDependencies;
+  readonly identity?: IdentityDependencies;
   readonly runTask?: RunTaskDependencies;
 }
 
@@ -203,6 +211,42 @@ export function registerFederationCommands(
       await contactsImportCommand(String(path), commandOptions as Parameters<typeof contactsImportCommand>[1], options.contacts);
     });
 
+  contacts
+    .command("share-link")
+    .description("Create a short-lived signed federation contact import link")
+    .argument("<name>", "Contact name recipients should save")
+    .requiredOption("--endpoint <url>", "This install's /api/federation endpoint URL")
+    .requiredOption("--revocation-url <url>", "This install's revocation lookup URL")
+    .option("--label <text>", "Human-readable label")
+    .option("--expires <duration>", "Share link expiry duration", "15m")
+    .option("--base-url <url>", "URL prefix for the share link", "stacy://contacts/import")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (name, commandOptions) => {
+      await contactsShareLinkCommand(
+        String(name),
+        commandOptions as Parameters<typeof contactsShareLinkCommand>[1],
+        options.contacts,
+      );
+    });
+
+  contacts
+    .command("import-link")
+    .description("Import and verify a signed federation contact share link")
+    .argument("<url>", "Signed contact share link")
+    .option("--as <name>", "Save the contact under a local alias")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (link, commandOptions) => {
+      await contactsImportLinkCommand(
+        String(link),
+        commandOptions as Parameters<typeof contactsImportLinkCommand>[1],
+        options.contacts,
+      );
+    });
+
   const receipts = program
     .command("receipts")
     .description("Federation receipt log operations");
@@ -230,6 +274,38 @@ export function registerFederationCommands(
       await receiptsVerifyCommand(commandOptions as Parameters<typeof receiptsVerifyCommand>[0], options.receipts);
     });
 
+  const identity = program
+    .command("identity")
+    .description("Federation install identity operations");
+
+  identity
+    .command("rotate")
+    .description("Rotate this install's federation keypair and record a dual-signed transition")
+    .option("--reason <text>", "Reason recorded in the signed key transition")
+    .option("--effective-at <iso>", "ISO timestamp when the new key becomes effective")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await identityRotateCommand(
+        commandOptions as Parameters<typeof identityRotateCommand>[0],
+        options.identity,
+      );
+    });
+
+  identity
+    .command("verify-chain")
+    .description("Verify the dual-signed federation install key transition chain")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await identityVerifyChainCommand(
+        commandOptions as Parameters<typeof identityVerifyChainCommand>[0],
+        options.identity,
+      );
+    });
+
   program
     .command(federationCliCommands.revoke)
     .description("Revoke a federated Knowledge Object grant")
@@ -244,7 +320,15 @@ export function registerFederationCommands(
     });
 }
 
-export { runTaskCommand, type RunTaskDependencies };
+export {
+  contactsImportLinkCommand,
+  contactsShareLinkCommand,
+  identityRotateCommand,
+  identityVerifyChainCommand,
+  runTaskCommand,
+  type IdentityDependencies,
+  type RunTaskDependencies,
+};
 
 function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];

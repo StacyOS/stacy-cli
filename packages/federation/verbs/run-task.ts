@@ -8,6 +8,7 @@ import { createLocalKnowledgeObject } from "../src/brain/local-brain.js";
 import type { CanonicalJsonValue } from "../src/crypto/canonical.js";
 import {
   createDeterministicDashboardContent,
+  createDeterministicReferralPacketContent,
   createDeterministicReportContent,
   createDeterministicTableContent,
   parseDashboardSchema,
@@ -15,6 +16,7 @@ import {
   redactDashboardInputForAdapter,
   normalizeRedactedColumns,
   type DashboardContent,
+  type ReferralPacketContent,
   type ReportContent,
   type TableContent,
 } from "../src/dashboard/dashboard-content.js";
@@ -22,6 +24,7 @@ import {
   parseAdapterOutput,
   type AdapterDashboardOutput,
   type AdapterOutputKind,
+  type AdapterReferralPacketOutput,
   type AdapterReportOutput,
   type AdapterTableOutput,
 } from "../src/dashboard/adapter-output.js";
@@ -197,8 +200,8 @@ function parseAdapterOutputMode(value: string | undefined): AdapterOutputMode {
 
 function parseOutputKind(value: string | undefined): AdapterOutputKind {
   const normalized = (value ?? "dashboard").trim().toLowerCase();
-  if (normalized === "dashboard" || normalized === "report" || normalized === "table") return normalized;
-  throw new Error("--output-kind must be dashboard, report, or table.");
+  if (normalized === "dashboard" || normalized === "report" || normalized === "table" || normalized === "referral_packet") return normalized;
+  throw new Error("--output-kind must be dashboard, report, table, or referral_packet.");
 }
 
 function createTaskContent(options: {
@@ -209,7 +212,7 @@ function createTaskContent(options: {
   readonly adapterOutput?: string;
   readonly adapterContract?: ReturnType<typeof parseAdapterOutput>;
   readonly redactedColumns?: readonly string[];
-}): (DashboardContent | ReportContent | TableContent) & CanonicalJsonValue {
+}): (DashboardContent | ReportContent | TableContent | ReferralPacketContent) & CanonicalJsonValue {
   if (options.outputKind === "dashboard") {
     return createDeterministicDashboardContent({
       task: options.task,
@@ -228,10 +231,18 @@ function createTaskContent(options: {
       redactedColumns: options.redactedColumns,
     });
   }
-  return createDeterministicTableContent({
+  if (options.outputKind === "table") {
+    return createDeterministicTableContent({
+      task: options.task,
+      input: options.input,
+      adapterTable: options.adapterContract as AdapterTableOutput | undefined,
+      redactedColumns: options.redactedColumns,
+    });
+  }
+  return createDeterministicReferralPacketContent({
     task: options.task,
     input: options.input,
-    adapterTable: options.adapterContract as AdapterTableOutput | undefined,
+    adapterReferralPacket: options.adapterContract as AdapterReferralPacketOutput | undefined,
     redactedColumns: options.redactedColumns,
   });
 }

@@ -4,6 +4,7 @@ import {
   type SignedKnowledgeObject,
   verifyKnowledgeObject,
 } from "../ko/knowledge-object.js";
+import type { ConsentGrantRecipient } from "../consent/grant.js";
 
 export type BrainKnowledgeObjectSource = "local" | "federated";
 
@@ -39,6 +40,10 @@ export type ReadKnowledgeObjectResult =
       readonly ko: SignedKnowledgeObject;
       readonly provenance: StoredKnowledgeObjectProvenance;
       readonly verification: { readonly contentHash: string };
+      readonly consent?: {
+        readonly grantId: string;
+        readonly recipient?: ConsentGrantRecipient;
+      };
     }
   | { readonly ok: false; readonly reason: string };
 

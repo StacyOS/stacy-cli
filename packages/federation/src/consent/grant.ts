@@ -16,6 +16,17 @@ export const CONSENT_GRANT_SCOPES = [
 
 export type ConsentGrantScope = typeof CONSENT_GRANT_SCOPES[number];
 
+export type ConsentGrantRecipient =
+  | {
+      readonly type: "install";
+      readonly id: string;
+    }
+  | {
+      readonly type: "group";
+      readonly id: string;
+      readonly role?: string;
+    };
+
 export interface ConsentGrantUnsignedPayload {
   readonly kind: "consent_grant";
   readonly schemaVersion: typeof CONSENT_GRANT_SCHEMA_VERSION;
@@ -24,6 +35,7 @@ export interface ConsentGrantUnsignedPayload {
   readonly koContentHash: string;
   readonly producerInstallId: string;
   readonly consumerInstallId: string;
+  readonly recipient?: ConsentGrantRecipient;
   readonly scope: ConsentGrantScope;
   readonly expiresAt: string;
   readonly revocable: boolean;
@@ -50,6 +62,7 @@ export interface CreateConsentGrantOptions {
   readonly koContentHash: string;
   readonly producerIdentity: InstallIdentity;
   readonly consumerInstallId: string;
+  readonly recipient?: ConsentGrantRecipient;
   readonly scope?: ConsentGrantScope;
   readonly expiresAt: Date;
   readonly revocable: boolean;
@@ -64,6 +77,9 @@ export type ConsentGrantVerificationResult =
 export function createConsentGrant(
   options: CreateConsentGrantOptions,
 ): SignedConsentGrant {
+  const recipient = normalizeConsentGrantRecipient(
+    options.recipient ?? { type: "install", id: options.consumerInstallId },
+  );
   const unsignedPayload: ConsentGrantUnsignedPayload = {
     kind: "consent_grant",
     schemaVersion: CONSENT_GRANT_SCHEMA_VERSION,
@@ -72,6 +88,7 @@ export function createConsentGrant(
     koContentHash: options.koContentHash,
     producerInstallId: options.producerIdentity.record.installId,
     consumerInstallId: options.consumerInstallId,
+    recipient,
     scope: options.scope ?? CONSENT_GRANT_SCOPE_READ,
     expiresAt: options.expiresAt.toISOString(),
     revocable: options.revocable,
@@ -130,6 +147,9 @@ export function verifyConsentGrant(
       koContentHash: grant.signedPayload.koContentHash,
       producerInstallId: grant.signedPayload.producerInstallId,
       consumerInstallId: grant.signedPayload.consumerInstallId,
+      ...(grant.signedPayload.recipient
+        ? { recipient: normalizeConsentGrantRecipient(grant.signedPayload.recipient) }
+        : {}),
       scope: grant.signedPayload.scope,
       expiresAt: grant.signedPayload.expiresAt,
       revocable: grant.signedPayload.revocable,
@@ -163,6 +183,24 @@ export function verifyConsentGrant(
 
 export function isConsentGrantScope(value: unknown): value is ConsentGrantScope {
   return typeof value === "string" && CONSENT_GRANT_SCOPES.includes(value as ConsentGrantScope);
+}
+
+export function normalizeConsentGrantRecipient(recipient: ConsentGrantRecipient): ConsentGrantRecipient {
+  const id = recipient.id.trim();
+  if (!id) {
+    throw new Error("Consent grant recipient id is required");
+  }
+  if (recipient.type === "install") {
+    return { type: "install", id };
+  }
+  if (recipient.type === "group") {
+    return {
+      type: "group",
+      id,
+      ...(recipient.role?.trim() ? { role: recipient.role.trim() } : {}),
+    };
+  }
+  throw new Error("Unsupported consent grant recipient type");
 }
 
 export function consentGrantScopeIncludesRead(scope: ConsentGrantScope): boolean {

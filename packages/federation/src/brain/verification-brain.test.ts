@@ -143,6 +143,78 @@ describe("verification Brain KO creation", () => {
       ]),
     );
   });
+
+  it("verifies v1 and v2 referral packet contracts and fails unknown versions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-verification-brain-"));
+    tempRoots.push(root);
+    const producer = createInstallIdentity();
+    const verifier = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const identityPath = join(root, "identity.json");
+    await writeIdentity(identityPath, verifier);
+
+    const v1 = createKnowledgeObject({
+      tenant: "stacy/clinic",
+      contentType: "application/json",
+      content: referralPacketContent(1),
+      identity: producer,
+      idGenerator: () => "ko_referral_v1",
+    });
+    const v2 = createKnowledgeObject({
+      tenant: "stacy/clinic",
+      contentType: "application/json",
+      content: referralPacketContent(2, { carePriority: "urgent" }),
+      identity: producer,
+      idGenerator: () => "ko_referral_v2",
+    });
+    const unknown = createKnowledgeObject({
+      tenant: "stacy/clinic",
+      contentType: "application/json",
+      content: referralPacketContent(99),
+      identity: producer,
+      idGenerator: () => "ko_referral_v99",
+    });
+
+    const v1Result = await createVerificationKnowledgeObject({
+      db: dbForRows([koRow(v1, provenance(producer))]),
+      identityPath,
+      sourceKoId: v1.id,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+    });
+    const v2Result = await createVerificationKnowledgeObject({
+      db: dbForRows([koRow(v2, provenance(producer))]),
+      identityPath,
+      sourceKoId: v2.id,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+    });
+    const unknownResult = await createVerificationKnowledgeObject({
+      db: dbForRows([koRow(unknown, provenance(producer))]),
+      identityPath,
+      sourceKoId: unknown.id,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+    });
+
+    expect(v1Result.report.verdict).toBe("pass");
+    expect(v1Result.report.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "content_contract_version", status: "pass" }),
+      expect.objectContaining({ id: "referral_packet_contract", status: "pass" }),
+    ]));
+    expect(v2Result.report.verdict).toBe("pass");
+    expect(v2Result.report.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "content_contract_version",
+        status: "pass",
+        details: expect.objectContaining({ schemaVersion: 2 }),
+      }),
+    ]));
+    expect(unknownResult.report.verdict).toBe("fail");
+    expect(unknownResult.report.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "content_contract_version",
+        status: "fail",
+        summary: "Unsupported referral_packet schema version 99.",
+      }),
+    ]));
+  });
 });
 
 function dbForRows(rows: readonly unknown[]): BrainDb & { readonly queries: unknown[] } {
@@ -167,6 +239,43 @@ function koRow(ko: SignedKnowledgeObject, provenance: Record<string, unknown>) {
       provenance_json: provenance,
     },
   ];
+}
+
+function provenance(producer: ReturnType<typeof createInstallIdentity>) {
+  return {
+    source: "local",
+    creatorInstallId: producer.record.installId,
+    storedAt: "2026-05-22T00:00:00.000Z",
+  };
+}
+
+function referralPacketContent(schemaVersion: number, extra: Record<string, unknown> = {}) {
+  return {
+    kind: "referral_packet",
+    schemaVersion,
+    title: "Northstar Clinic Referral Packet",
+    task: "Northstar Clinic Referral Packet",
+    input: {
+      fileName: "referral-packet.csv",
+      contentHash: "sha256:csv",
+      rows: 1,
+    },
+    patientReference: "N.P.",
+    referralReason: "Second opinion after abnormal ECG",
+    clinicalSummary: "Intermittent chest tightness.",
+    labSnapshot: "LDL 162 mg/dL; troponin negative",
+    medications: ["Atorvastatin 20mg", "aspirin 81mg"],
+    imagingStatus: "ECG attached",
+    consent: {
+      expiresAt: "2026-06-22T23:59:59Z",
+      revocationReason: "Patient withdrew consent",
+    },
+    attachments: [{ label: "ECG", status: "attached" }],
+    summary: "Northstar Clinic Referral Packet: second opinion.",
+    generator: "deterministic_referral_packet",
+    generatedAt: "1970-01-01T00:00:00.000Z",
+    ...extra,
+  };
 }
 
 async function writeIdentity(path: string, identity: ReturnType<typeof createInstallIdentity>): Promise<void> {

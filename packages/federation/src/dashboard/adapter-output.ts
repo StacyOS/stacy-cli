@@ -1,6 +1,6 @@
 import type { DashboardWidget } from "./dashboard-content.js";
 
-export type AdapterOutputKind = "dashboard" | "report" | "table";
+export type AdapterOutputKind = "dashboard" | "report" | "table" | "referral_packet";
 
 export interface AdapterDashboardOutput {
   readonly title?: string;
@@ -29,18 +29,41 @@ export interface AdapterTableOutput {
   readonly notes?: readonly string[];
 }
 
+export interface AdapterReferralPacketOutput {
+  readonly title?: string;
+  readonly patientReference: string;
+  readonly referralReason: string;
+  readonly clinicalSummary: string;
+  readonly labSnapshot: string;
+  readonly medications: readonly string[];
+  readonly imagingStatus: string;
+  readonly consent: {
+    readonly expiresAt: string;
+    readonly revocationReason: string;
+  };
+  readonly attachments?: readonly AdapterReferralAttachment[];
+  readonly notes?: readonly string[];
+}
+
+export interface AdapterReferralAttachment {
+  readonly label: string;
+  readonly status: string;
+}
+
 export type AdapterTableCell = string | number | boolean | null;
 export type AdapterTableRow = Readonly<Record<string, AdapterTableCell>>;
 
 export type ParsedAdapterOutput =
   | AdapterDashboardOutput
   | AdapterReportOutput
-  | AdapterTableOutput;
+  | AdapterTableOutput
+  | AdapterReferralPacketOutput;
 
 export function parseAdapterOutput(raw: string, kind: AdapterOutputKind): ParsedAdapterOutput {
   if (kind === "dashboard") return parseAdapterDashboardOutput(raw);
   if (kind === "report") return parseAdapterReportOutput(raw);
-  return parseAdapterTableOutput(raw);
+  if (kind === "table") return parseAdapterTableOutput(raw);
+  return parseAdapterReferralPacketOutput(raw);
 }
 
 export function parseAdapterDashboardOutput(raw: string): AdapterDashboardOutput {
@@ -94,6 +117,22 @@ export function parseAdapterTableOutput(raw: string): AdapterTableOutput {
     ...(typeof parsed.summary === "string" && parsed.summary.trim() ? { summary: parsed.summary.trim() } : {}),
     columns,
     rows: parsed.rows.map((row, index) => parseAdapterTableRow(row, index, columns)),
+    ...(parsed.notes === undefined ? {} : { notes: parseAdapterNotes(parsed.notes) }),
+  };
+}
+
+export function parseAdapterReferralPacketOutput(raw: string): AdapterReferralPacketOutput {
+  const parsed = parseAdapterJsonObject(raw, "referral_packet");
+  return {
+    ...(typeof parsed.title === "string" && parsed.title.trim() ? { title: parsed.title.trim() } : {}),
+    patientReference: requiredString(parsed.patientReference, "Adapter referral packet output patientReference"),
+    referralReason: requiredString(parsed.referralReason, "Adapter referral packet output referralReason"),
+    clinicalSummary: requiredString(parsed.clinicalSummary, "Adapter referral packet output clinicalSummary"),
+    labSnapshot: requiredString(parsed.labSnapshot, "Adapter referral packet output labSnapshot"),
+    medications: parseStringArray(parsed.medications, "Adapter referral packet output medications"),
+    imagingStatus: requiredString(parsed.imagingStatus, "Adapter referral packet output imagingStatus"),
+    consent: parseReferralConsent(parsed.consent),
+    ...(parsed.attachments === undefined ? {} : { attachments: parseReferralAttachments(parsed.attachments) }),
     ...(parsed.notes === undefined ? {} : { notes: parseAdapterNotes(parsed.notes) }),
   };
 }
@@ -165,6 +204,49 @@ function parseAdapterTableRow(value: unknown, index: number, columns: readonly s
     row[column] = cell;
   }
   return row;
+}
+
+function parseReferralConsent(value: unknown): AdapterReferralPacketOutput["consent"] {
+  if (!isRecord(value)) {
+    throw new Error("Adapter referral packet output consent must be an object.");
+  }
+  const expiresAt = requiredString(value.expiresAt, "Adapter referral packet output consent.expiresAt");
+  if (!Number.isFinite(Date.parse(expiresAt))) {
+    throw new Error("Adapter referral packet output consent.expiresAt must be an ISO timestamp.");
+  }
+  return {
+    expiresAt,
+    revocationReason: requiredString(value.revocationReason, "Adapter referral packet output consent.revocationReason"),
+  };
+}
+
+function parseReferralAttachments(value: unknown): readonly AdapterReferralAttachment[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Adapter referral packet output attachments must be an array.");
+  }
+  return value.map((attachment, index) => {
+    if (!isRecord(attachment)) {
+      throw new Error(`Adapter referral packet attachment ${index + 1} must be an object.`);
+    }
+    return {
+      label: requiredString(attachment.label, `Adapter referral packet attachment ${index + 1} label`),
+      status: requiredString(attachment.status, `Adapter referral packet attachment ${index + 1} status`),
+    };
+  });
+}
+
+function parseStringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${label} must be a non-empty array of strings.`);
+  }
+  return value.map((entry, index) => requiredString(entry, `${label} item ${index + 1}`));
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+  return value.trim();
 }
 
 function isTableCell(value: unknown): value is AdapterTableCell {

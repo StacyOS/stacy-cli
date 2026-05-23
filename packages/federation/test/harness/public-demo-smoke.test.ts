@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { loadInstallIdentity } from "../../src/identity/install-identity.js";
@@ -6,8 +6,7 @@ import { resolveFederationIdentityPath } from "../../src/identity/paths.js";
 import { createTwoInstallHarness, type HarnessCommandResult } from "./two-install-harness.js";
 
 const runPublicDemoSmoke = process.env.STACY_FEDERATION_PUBLIC_DEMO_SMOKE === "1";
-const demoCsvPath = resolve(process.cwd(), "demo/acme-q2-revenue.csv");
-const demoSchemaPath = resolve(process.cwd(), "demo/acme-dashboard.schema.json");
+const demoCsvPath = resolve(process.cwd(), "demo/referral-packet.csv");
 const publicDemoAdapterCommand = process.env.STACY_PUBLIC_DEMO_ADAPTER?.trim();
 const publicDemoAdapterArgs = parseAdapterArgs(process.env.STACY_PUBLIC_DEMO_ADAPTER_ARGS);
 
@@ -40,10 +39,9 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
       expectSuccessfulCommand(seedB);
       const consumerIdentity = await loadInstallIdentity(resolveFederationIdentityPath(harness.installB.instanceRoot));
 
-      const contactCardPath = join(harness.rootDir, "meera.contact-card.json");
-      const exportContactCardCommand = [
+      const shareLinkCommand = [
         "contacts",
-        "export",
+        "share-link",
         "meera",
         "--config",
         harness.installB.configPath,
@@ -52,29 +50,34 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "--revocation-url",
         `http://127.0.0.1:${harness.installB.serverPort}/api/federation/revocations`,
         "--label",
-        "Meera's Stacy install",
-        "--out",
-        contactCardPath,
+        "Dr. Meera Patel / Eastside Specialty",
+        "--expires",
+        "15m",
+        "--json",
       ];
-      const importContactCardCommand = [
+      logStep("3. Create B's short-lived signed contact share link", [
+        formatDemoCommand("B", shareLinkCommand),
+      ]);
+      const shareLink = await harness.runCli("B", shareLinkCommand);
+      expectSuccessfulCommand(shareLink);
+      const shareLinkPayload = parseCommandJson(shareLink) as { readonly link: string };
+
+      const importContactLinkCommand = [
         "contacts",
-        "import",
-        contactCardPath,
+        "import-link",
+        shareLinkPayload.link,
         "--config",
         harness.installA.configPath,
         "--as",
         "meera",
         "--json",
       ];
-      logStep("3. Exchange B's signed contact card as meera", [
-        formatDemoCommand("B", exportContactCardCommand),
-        formatDemoCommand("A", importContactCardCommand),
+      logStep("4. Import B as contact meera from the signed link", [
+        formatDemoCommand("A", importContactLinkCommand),
       ]);
-      const exportContactCard = await harness.runCli("B", exportContactCardCommand);
-      const importContactCard = await harness.runCli("A", importContactCardCommand);
-      expectSuccessfulCommand(exportContactCard);
-      expectSuccessfulCommand(importContactCard);
-      expect(parseCommandJson(importContactCard)).toMatchObject({
+      const importContactLink = await harness.runCli("A", importContactLinkCommand);
+      expectSuccessfulCommand(importContactLink);
+      expect(parseCommandJson(importContactLink)).toMatchObject({
         name: "meera",
         installId: consumerIdentity.record.installId,
         federationEndpointUrl: `http://127.0.0.1:${harness.installB.serverPort}/api/federation`,
@@ -82,15 +85,15 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
 
       const runTaskCommand = [
         "run",
-        "build a quarterly revenue dashboard from this CSV",
+        "Northstar Clinic Referral Packet",
         "--config",
         harness.installA.configPath,
         "--input",
         demoCsvPath,
-        "--schema",
-        demoSchemaPath,
+        "--output-kind",
+        "referral_packet",
         "--ko-id",
-        "ko_public_revenue_dashboard",
+        "ko_referral_packet",
         ...(publicDemoAdapterCommand
           ? [
               "--adapter-command",
@@ -103,7 +106,7 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
           : []),
         "--json",
       ];
-      logStep("4. Create signed KO from real CSV task", [formatDemoCommand("A", runTaskCommand)]);
+      logStep("5. Create signed KO from real CSV task", [formatDemoCommand("A", runTaskCommand)]);
       const runTask = await harness.runCli("A", runTaskCommand);
       expectSuccessfulCommand(runTask);
       const created = parseCommandJson(runTask) as {
@@ -113,9 +116,9 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         readonly generator: string;
       };
       expect(created).toMatchObject({
-        id: "ko_public_revenue_dashboard",
+        id: "ko_referral_packet",
         contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
-        generator: publicDemoAdapterCommand ? "adapter_command" : "deterministic_dashboard",
+        generator: publicDemoAdapterCommand ? "adapter_command" : "deterministic_referral_packet",
       });
 
       const showACommand = [
@@ -125,19 +128,19 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "--config",
         harness.installA.configPath,
       ];
-      logStep("5. Show local dashboard KO with provenance", [formatDemoCommand("A", showACommand)]);
+      logStep("6. Show local referral packet KO with provenance", [formatDemoCommand("A", showACommand)]);
       const showA = await harness.runCli("A", showACommand);
       expectSuccessfulCommand(showA);
-      expect(showA.stdout).toContain("Dashboard: Acme Q2 Revenue Dashboard");
-      expect(showA.stdout).toContain("Input: acme-q2-revenue.csv");
+      expect(showA.stdout).toContain("Referral packet: Northstar Clinic Referral Packet");
+      expect(showA.stdout).toContain("Input: referral-packet.csv");
       expect(showA.stdout).toContain("Signature: verified");
       expect(showA.stdout).toContain(
-        publicDemoAdapterCommand ? "Generator: adapter_command" : "Generator: deterministic_dashboard",
+        publicDemoAdapterCommand ? "Generator: adapter_command" : "Generator: deterministic_referral_packet",
       );
       if (publicDemoAdapterCommand) {
-        expect(showA.stdout).toContain("Summary: Fake adapter summary:");
+        expect(showA.stdout).toContain("Patient reference: N.P.");
         expect(showA.stdout).toContain("Adapter notes:");
-        expect(showA.stdout).toContain("Adapter output validated against the dashboard JSON contract.");
+        expect(showA.stdout).toContain("validated against the referral_packet JSON contract");
       }
 
       const shareCommand = [
@@ -154,7 +157,7 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "--revocable",
         "--json",
       ];
-      logStep("6. Share by contact name", [formatDemoCommand("A", shareCommand)]);
+      logStep("7. Share by contact name", [formatDemoCommand("A", shareCommand)]);
       const share = await harness.runCli("A", shareCommand);
       expectSuccessfulCommand(share);
       expect(parseCommandJson(share)).toMatchObject({
@@ -175,15 +178,15 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         consumerIdentity.record.installId,
         "--json",
       ];
-      logStep("7. Read on B before revoke", [formatDemoCommand("B", showBeforeRevokeCommand)]);
+      logStep("8. Read on B before revoke", [formatDemoCommand("B", showBeforeRevokeCommand)]);
       const showBeforeRevoke = await harness.runCli("B", showBeforeRevokeCommand);
       expectSuccessfulCommand(showBeforeRevoke);
       expect(parseCommandJson(showBeforeRevoke)).toMatchObject({
         id: created.id,
         content: {
-          kind: "dashboard",
+          kind: "referral_packet",
           input: {
-            fileName: "acme-q2-revenue.csv",
+            fileName: "referral-packet.csv",
           },
         },
         verified: true,
@@ -195,10 +198,10 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "--config",
         harness.installA.configPath,
         "--reason",
-        "Public demo revoke",
+        "Patient withdrew consent",
         "--json",
       ];
-      logStep("8. Revoke on A", [formatDemoCommand("A", revokeCommand)]);
+      logStep("9. Revoke on A", [formatDemoCommand("A", revokeCommand)]);
       const revoke = await harness.runCli("A", revokeCommand);
       expectSuccessfulCommand(revoke);
 
@@ -212,7 +215,7 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         consumerIdentity.record.installId,
         "--json",
       ];
-      logStep("9. Read on B after revoke", [formatDemoCommand("B", showAfterRevokeCommand)]);
+      logStep("10. Read on B after revoke", [formatDemoCommand("B", showAfterRevokeCommand)]);
       const showAfterRevoke = await harness.runCli("B", showAfterRevokeCommand);
       expectFailedCommand(showAfterRevoke, "Consent grant has been revoked");
 
@@ -280,7 +283,7 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         harness.installB.configPath,
         "--global",
       ];
-      logStep("10. Show receipts on both installs", [
+      logStep("11. Show receipts on both installs", [
         formatDemoCommand("A", receiptsATextCommand),
         formatDemoCommand("B", receiptsBTextCommand),
         formatDemoCommand("A", verifyReceiptsACommand),
@@ -324,11 +327,11 @@ describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
         "StacyOS public federation demo complete",
         `KO: ${created.id}`,
         `Content hash: ${created.contentHash}`,
-        `Producer install: ${created.creatorInstallId}`,
-        `Consumer install: ${consumerIdentity.record.installId}`,
+        `Producer: Northstar Clinic (${created.creatorInstallId})`,
+        `Consumer: Dr. Meera Patel / Eastside Specialty (${consumerIdentity.record.installId})`,
         `Generator: ${created.generator}`,
         "B read before revoke: allowed",
-        "A revoked access",
+        "A revoked access: Patient withdrew consent",
         "B read after revoke: denied",
         `Receipts A: ${eventsA.join(", ")}`,
         `Receipts B: ${eventsB.join(", ")}`,
@@ -397,6 +400,9 @@ function formatDemoCommand(install: "A" | "B", args: readonly string[]): string 
 }
 
 function quoteShellArg(value: string): string {
+  if (value.startsWith("stacy://contacts/import?payload=")) {
+    return "\"stacy://contacts/import?payload=<signed_payload>\"";
+  }
   if (/^[A-Za-z0-9_./:=@-]+$/.test(value)) return value;
   return `"${value.replaceAll("\"", "\\\"")}"`;
 }

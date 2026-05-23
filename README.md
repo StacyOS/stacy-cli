@@ -55,6 +55,36 @@ Prerequisites:
 Stacy does not ship shared Codex or Claude credentials. Each operator connects
 their own local account on their own machine.
 
+## Federation Demo
+
+The StacyOS federation demo proves signed context, per-object consent,
+read-time revocation, and receipts across two independent Stacy installs. The
+canonical public scenario is a healthcare referral: Northstar Clinic sends a
+signed referral packet to Dr. Meera Patel at Eastside Specialty, then revokes
+access after the patient withdraws consent.
+
+Start here:
+
+- [3-minute quickstart](docs/federation-demo-quickstart.md)
+- [Conceptual guide](docs/federation-demo-conceptual.md)
+- [Technical deep dive](docs/federation-demo-technical-deep-dive.md)
+- [Schema compatibility](docs/federation-schema-compatibility.md)
+- [Scenario](docs/federation-scenario.md)
+- [Demo script](docs/federation-demo-script.md)
+- [Audit packet](docs/federation-audit-packet.md)
+- [Threat model](docs/federation-threat-model.md)
+- [Security questionnaire](docs/federation-security-questionnaire.md)
+- [Design partner plan](docs/federation-design-partner-plan.md)
+- [Security roadmap](docs/federation-security-roadmap.md)
+- [Operator runbook](packages/federation/DEMO_RUNBOOK.md)
+- [Live deployment runbook](docs/federation-live-deployment.md)
+
+Local verification:
+
+```bash
+pnpm --filter @arpanstacy/stacy-federation demo:public
+```
+
 ## Why Stacy
 
 AI agents are useful, but they become hard to trust when their work is invisible.
