@@ -4,6 +4,7 @@ import { createInstallIdentity } from "../identity/install-identity.js";
 import { createKnowledgeObject } from "../ko/knowledge-object.js";
 import { CONSENT_GRANT_SCOPES, createConsentGrant } from "./grant.js";
 import { enforceReadConsent, enforceWriteConsent } from "./enforcement.js";
+import { createGroupRoster } from "./group-roster.js";
 import { createRevocationTombstone } from "./revocation.js";
 
 describe("read-time consent enforcement", () => {
@@ -220,6 +221,101 @@ describe("read-time consent enforcement", () => {
         now: new Date("2026-05-22T00:00:00.000Z"),
       }),
     ).toEqual({ ok: false, reason: "Consent grant has been revoked" });
+  });
+
+  it("allows read when a group grant targets a signed roster containing the consumer", () => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/clinic",
+      contentType: "application/json",
+      content: { title: "Referral" },
+      identity: producer,
+      idGenerator: () => "ko_referral",
+    });
+    const roster = createGroupRoster({
+      tenant: "stacy/clinic",
+      groupId: "group_eastside_specialty",
+      label: "Eastside Specialty",
+      members: [{ installId: consumer.record.installId, label: "Dr. Meera Patel", role: "clinician" }],
+      issuerIdentity: producer,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      idGenerator: () => "roster_eastside",
+    });
+    const grant = createConsentGrant({
+      tenant: "stacy/clinic",
+      koId: ko.id,
+      koContentHash: ko.signedPayload.contentHash,
+      producerIdentity: producer,
+      consumerInstallId: roster.signedPayload.groupId,
+      recipient: {
+        type: "group",
+        id: roster.signedPayload.groupId,
+        role: "clinician",
+      },
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      idGenerator: () => "grant_group",
+    });
+
+    expect(
+      enforceReadConsent({
+        ko,
+        grant,
+        consumerInstallId: consumer.record.installId,
+        groupRosters: [roster],
+        now: new Date("2026-05-22T00:00:00.000Z"),
+      }),
+    ).toEqual({ ok: true, grantId: "grant_group" });
+  });
+
+  it("denies group read when the consumer was removed from the signed roster", () => {
+    const producer = createInstallIdentity();
+    const consumer = createInstallIdentity();
+    const otherMember = createInstallIdentity();
+    const ko = createKnowledgeObject({
+      tenant: "stacy/clinic",
+      contentType: "application/json",
+      content: { title: "Referral" },
+      identity: producer,
+      idGenerator: () => "ko_referral",
+    });
+    const roster = createGroupRoster({
+      tenant: "stacy/clinic",
+      groupId: "group_eastside_specialty",
+      label: "Eastside Specialty",
+      members: [{ installId: otherMember.record.installId, label: "Dr. Other", role: "clinician" }],
+      issuerIdentity: producer,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      idGenerator: () => "roster_eastside",
+    });
+    const grant = createConsentGrant({
+      tenant: "stacy/clinic",
+      koId: ko.id,
+      koContentHash: ko.signedPayload.contentHash,
+      producerIdentity: producer,
+      consumerInstallId: roster.signedPayload.groupId,
+      recipient: {
+        type: "group",
+        id: roster.signedPayload.groupId,
+        role: "clinician",
+      },
+      expiresAt: new Date("2026-06-21T00:00:00.000Z"),
+      revocable: true,
+      createdAt: new Date("2026-05-22T00:00:00.000Z"),
+      idGenerator: () => "grant_group",
+    });
+
+    expect(
+      enforceReadConsent({
+        ko,
+        grant,
+        consumerInstallId: consumer.record.installId,
+        groupRosters: [roster],
+        now: new Date("2026-05-22T00:00:00.000Z"),
+      }),
+    ).toEqual({ ok: false, reason: "Consumer not in producer's latest group roster" });
   });
 
   it("rejects tombstones from the wrong issuer", () => {
