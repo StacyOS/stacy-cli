@@ -65,6 +65,7 @@ access after the patient withdraws consent.
 
 Start here:
 
+- **[Complete report (single source of truth)](docs/stacy/FEDERATION-COMPLETE-REPORT.md)** — every claim, every CLI command, every gap, in one document
 - [3-minute quickstart](docs/federation-demo-quickstart.md)
 - [Conceptual guide](docs/federation-demo-conceptual.md)
 - [Technical deep dive](docs/federation-demo-technical-deep-dive.md)
