@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discord — #dev
+    url: https://discord.gg/stacyos
+    about: Questions, roadmap-level proposals, and general discussion. Coordinate here before large changes.
+  - name: Security vulnerability
+    url: https://github.com/StacyOS/stacy-cli/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.

@@ -1,0 +1,64 @@
+name: release-check
+
+# Federation product-readiness gate. Complements pr.yml (which runs the
+# workspace typecheck/test/build/e2e) by exercising the @arpanstacy/stacy-federation
+# demo paths end-to-end before anything lands on the default branch.
+#
+# NOTE: origin/HEAD is `main` but pr.yml/release.yml trigger on `master`.
+# This gate triggers on BOTH as a stopgap until that mismatch is resolved
+# (see the "Open cross-cutting issue" section in docs/DECISIONS.md).
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: release-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Preflight
+        run: pnpm --filter @arpanstacy/stacy-federation preflight
+
+      - name: Typecheck
+        run: pnpm --filter @arpanstacy/stacy-federation typecheck
+
+      - name: Test
+        run: pnpm --filter @arpanstacy/stacy-federation test
+
+      - name: Demo check
+        run: pnpm --filter @arpanstacy/stacy-federation demo:check
+
+      - name: Public demo
+        run: pnpm --filter @arpanstacy/stacy-federation demo:public
+
+      - name: Public demo (cached adapter)
+        run: pnpm --filter @arpanstacy/stacy-federation demo:public:adapter-cached
+
+      - name: Public demo (repeat x3)
+        env:
+          STACY_FEDERATION_PUBLIC_DEMO_REPEAT: "3"
+        run: pnpm --filter @arpanstacy/stacy-federation demo:public:repeat
