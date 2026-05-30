@@ -202,6 +202,92 @@ export async function readKnowledgeObject(
   };
 }
 
+export interface ListKnowledgeObjectsOptions {
+  readonly db: BrainDb;
+  readonly tenant?: string;
+  readonly contentType?: string;
+  readonly source?: BrainKnowledgeObjectSource;
+  readonly limit?: number;
+}
+
+export interface KnowledgeObjectSummary {
+  readonly id: string;
+  readonly tenant: string;
+  readonly source: BrainKnowledgeObjectSource;
+  readonly creatorInstallId: string;
+  readonly contentHash: string;
+  readonly contentType: string;
+  readonly createdAt: string;
+  readonly storedAt: string;
+}
+
+interface KnowledgeObjectSummaryRow {
+  readonly id: string;
+  readonly tenant: string;
+  readonly source: string;
+  readonly creator_install_id: string;
+  readonly content_hash: string;
+  readonly content_type: string;
+  readonly created_at: string;
+  readonly stored_at: string;
+}
+
+export async function listKnowledgeObjects(
+  options: ListKnowledgeObjectsOptions,
+): Promise<readonly KnowledgeObjectSummary[]> {
+  const limit = Math.min(Math.max(Math.trunc(options.limit ?? 20), 1), 100);
+  const filters: SQL[] = [];
+  if (options.tenant !== undefined) {
+    filters.push(sql`tenant = ${options.tenant}`);
+  }
+  if (options.contentType !== undefined) {
+    filters.push(sql`content_type = ${options.contentType}`);
+  }
+  if (options.source !== undefined) {
+    filters.push(sql`source = ${options.source}`);
+  }
+  const whereClause =
+    filters.length > 0 ? sql`WHERE ${sql.join(filters, sql` AND `)}` : sql``;
+
+  let rows: readonly KnowledgeObjectSummaryRow[];
+  try {
+    rows = normalizeRows<KnowledgeObjectSummaryRow>(
+      await options.db.execute(sql`
+        SELECT
+          id,
+          tenant,
+          source,
+          creator_install_id,
+          content_hash,
+          content_type,
+          created_at,
+          stored_at
+        FROM federation_knowledge_objects
+        ${whereClause}
+        ORDER BY stored_at DESC
+        LIMIT ${limit}
+      `),
+    );
+  } catch (error) {
+    if (isUndefinedTableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    tenant: row.tenant,
+    source: row.source === "federated" ? "federated" : "local",
+    creatorInstallId: row.creator_install_id,
+    contentHash: row.content_hash,
+    contentType: row.content_type,
+    createdAt: String(row.created_at),
+    storedAt: String(row.stored_at),
+  }));
+}
+
 function normalizeRows<T>(result: unknown): readonly T[] {
   if (typeof result === "object" && result !== null && "rows" in result) {
     return (result as { readonly rows: readonly T[] }).rows;

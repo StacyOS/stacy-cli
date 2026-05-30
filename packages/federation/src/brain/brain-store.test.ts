@@ -5,6 +5,7 @@ import { createInstallIdentity } from "../identity/install-identity.js";
 import { createKnowledgeObject } from "../ko/knowledge-object.js";
 import {
   ensureBrainTables,
+  listKnowledgeObjects,
   readKnowledgeObject,
   storeKnowledgeObject,
   type BrainDb,
@@ -140,5 +141,60 @@ describe("Brain KO store", () => {
     await expect(readKnowledgeObject({ db, koId: ko.id })).resolves.toMatchObject({
       ok: false,
     });
+  });
+});
+
+describe("listKnowledgeObjects", () => {
+  it("maps rows to summaries and normalizes source", async () => {
+    const db = new FakeBrainDb();
+    db.rows = [
+      {
+        id: "ko_a",
+        tenant: "stacy/acme",
+        source: "local",
+        creator_install_id: "install_1",
+        content_hash: "sha256:aaa",
+        content_type: "application/json",
+        created_at: "2026-05-22T00:00:00.000Z",
+        stored_at: "2026-05-22T00:00:01.000Z",
+      },
+      {
+        id: "ko_b",
+        tenant: "stacy/acme",
+        source: "weird-value",
+        creator_install_id: "install_2",
+        content_hash: "sha256:bbb",
+        content_type: "application/json",
+        created_at: "2026-05-22T00:01:00.000Z",
+        stored_at: "2026-05-22T00:01:01.000Z",
+      },
+    ];
+
+    const result = await listKnowledgeObjects({ db });
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ id: "ko_a", source: "local", contentHash: "sha256:aaa" });
+    // any non-"federated" source string normalizes to "local"
+    expect(result[1]?.source).toBe("local");
+  });
+
+  it("returns an empty list when the KO table does not exist", async () => {
+    const db: BrainDb = {
+      async execute() {
+        throw Object.assign(new Error("relation does not exist"), { code: "42P01" });
+      },
+    };
+
+    await expect(listKnowledgeObjects({ db })).resolves.toEqual([]);
+  });
+
+  it("propagates unexpected database errors", async () => {
+    const db: BrainDb = {
+      async execute() {
+        throw Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" });
+      },
+    };
+
+    await expect(listKnowledgeObjects({ db })).rejects.toThrow("connection refused");
   });
 });

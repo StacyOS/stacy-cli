@@ -1,5 +1,6 @@
 import { brainDeriveCommand, type BrainDeriveDependencies } from "./brain-derive.js";
 import { brainCreateCommand, type BrainCreateDependencies } from "./brain-create.js";
+import { brainListCommand, type BrainListDependencies } from "./brain-list.js";
 import { brainShowCommand, type BrainShowDependencies } from "./brain-show.js";
 import { brainVerifyCommand, type BrainVerifyDependencies } from "./brain-verify.js";
 import {
@@ -34,6 +35,7 @@ interface CommandLike {
 export const federationCliCommands = {
   brain: "brain",
   brainCreate: "create",
+  brainList: "list",
   brainDerive: "derive",
   brainShow: "show",
   brainVerify: "verify",
@@ -43,6 +45,7 @@ export const federationCliCommands = {
 
 export interface RegisterFederationCommandsOptions {
   readonly brainCreate?: BrainCreateDependencies;
+  readonly brainList?: BrainListDependencies;
   readonly brainDerive?: BrainDeriveDependencies;
   readonly brainShow?: BrainShowDependencies;
   readonly brainVerify?: BrainVerifyDependencies;
@@ -76,6 +79,19 @@ export function registerFederationCommands(
     .option("--json", "Print raw JSON output", false)
     .action(async (commandOptions) => {
       await brainCreateCommand(commandOptions as Parameters<typeof brainCreateCommand>[0], options.brainCreate);
+    });
+
+  brain
+    .command(federationCliCommands.brainList)
+    .description("List locally stored signed Knowledge Objects")
+    .option("--content-type <type>", "Filter by Knowledge Object content type")
+    .option("--source <source>", "Filter by source: local or federated")
+    .option("--limit <n>", "Maximum rows to return (1-100, default 20)")
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .option("--json", "Print raw JSON output", false)
+    .action(async (commandOptions) => {
+      await brainListCommand(commandOptions as Parameters<typeof brainListCommand>[0], options.brainList);
     });
 
   brain
