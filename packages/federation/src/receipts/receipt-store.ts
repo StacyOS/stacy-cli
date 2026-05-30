@@ -15,7 +15,10 @@ export type FederationReceiptEventType =
   | "deny"
   | "revoke"
   | "derive"
-  | "verify";
+  | "verify"
+  | "ingest"
+  | "normalize"
+  | "run";
 
 export interface FederationReceipt {
   readonly id: string;

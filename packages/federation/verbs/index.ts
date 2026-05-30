@@ -15,6 +15,14 @@ import {
   contactsShowCommand,
   type ContactsDependencies,
 } from "./contacts.js";
+import { connectGithubCommand, type ConnectDependencies } from "./connect.js";
+import {
+  connectorsDisconnectCommand,
+  connectorsListCommand,
+  connectorsStatusCommand,
+  type ConnectorsDependencies,
+} from "./connectors.js";
+import { ingestGithubCommand, type IngestDependencies } from "./ingest.js";
 import { receiptsListCommand, receiptsVerifyCommand, type ReceiptsDependencies } from "./receipts.js";
 import {
   identityBackupCommand,
@@ -63,6 +71,9 @@ export interface RegisterFederationCommandsOptions {
   readonly receipts?: ReceiptsDependencies;
   readonly identity?: IdentityDependencies;
   readonly runTask?: RunTaskDependencies;
+  readonly connect?: ConnectDependencies;
+  readonly connectors?: ConnectorsDependencies;
+  readonly ingest?: IngestDependencies;
 }
 
 export function registerFederationCommands(
@@ -295,6 +306,79 @@ export function registerFederationCommands(
       );
     });
 
+  program
+    .command("connect")
+    .description("Connect an external tool via OAuth (device-code flow)")
+    .argument("<connector>", "Connector id (github)")
+    .option("--client-id <id>", "OAuth client id (or set STACY_GITHUB_CLIENT_ID)")
+    .option("--org <org>", "Restrict access to a single organization")
+    .option("--scope <scope>", "Override the requested OAuth scope")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (connector, commandOptions) => {
+      assertGithubConnector(String(connector));
+      await connectGithubCommand(commandOptions as Parameters<typeof connectGithubCommand>[0], options.connect);
+    });
+
+  const connectors = program
+    .command("connectors")
+    .description("Manage connected external tools");
+
+  connectors
+    .command("list")
+    .description("List available connectors and their connection status")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await connectorsListCommand(commandOptions as Parameters<typeof connectorsListCommand>[0], options.connectors);
+    });
+
+  connectors
+    .command("status")
+    .description("Show the live status of a connected tool")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await connectorsStatusCommand(commandOptions as Parameters<typeof connectorsStatusCommand>[0], options.connectors);
+    });
+
+  connectors
+    .command("disconnect")
+    .description("Remove a connector's stored token")
+    .argument("<connector>", "Connector id (github)")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (connector, commandOptions) => {
+      await connectorsDisconnectCommand(
+        String(connector),
+        commandOptions as Parameters<typeof connectorsDisconnectCommand>[1],
+        options.connectors,
+      );
+    });
+
+  program
+    .command("ingest")
+    .description("Ingest external-tool data as signed Knowledge Objects")
+    .argument("<connector>", "Connector id (github)")
+    .requiredOption("--repo <owner/name>", "Repository to ingest from")
+    .option("--pulls", "Ingest pull requests (default when neither --pulls nor --issues given)", false)
+    .option("--issues", "Ingest issues", false)
+    .option("--state <state>", "Filter by state: open, closed, or all", "open")
+    .option("--label <label>", "Only ingest objects with this label")
+    .option("--since <duration>", "Only ingest objects updated since (7d, 24h, ISO date)")
+    .option("--yes", "Skip the confirmation prompt (for scripting)", false)
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (connector, commandOptions) => {
+      assertGithubConnector(String(connector));
+      await ingestGithubCommand(commandOptions as Parameters<typeof ingestGithubCommand>[0], options.ingest);
+    });
+
   const receipts = program
     .command("receipts")
     .description("Federation receipt log operations");
@@ -398,6 +482,11 @@ export function registerFederationCommands(
 export {
   brainExportCommand,
   brainImportCommand,
+  connectGithubCommand,
+  connectorsDisconnectCommand,
+  connectorsListCommand,
+  connectorsStatusCommand,
+  ingestGithubCommand,
   contactsImportLinkCommand,
   contactsShareLinkCommand,
   identityBackupCommand,
@@ -407,10 +496,19 @@ export {
   runTaskCommand,
   type BrainExportDependencies,
   type BrainImportDependencies,
+  type ConnectDependencies,
+  type ConnectorsDependencies,
+  type IngestDependencies,
   type IdentityDependencies,
   type RunTaskDependencies,
 };
 
 function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+function assertGithubConnector(connector: string): void {
+  if (connector.trim().toLowerCase() !== "github") {
+    throw new Error(`Unsupported connector "${connector}". Only "github" is available in v0.2.`);
+  }
 }

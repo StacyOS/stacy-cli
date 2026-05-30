@@ -50,6 +50,14 @@ describe("federation CLI registration", () => {
     expect(topLevelCommands).toContain("contacts");
     expect(topLevelCommands).toContain("receipts");
     expect(topLevelCommands).toContain("identity");
+    expect(topLevelCommands).toContain("connect");
+    expect(topLevelCommands).toContain("connectors");
+    expect(topLevelCommands).toContain("ingest");
+
+    const connectors = program.children.find((child) => child.nameAndArgs === "connectors");
+    expect(connectors?.children.map((child) => child.nameAndArgs)).toEqual(
+      expect.arrayContaining(["list", "status", "disconnect"]),
+    );
 
     const brain = program.children.find((child) => child.nameAndArgs === federationCliCommands.brain);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainCreate);
