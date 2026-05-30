@@ -27,7 +27,7 @@ import { registerPluginCommands } from "./commands/client/plugin.js";
 import { registerClientAuthCommands } from "./commands/client/auth.js";
 import { cliVersion } from "./version.js";
 import { applyStacyEnvAliases } from "./config/env-aliases.js";
-import { registerFederationCommands, runTaskCommand } from "@arpanstacy/stacy-federation/verbs";
+import { agentRunCommand, registerFederationCommands, runTaskCommand } from "@arpanstacy/stacy-federation/verbs";
 
 const program = new Command();
 applyStacyEnvAliases();
@@ -147,6 +147,9 @@ program
   .option("--bind <mode>", "On first run, use onboarding reachability preset (loopback, lan, tailnet)")
   .option("--repair", "Attempt automatic repairs during doctor", true)
   .option("--no-repair", "Disable automatic repairs during doctor")
+  .option("--use <ko_id>", "Input Knowledge Object for an AI run; repeat for multiple", collectOption, [])
+  .option("--model <name>", "Model identifier passed to the run adapter")
+  .option("--adapter <name>", "Run adapter to use: anthropic (default) or deterministic")
   .option("--input <path>", "Input file for a public federation demo task")
   .option("--schema <path>", "Dashboard schema JSON for mapping CSV columns to widgets")
   .option("--adapter-command <command>", "Optional adapter-like command for task generation")
@@ -161,6 +164,10 @@ program
   .option("--json", "Print raw JSON output", false)
   .action(async (task, opts) => {
     if (typeof task === "string" && task.trim()) {
+      if (Array.isArray(opts.use) && opts.use.length > 0) {
+        await agentRunCommand(task, opts);
+        return;
+      }
       await runTaskCommand(task, opts);
       return;
     }

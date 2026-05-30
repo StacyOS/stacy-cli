@@ -32,6 +32,7 @@ import {
   type IdentityDependencies,
 } from "./identity.js";
 import { revokeCommand, type RevokeDependencies } from "./revoke.js";
+import { agentRunCommand, type AgentRunDependencies } from "./run.js";
 import { runTaskCommand, type RunTaskDependencies } from "./run-task.js";
 import { shareCommand, type ShareDependencies } from "./share.js";
 
@@ -493,6 +494,7 @@ export {
   identityRotateCommand,
   identityShowCommand,
   identityVerifyChainCommand,
+  agentRunCommand,
   runTaskCommand,
   type BrainExportDependencies,
   type BrainImportDependencies,
@@ -500,6 +502,7 @@ export {
   type ConnectorsDependencies,
   type IngestDependencies,
   type IdentityDependencies,
+  type AgentRunDependencies,
   type RunTaskDependencies,
 };
 
