@@ -53,6 +53,9 @@ describe("federation CLI registration", () => {
 
     const brain = program.children.find((child) => child.nameAndArgs === federationCliCommands.brain);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainCreate);
+    expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainList);
+    expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainExport);
+    expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainImport);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainDerive);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainShow);
     expect(brain?.children.map((child) => child.nameAndArgs)).toContain(federationCliCommands.brainVerify);
@@ -67,7 +70,7 @@ describe("federation CLI registration", () => {
 
     const identity = program.children.find((child) => child.nameAndArgs === "identity");
     expect(identity?.children.map((child) => child.nameAndArgs)).toEqual(
-      expect.arrayContaining(["rotate", "verify-chain"]),
+      expect.arrayContaining(["show", "backup", "rotate", "verify-chain"]),
     );
   });
 

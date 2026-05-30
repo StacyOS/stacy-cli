@@ -1,5 +1,7 @@
 import { brainDeriveCommand, type BrainDeriveDependencies } from "./brain-derive.js";
 import { brainCreateCommand, type BrainCreateDependencies } from "./brain-create.js";
+import { brainExportCommand, type BrainExportDependencies } from "./brain-export.js";
+import { brainImportCommand, type BrainImportDependencies } from "./brain-import.js";
 import { brainListCommand, type BrainListDependencies } from "./brain-list.js";
 import { brainShowCommand, type BrainShowDependencies } from "./brain-show.js";
 import { brainVerifyCommand, type BrainVerifyDependencies } from "./brain-verify.js";
@@ -15,7 +17,9 @@ import {
 } from "./contacts.js";
 import { receiptsListCommand, receiptsVerifyCommand, type ReceiptsDependencies } from "./receipts.js";
 import {
+  identityBackupCommand,
   identityRotateCommand,
+  identityShowCommand,
   identityVerifyChainCommand,
   type IdentityDependencies,
 } from "./identity.js";
@@ -36,6 +40,8 @@ export const federationCliCommands = {
   brain: "brain",
   brainCreate: "create",
   brainList: "list",
+  brainExport: "export",
+  brainImport: "import",
   brainDerive: "derive",
   brainShow: "show",
   brainVerify: "verify",
@@ -46,6 +52,8 @@ export const federationCliCommands = {
 export interface RegisterFederationCommandsOptions {
   readonly brainCreate?: BrainCreateDependencies;
   readonly brainList?: BrainListDependencies;
+  readonly brainExport?: BrainExportDependencies;
+  readonly brainImport?: BrainImportDependencies;
   readonly brainDerive?: BrainDeriveDependencies;
   readonly brainShow?: BrainShowDependencies;
   readonly brainVerify?: BrainVerifyDependencies;
@@ -104,6 +112,30 @@ export function registerFederationCommands(
     .option("--json", "Print raw JSON output", false)
     .action(async (koId, commandOptions) => {
       await brainShowCommand(String(koId), commandOptions as Parameters<typeof brainShowCommand>[1], options.brainShow);
+    });
+
+  brain
+    .command(federationCliCommands.brainExport)
+    .description("Export a signed Knowledge Object to a portable file")
+    .argument("<ko_id>", "Knowledge Object ID or content hash")
+    .option("--out <path>", "Write the export to a file (default <ko_id>.stacy-ko.json)")
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .option("--json", "Print raw JSON output", false)
+    .action(async (koId, commandOptions) => {
+      await brainExportCommand(String(koId), commandOptions as Parameters<typeof brainExportCommand>[1], options.brainExport);
+    });
+
+  brain
+    .command(federationCliCommands.brainImport)
+    .description("Import and verify a signed Knowledge Object from a portable file")
+    .argument("<path>", "Path to a Knowledge Object export JSON file")
+    .option("--source <source>", "Record the imported KO source: local or federated (default federated)")
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .option("--json", "Print raw JSON output", false)
+    .action(async (path, commandOptions) => {
+      await brainImportCommand(String(path), commandOptions as Parameters<typeof brainImportCommand>[1], options.brainImport);
     });
 
   brain
@@ -295,6 +327,33 @@ export function registerFederationCommands(
     .description("Federation install identity operations");
 
   identity
+    .command("show")
+    .description("Show this install's federation identity and public key")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await identityShowCommand(
+        commandOptions as Parameters<typeof identityShowCommand>[0],
+        options.identity,
+      );
+    });
+
+  identity
+    .command("backup")
+    .description("Write a private backup of this install's federation identity")
+    .option("--out <path>", "Write the backup to a file (default federation-install-identity.<install>.backup.json)")
+    .option("--json", "Print raw JSON output", false)
+    .option("-c, --config <path>", "Path to config file")
+    .option("--db-url <url>", "Database connection string")
+    .action(async (commandOptions) => {
+      await identityBackupCommand(
+        commandOptions as Parameters<typeof identityBackupCommand>[0],
+        options.identity,
+      );
+    });
+
+  identity
     .command("rotate")
     .description("Rotate this install's federation keypair and record a dual-signed transition")
     .option("--reason <text>", "Reason recorded in the signed key transition")
@@ -337,11 +396,17 @@ export function registerFederationCommands(
 }
 
 export {
+  brainExportCommand,
+  brainImportCommand,
   contactsImportLinkCommand,
   contactsShareLinkCommand,
+  identityBackupCommand,
   identityRotateCommand,
+  identityShowCommand,
   identityVerifyChainCommand,
   runTaskCommand,
+  type BrainExportDependencies,
+  type BrainImportDependencies,
   type IdentityDependencies,
   type RunTaskDependencies,
 };

@@ -9,7 +9,12 @@ import { createInstallIdentity, parseInstallIdentity } from "../src/identity/ins
 import { resolveFederationIdentityPath } from "../src/identity/paths.js";
 import type { SignedKeyTransition } from "../src/identity/key-transition.js";
 import { verifyKeyTransition } from "../src/identity/key-transition.js";
-import { identityRotateCommand, identityVerifyChainCommand } from "./identity.js";
+import {
+  identityBackupCommand,
+  identityRotateCommand,
+  identityShowCommand,
+  identityVerifyChainCommand,
+} from "./identity.js";
 
 describe("identity verbs", () => {
   it("rotates the active install identity after storing a signed transition", async () => {
@@ -72,5 +77,50 @@ describe("identity verbs", () => {
     );
 
     expect(logs).toEqual(["Install key chain valid. No rotations recorded."]);
+  });
+
+  it("shows the install identity and public key without the private key", async () => {
+    const identity = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const logs: string[] = [];
+
+    await identityShowCommand(
+      { config: "/tmp/stacy/config.json", dbUrl: "postgres://example", json: true },
+      {
+        loadIdentity: async () => identity,
+        stdout: { log: (line) => logs.push(line) },
+      },
+    );
+
+    const summary = JSON.parse(logs[0] ?? "{}") as Record<string, unknown>;
+    expect(summary).toMatchObject({
+      installId: identity.record.installId,
+      personId: identity.record.personId,
+      workerId: identity.record.workerId,
+      publicKeyPem: identity.record.publicKeyPem,
+    });
+    expect(logs.join("\n")).not.toContain("PRIVATE KEY");
+  });
+
+  it("writes a private identity backup to disk", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-identity-backup-"));
+    const identity = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
+    const backupPath = join(root, "backup.json");
+    const logs: string[] = [];
+
+    await identityBackupCommand(
+      { config: "/tmp/stacy/config.json", dbUrl: "postgres://example", out: backupPath, json: true },
+      {
+        loadIdentity: async () => identity,
+        stdout: { log: (line) => logs.push(line) },
+      },
+    );
+
+    const restored = parseInstallIdentity(await readFile(backupPath, "utf8"));
+    expect(restored.record.installId).toBe(identity.record.installId);
+    expect(restored.record.privateKeyPem).toBe(identity.record.privateKeyPem);
+    expect(JSON.parse(logs[0] ?? "{}") as unknown).toMatchObject({
+      installId: identity.record.installId,
+      backupPath,
+    });
   });
 });

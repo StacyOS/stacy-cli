@@ -1,6 +1,6 @@
 import { createDb } from "@arpanstacy/stacy-db";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import type { BrainDb } from "../src/brain/brain-store.js";
 import {
@@ -30,6 +30,15 @@ export interface IdentityRotateOptions extends LocalRuntimeOptions {
 }
 
 export interface IdentityVerifyChainOptions extends LocalRuntimeOptions {
+  readonly json?: boolean;
+}
+
+export interface IdentityShowOptions extends LocalRuntimeOptions {
+  readonly json?: boolean;
+}
+
+export interface IdentityBackupOptions extends LocalRuntimeOptions {
+  readonly out?: string;
   readonly json?: boolean;
 }
 
@@ -133,6 +142,68 @@ export async function identityVerifyChainCommand(
   }
 }
 
+export async function identityShowCommand(
+  options: IdentityShowOptions,
+  dependencies: IdentityDependencies = {},
+): Promise<void> {
+  const stdout = dependencies.stdout ?? console;
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const identity = await (dependencies.loadIdentity ?? loadInstallIdentity)(runtime.identityPath);
+  const record = identity.record;
+
+  const summary = {
+    installId: record.installId,
+    personId: record.personId,
+    workerId: record.workerId,
+    publicKeyPem: record.publicKeyPem,
+    createdAt: record.createdAt,
+    identityPath: runtime.identityPath,
+  };
+  stdout.log(
+    options.json
+      ? JSON.stringify(summary, null, 2)
+      : [
+          "Federation install identity.",
+          `Install: ${summary.installId}`,
+          `Person: ${summary.personId}`,
+          `Worker: ${summary.workerId}`,
+          `Created at: ${summary.createdAt}`,
+          `Identity file: ${summary.identityPath}`,
+          "Public key:",
+          summary.publicKeyPem.trim(),
+        ].join("\n"),
+  );
+}
+
+export async function identityBackupCommand(
+  options: IdentityBackupOptions,
+  dependencies: IdentityDependencies = {},
+): Promise<void> {
+  const stdout = dependencies.stdout ?? console;
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const identity = await (dependencies.loadIdentity ?? loadInstallIdentity)(runtime.identityPath);
+
+  const backupPath = resolve(
+    options.out?.trim() || `federation-install-identity.${identity.record.installId}.backup.json`,
+  );
+  await (dependencies.writeBackupFile ?? writeIdentityBackupToPath)(backupPath, identity);
+
+  const summary = {
+    installId: identity.record.installId,
+    backupPath,
+  };
+  stdout.log(
+    options.json
+      ? JSON.stringify(summary, null, 2)
+      : [
+          "Federation install identity backed up.",
+          `Install: ${summary.installId}`,
+          `Backup written to: ${summary.backupPath}`,
+          "Keep this file private: it contains the install private key.",
+        ].join("\n"),
+  );
+}
+
 function formatRotation(result: {
   readonly transitionId: string;
   readonly oldInstallId: string;
@@ -174,6 +245,11 @@ async function writeIdentityBackupFile(path: string, identity: InstallIdentity):
     flag: "wx",
     mode: 0o600,
   });
+}
+
+async function writeIdentityBackupToPath(path: string, identity: InstallIdentity): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(identity.record, null, 2)}\n`, { mode: 0o600 });
 }
 
 async function closeDb(db: BrainDb): Promise<void> {
