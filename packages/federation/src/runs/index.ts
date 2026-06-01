@@ -28,3 +28,9 @@ export {
   type StoreAgentRunOutputOptions,
   type StoreAgentRunOutputResult,
 } from "./run-service.js";
+export {
+  FileRunCache,
+  computeRunCacheKey,
+  type RunCache,
+  type RunCacheKeyInput,
+} from "./run-cache.js";

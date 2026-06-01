@@ -3,6 +3,7 @@ import type { KeychainStore } from "../src/connectors/keychain.js";
 import {
   buildConnectorRegistry,
   buildGitHubConnector,
+  ensureFreshToken,
   resolveConnectorKeychain,
 } from "./connector-runtime.js";
 import {
@@ -68,8 +69,8 @@ export async function connectorsStatusCommand(
   const keychain = dependencies.keychain ?? resolveConnectorKeychain(runtime);
   const connector = dependencies.connector ?? buildGitHubConnector();
 
-  const token = await keychain.get(connector.id);
-  if (!token) {
+  const storedToken = await keychain.get(connector.id);
+  if (!storedToken) {
     const message = `${connector.displayName} is not connected. Run \`stacy connect ${connector.id}\`.`;
     if (options.json) {
       stdout.log(JSON.stringify({ connected: false, connector: connector.id }, null, 2));
@@ -79,6 +80,7 @@ export async function connectorsStatusCommand(
     return;
   }
 
+  const token = await ensureFreshToken({ connector, keychain, token: storedToken });
   const report = await connector.status(token);
   if (options.json) {
     stdout.log(JSON.stringify({ connector: connector.id, ...report }, null, 2));

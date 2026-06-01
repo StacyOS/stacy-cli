@@ -2,6 +2,7 @@ import { FileKeychain, type KeychainStore } from "../src/connectors/keychain.js"
 import { ConnectorRegistry } from "../src/connectors/registry.js";
 import { SlidingWindowRateLimiter } from "../src/connectors/rate-limiter.js";
 import { GitHubConnector } from "../src/connectors/github/connector.js";
+import type { Connector, TokenBundle } from "../src/connectors/types.js";
 import {
   resolveConnectorStateDir,
   resolveConnectorTokenStorePath,
@@ -38,6 +39,45 @@ export function buildConnectorRegistry(): ConnectorRegistry {
   const registry = new ConnectorRegistry();
   registry.register(buildGitHubConnector());
   return registry;
+}
+
+export interface EnsureFreshTokenOptions {
+  readonly connector: Connector;
+  readonly keychain: KeychainStore;
+  readonly token: TokenBundle;
+  readonly now?: Date;
+  /** Refresh this many ms *before* the recorded expiry to avoid edge races. */
+  readonly skewMs?: number;
+}
+
+/**
+ * Returns a usable token, transparently refreshing it via the connector when it
+ * is at or past its `expiresAt` (minus a small skew). A refreshed token is
+ * persisted back to the keychain. Tokens without an expiry (e.g. GitHub OAuth
+ * app device-flow tokens) are returned untouched.
+ */
+export async function ensureFreshToken(options: EnsureFreshTokenOptions): Promise<TokenBundle> {
+  const now = options.now ?? new Date();
+  const skewMs = options.skewMs ?? 60_000;
+  if (!isTokenExpired(options.token, now, skewMs)) {
+    return options.token;
+  }
+
+  const refreshed = await options.connector.refresh(options.token);
+  if (
+    refreshed.accessToken !== options.token.accessToken ||
+    refreshed.expiresAt !== options.token.expiresAt
+  ) {
+    await options.keychain.set(options.connector.id, refreshed);
+  }
+  return refreshed;
+}
+
+function isTokenExpired(token: TokenBundle, now: Date, skewMs: number): boolean {
+  if (!token.expiresAt) return false;
+  const expiry = Date.parse(token.expiresAt);
+  if (Number.isNaN(expiry)) return false;
+  return expiry - skewMs <= now.getTime();
 }
 
 /**

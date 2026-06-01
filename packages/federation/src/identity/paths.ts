@@ -11,3 +11,7 @@ export function resolveConnectorTokenStorePath(instanceRoot: string): string {
 export function resolveConnectorStateDir(instanceRoot: string): string {
   return resolve(instanceRoot, "connectors");
 }
+
+export function resolveRunCacheDir(instanceRoot: string): string {
+  return resolve(instanceRoot, "runs", "cache");
+}

@@ -9,6 +9,7 @@ import { storeIngestedObject } from "../src/connectors/ingest-service.js";
 import {
   buildGitHubConnector,
   defaultGitHubRateLimiter,
+  ensureFreshToken,
   resolveConnectorKeychain,
   resolveSince,
 } from "./connector-runtime.js";
@@ -55,10 +56,16 @@ export async function ingestGithubCommand(
 
   const keychain = dependencies.keychain ?? resolveConnectorKeychain(runtime);
   const connector = dependencies.connector ?? buildGitHubConnector({ rateLimiter: defaultGitHubRateLimiter(runtime.instanceRoot) });
-  const token = await keychain.get(connector.id);
-  if (!token) {
+  const storedToken = await keychain.get(connector.id);
+  if (!storedToken) {
     throw new Error(`${connector.id} is not connected. Run \`stacy connect ${connector.id}\` first.`);
   }
+  const token = await ensureFreshToken({
+    connector,
+    keychain,
+    token: storedToken,
+    now: dependencies.now,
+  });
 
   // Fetch + normalize first so the confirmation can show a real count.
   const objects: NormalizedObject[] = [];

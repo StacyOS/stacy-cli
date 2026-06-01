@@ -160,12 +160,13 @@ program
   .option("--redact-column <name>", "Column removed from adapter stdin; repeat or comma-separate", collectOption, [])
   .option("--ack-egress", "Acknowledge that adapter execution may send input records outside this install", false)
   .option("--ko-id <id>", "Deterministic Knowledge Object ID for demo runs")
+  .option("--no-cache", "Skip the run-result cache for AI runs (--use)")
   .option("--db-url <url>", "Database connection string")
   .option("--json", "Print raw JSON output", false)
   .action(async (task, opts) => {
     if (typeof task === "string" && task.trim()) {
       if (Array.isArray(opts.use) && opts.use.length > 0) {
-        await agentRunCommand(task, opts);
+        await agentRunCommand(task, { ...opts, noCache: opts.cache === false });
         return;
       }
       await runTaskCommand(task, opts);

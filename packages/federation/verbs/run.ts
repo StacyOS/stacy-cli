@@ -19,6 +19,13 @@ import {
 } from "../src/runs/adapters.js";
 import { storeAgentRunOutput } from "../src/runs/run-service.js";
 import {
+  FileRunCache,
+  computeRunCacheKey,
+  type RunCache,
+} from "../src/runs/run-cache.js";
+import { resolveRunCacheDir } from "../src/identity/paths.js";
+import type { AdapterRunResult } from "../src/runs/adapters.js";
+import {
   resolveLocalRuntime,
   type LocalRuntimeDependencies,
   type LocalRuntimeOptions,
@@ -29,6 +36,7 @@ export interface AgentRunOptions extends LocalRuntimeOptions {
   readonly model?: string;
   readonly adapter?: string;
   readonly ackEgress?: boolean;
+  readonly noCache?: boolean;
   readonly koId?: string;
   readonly json?: boolean;
 }
@@ -37,6 +45,7 @@ export interface AgentRunDependencies extends LocalRuntimeDependencies {
   readonly createDb?: (connectionString: string) => BrainDb;
   readonly readKnowledgeObject?: typeof readKnowledgeObject;
   readonly adapters?: ReadonlyMap<string, RunAdapter>;
+  readonly cache?: RunCache;
   readonly stdout?: Pick<typeof console, "log">;
   readonly now?: () => Date;
 }
@@ -80,18 +89,35 @@ export async function agentRunCommand(
   try {
     const inputs = await loadAndVerifyInputs({ db, read, koIds: inputKoIds });
 
-    const adapterResult = await adapter.run({
+    const cache = options.noCache === true
+      ? undefined
+      : dependencies.cache ?? new FileRunCache(resolveRunCacheDir(runtime.instanceRoot));
+    const cacheKey = computeRunCacheKey({
       task: trimmedTask,
       model,
-      inputs: inputs.map(
-        (input): AdapterRunInput => ({
-          koId: input.reference.koId,
-          contentHash: input.reference.contentHash,
-          contentType: input.reference.contentType,
-          content: input.content,
-        }),
-      ),
+      adapter: adapter.id,
+      inputContentHashes: inputs.map((input) => input.reference.contentHash),
     });
+
+    let fromCache = false;
+    let adapterResult: AdapterRunResult | undefined = await cache?.get(cacheKey);
+    if (adapterResult) {
+      fromCache = true;
+    } else {
+      adapterResult = await adapter.run({
+        task: trimmedTask,
+        model,
+        inputs: inputs.map(
+          (input): AdapterRunInput => ({
+            koId: input.reference.koId,
+            contentHash: input.reference.contentHash,
+            contentType: input.reference.contentType,
+            content: input.content,
+          }),
+        ),
+      });
+      await cache?.set(cacheKey, adapterResult);
+    }
 
     const content = buildAgentOutputContent({
       task: trimmedTask,
@@ -124,6 +150,7 @@ export async function agentRunCommand(
       inputKoIds,
       contentHash: stored.contentHash,
       creatorInstallId: stored.creatorInstallId,
+      cached: fromCache,
     };
 
     stdout.log(options.json ? JSON.stringify(summary, null, 2) : formatRunText(summary, adapter.deterministic, options.ackEgress === true));

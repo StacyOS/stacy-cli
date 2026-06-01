@@ -11,7 +11,8 @@ import {
 } from "../src/ko/knowledge-object.js";
 import type { CanonicalJsonValue } from "../src/crypto/canonical.js";
 import type { ReadKnowledgeObjectResult } from "../src/brain/brain-store.js";
-import { deterministicAdapter, type RunAdapter } from "../src/runs/adapters.js";
+import { deterministicAdapter, type AdapterRunResult, type RunAdapter } from "../src/runs/adapters.js";
+import type { RunCache } from "../src/runs/run-cache.js";
 import { agentRunCommand } from "./run.js";
 
 const tempRoots: string[] = [];
@@ -96,6 +97,98 @@ describe("agentRunCommand", () => {
     expect(summary.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     // create + sign + run receipts plus the KO insert all issue queries.
     expect(queries.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("reuses a cached adapter result on a second identical run", async () => {
+    const objects = new Map<string, SignedKnowledgeObject>([
+      ["ko_pr_231", inputKo("ko_pr_231", { kind: "github_pull_request", number: 231 })],
+    ]);
+    let adapterRuns = 0;
+    const countingAdapter: RunAdapter = {
+      id: "deterministic",
+      deterministic: true,
+      run: async () => {
+        adapterRuns += 1;
+        return { output: { kind: "report", runs: adapterRuns } };
+      },
+    };
+    const store = new Map<string, AdapterRunResult>();
+    const cache: RunCache = {
+      get: async (key) => store.get(key),
+      set: async (key, value) => {
+        store.set(key, value);
+      },
+    };
+    const lines: string[] = [];
+
+    const run = () =>
+      agentRunCommand(
+        "Create a release risk report",
+        {
+          dbUrl: "postgres://example",
+          use: ["ko_pr_231"],
+          adapter: "deterministic",
+          json: true,
+        },
+        {
+          adapters: new Map([["deterministic", countingAdapter]]),
+          createDb: () => ({ execute: async () => [] }),
+          readKnowledgeObject: fakeRead(objects),
+          cache,
+          stdout: { log: (line) => lines.push(line) },
+          now: () => new Date("2026-05-22T00:00:00.000Z"),
+        },
+      );
+
+    await run();
+    await run();
+
+    expect(adapterRuns).toBe(1);
+    const first = JSON.parse(lines[0] ?? "{}") as { cached: boolean };
+    const second = JSON.parse(lines[1] ?? "{}") as { cached: boolean };
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+  });
+
+  it("skips the cache when noCache is set", async () => {
+    const objects = new Map<string, SignedKnowledgeObject>([
+      ["ko_pr_231", inputKo("ko_pr_231", { kind: "github_pull_request", number: 231 })],
+    ]);
+    let adapterRuns = 0;
+    const countingAdapter: RunAdapter = {
+      id: "deterministic",
+      deterministic: true,
+      run: async () => {
+        adapterRuns += 1;
+        return { output: { kind: "report" } };
+      },
+    };
+    let cacheTouched = false;
+    const cache: RunCache = {
+      get: async () => {
+        cacheTouched = true;
+        return undefined;
+      },
+      set: async () => {
+        cacheTouched = true;
+      },
+    };
+
+    await agentRunCommand(
+      "report",
+      { dbUrl: "postgres://example", use: ["ko_pr_231"], adapter: "deterministic", noCache: true, json: true },
+      {
+        adapters: new Map([["deterministic", countingAdapter]]),
+        createDb: () => ({ execute: async () => [] }),
+        readKnowledgeObject: fakeRead(objects),
+        cache,
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(adapterRuns).toBe(1);
+    expect(cacheTouched).toBe(false);
   });
 
   it("requires --ack-egress for non-deterministic adapters before reading any KO", async () => {
