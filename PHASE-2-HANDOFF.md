@@ -124,10 +124,17 @@ that receives the run request as JSON on stdin and must emit an
 `agent_output`-shaped JSON object on stdout (the proven
 `claude-cli-adapter.mjs` pattern from the demo runner).
 
+A ready-to-use reference adapter ships in this repo at
+**`scripts/anthropic-run-adapter.mjs`** (dependency-free, calls the live Messages
+API, reads the key from its own env). It has been verified end-to-end against the
+real Anthropic API. Point `STACY_ANTHROPIC_ADAPTER_COMMAND` straight at it — note
+it must be a single executable path (Stacy does not shell-split, so
+`node script.mjs` will not work).
+
 **What to provision:**
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-export STACY_ANTHROPIC_ADAPTER_COMMAND="node /abs/path/to/claude-cli-adapter.mjs"
+export STACY_ANTHROPIC_ADAPTER_COMMAND="$PWD/scripts/anthropic-run-adapter.mjs"
 # optional: export STACY_DEFAULT_ADAPTER=anthropic   (already the default)
 ```
 
