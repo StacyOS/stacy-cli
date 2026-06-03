@@ -85,77 +85,132 @@ export async function agentRunCommand(
   const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
   const read = dependencies.readKnowledgeObject ?? readKnowledgeObject;
   const now = dependencies.now?.() ?? new Date();
+  const cache = options.noCache === true
+    ? undefined
+    : dependencies.cache ?? new FileRunCache(resolveRunCacheDir(runtime.instanceRoot));
 
   try {
-    const inputs = await loadAndVerifyInputs({ db, read, koIds: inputKoIds });
-
-    const cache = options.noCache === true
-      ? undefined
-      : dependencies.cache ?? new FileRunCache(resolveRunCacheDir(runtime.instanceRoot));
-    const cacheKey = computeRunCacheKey({
-      task: trimmedTask,
-      model,
-      adapter: adapter.id,
-      inputContentHashes: inputs.map((input) => input.reference.contentHash),
-    });
-
-    let fromCache = false;
-    let adapterResult: AdapterRunResult | undefined = await cache?.get(cacheKey);
-    if (adapterResult) {
-      fromCache = true;
-    } else {
-      adapterResult = await adapter.run({
-        task: trimmedTask,
-        model,
-        inputs: inputs.map(
-          (input): AdapterRunInput => ({
-            koId: input.reference.koId,
-            contentHash: input.reference.contentHash,
-            contentType: input.reference.contentType,
-            content: input.content,
-          }),
-        ),
-      });
-      await cache?.set(cacheKey, adapterResult);
-    }
-
-    const content = buildAgentOutputContent({
-      task: trimmedTask,
-      model,
-      adapter: adapter.id,
-      inputs: inputs.map((input) => input.reference),
-      output: adapterResult.output,
-      notes: adapterResult.notes,
-    });
-
-    const stored = await storeAgentRunOutput({
-      db,
-      identityPath: runtime.identityPath,
-      content,
-      adapter: adapter.id,
-      model,
-      inputKoIds,
-      createdAt: now,
-      storedAt: now,
-      idGenerator: options.koId ? () => options.koId! : undefined,
-    });
+    const result = await runOnce(
+      { task: trimmedTask, model, adapter, inputKoIds, koId: options.koId },
+      { db, read, cache, identityPath: runtime.identityPath, now },
+    );
 
     const summary = {
-      id: stored.ko.id,
-      tenant: stored.ko.signedPayload.tenant,
+      id: result.koId,
+      tenant: result.tenant,
       task: trimmedTask,
       model,
       adapter: adapter.id,
       inputKoIds,
-      contentHash: stored.contentHash,
-      creatorInstallId: stored.creatorInstallId,
-      cached: fromCache,
+      contentHash: result.contentHash,
+      creatorInstallId: result.creatorInstallId,
+      cached: result.fromCache,
     };
 
     stdout.log(options.json ? JSON.stringify(summary, null, 2) : formatRunText(summary, adapter.deterministic, options.ackEgress === true));
   } finally {
     if (ownsDb) await closeDb(db);
   }
+}
+
+/** Inputs to a single run step. The adapter is already resolved and the egress
+ * gate already cleared by the caller (so chains gate once, up front). */
+export interface RunOnceParams {
+  readonly task: string;
+  readonly model: string;
+  readonly adapter: RunAdapter;
+  readonly inputKoIds: readonly string[];
+  readonly koId?: string;
+}
+
+/** Shared run dependencies. One `cache` instance is reused across chain steps. */
+export interface RunOnceContext {
+  readonly db: BrainDb;
+  readonly read: typeof readKnowledgeObject;
+  readonly cache?: RunCache;
+  readonly identityPath: string;
+  readonly now: Date;
+}
+
+export interface RunOnceResult {
+  readonly koId: string;
+  readonly contentHash: string;
+  readonly creatorInstallId: string;
+  readonly tenant: string;
+  readonly fromCache: boolean;
+}
+
+/**
+ * Executes ONE run: load + verify inputs, consult the run-result cache, invoke
+ * the adapter on a miss, then sign + store the `agent_output` KO. Returns the
+ * stored KO id so callers can chain steps. The single-run verb and the run
+ * chain both go through here — no duplicated run logic, no stdout parsing.
+ */
+export async function runOnce(
+  params: RunOnceParams,
+  context: RunOnceContext,
+): Promise<RunOnceResult> {
+  const inputs = await loadAndVerifyInputs({
+    db: context.db,
+    read: context.read,
+    koIds: params.inputKoIds,
+  });
+
+  const cacheKey = computeRunCacheKey({
+    task: params.task,
+    model: params.model,
+    adapter: params.adapter.id,
+    inputContentHashes: inputs.map((input) => input.reference.contentHash),
+  });
+
+  let fromCache = false;
+  let adapterResult: AdapterRunResult | undefined = await context.cache?.get(cacheKey);
+  if (adapterResult) {
+    fromCache = true;
+  } else {
+    adapterResult = await params.adapter.run({
+      task: params.task,
+      model: params.model,
+      inputs: inputs.map(
+        (input): AdapterRunInput => ({
+          koId: input.reference.koId,
+          contentHash: input.reference.contentHash,
+          contentType: input.reference.contentType,
+          content: input.content,
+        }),
+      ),
+    });
+    await context.cache?.set(cacheKey, adapterResult);
+  }
+
+  const content = buildAgentOutputContent({
+    task: params.task,
+    model: params.model,
+    adapter: params.adapter.id,
+    inputs: inputs.map((input) => input.reference),
+    output: adapterResult.output,
+    notes: adapterResult.notes,
+  });
+
+  const stored = await storeAgentRunOutput({
+    db: context.db,
+    identityPath: context.identityPath,
+    content,
+    adapter: params.adapter.id,
+    model: params.model,
+    inputKoIds: params.inputKoIds,
+    createdAt: context.now,
+    storedAt: context.now,
+    idGenerator: params.koId ? () => params.koId! : undefined,
+  });
+
+  return {
+    koId: stored.ko.id,
+    contentHash: stored.contentHash,
+    creatorInstallId: stored.creatorInstallId,
+    tenant: stored.ko.signedPayload.tenant,
+    fromCache,
+  };
 }
 
 interface LoadedInput {

@@ -13,7 +13,8 @@ import type { CanonicalJsonValue } from "../src/crypto/canonical.js";
 import type { ReadKnowledgeObjectResult } from "../src/brain/brain-store.js";
 import { deterministicAdapter, type AdapterRunResult, type RunAdapter } from "../src/runs/adapters.js";
 import type { RunCache } from "../src/runs/run-cache.js";
-import { agentRunCommand } from "./run.js";
+import { agentRunCommand, runOnce } from "./run.js";
+import { resolveLocalRuntime } from "./local-runtime.js";
 
 const tempRoots: string[] = [];
 const identity = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
@@ -231,6 +232,45 @@ describe("agentRunCommand", () => {
         },
       ),
     ).rejects.toThrow("ko_missing could not be read");
+  });
+
+  it("runOnce returns the stored KO id and flips fromCache across calls (chain contract)", async () => {
+    const configPath = await writeConfig();
+    const runtime = resolveLocalRuntime({ config: configPath, dbUrl: "postgres://example" }, {});
+    const objects = new Map<string, SignedKnowledgeObject>([
+      ["ko_in", inputKo("ko_in", { kind: "doc", n: 1 })],
+    ]);
+    const store = new Map<string, AdapterRunResult>();
+    const cache: RunCache = {
+      get: async (key) => store.get(key),
+      set: async (key, value) => {
+        store.set(key, value);
+      },
+    };
+    const ctx = {
+      db: { execute: async () => [] } as never,
+      read: fakeRead(objects),
+      cache,
+      identityPath: runtime.identityPath,
+      now: new Date("2026-05-22T00:00:00.000Z"),
+    };
+    const params = {
+      task: "Summarize",
+      model: "claude-sonnet-4-5",
+      adapter: deterministicAdapter,
+      inputKoIds: ["ko_in"],
+    };
+
+    const first = await runOnce(params, ctx);
+    const second = await runOnce(params, ctx);
+
+    expect(first.koId).toMatch(/^ko_/);
+    expect(first.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(first.fromCache).toBe(false);
+    expect(second.fromCache).toBe(true);
+    // #7: deterministic content => identical KO id and hash across runs.
+    expect(second.koId).toBe(first.koId);
+    expect(second.contentHash).toBe(first.contentHash);
   });
 
   it("requires at least one --use input", async () => {
