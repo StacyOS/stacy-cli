@@ -6,6 +6,8 @@ import {
   readKnowledgeObject,
   type BrainDb,
 } from "../src/brain/brain-store.js";
+import { canonicalBytes } from "../src/crypto/canonical.js";
+import { sha256Hex } from "../src/util/hash.js";
 import { verifyKnowledgeObject } from "../src/ko/knowledge-object.js";
 import {
   buildAgentOutputContent,
@@ -287,7 +289,7 @@ export async function runOnce(
     task: params.task,
     model: params.model,
     adapter: params.adapter.id,
-    inputContentHashes: inputs.map((input) => input.reference.contentHash),
+    inputContentHashes: inputs.map((input) => input.cacheHash),
   });
 
   let fromCache = false;
@@ -343,6 +345,23 @@ export async function runOnce(
 interface LoadedInput {
   readonly reference: AgentRunInputReference;
   readonly content: AdapterRunInput["content"];
+  /**
+   * Hash of the input's CONTENT (+ content type) only — independent of the KO's
+   * `createdAt`. The KO's own `contentHash` folds in a wall-clock `createdAt`
+   * (knowledge-object.ts), so it changes every time a KO is created even for
+   * identical content. Using it as a run-cache key would make a chain's
+   * downstream step (whose input is the prior step's freshly-created output KO)
+   * miss the cache on every run. Keying on content instead means identical
+   * inputs reuse the cached adapter result, so an identical chain re-run makes
+   * zero adapter calls. The KO `contentHash` is still used for provenance.
+   */
+  readonly cacheHash: string;
+}
+
+/** Content-addressed cache hash: stable across runs and installs for identical
+ * content, unlike the KO id/contentHash which embed `createdAt`. */
+function computeInputCacheHash(contentType: string, content: AdapterRunInput["content"]): string {
+  return sha256Hex(canonicalBytes({ contentType, content }));
 }
 
 async function loadAndVerifyInputs(options: {
@@ -360,13 +379,16 @@ async function loadAndVerifyInputs(options: {
     if (!verification.ok) {
       throw new Error(`Input Knowledge Object ${koId} failed verification: ${verification.reason}`);
     }
+    const contentType = result.ko.signedPayload.contentType;
+    const content = result.ko.signedPayload.content;
     loaded.push({
       reference: {
         koId: result.ko.id,
         contentHash: verification.contentHash,
-        contentType: result.ko.signedPayload.contentType,
+        contentType,
       },
-      content: result.ko.signedPayload.content,
+      content,
+      cacheHash: computeInputCacheHash(contentType, content),
     });
   }
   return loaded;

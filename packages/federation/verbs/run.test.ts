@@ -20,12 +20,16 @@ const tempRoots: string[] = [];
 const identity = createInstallIdentity(new Date("2026-05-22T00:00:00.000Z"));
 
 function inputKo(id: string, content: CanonicalJsonValue): SignedKnowledgeObject {
+  return inputKoAt(id, content, new Date("2026-05-21T00:00:00.000Z"));
+}
+
+function inputKoAt(id: string, content: CanonicalJsonValue, createdAt: Date): SignedKnowledgeObject {
   return createKnowledgeObject({
     tenant: "stacy/acme",
     contentType: "application/json",
     content,
     identity,
-    createdAt: new Date("2026-05-21T00:00:00.000Z"),
+    createdAt,
     idGenerator: () => id,
   });
 }
@@ -149,6 +153,57 @@ describe("agentRunCommand", () => {
     const second = JSON.parse(lines[1] ?? "{}") as { cached: boolean };
     expect(first.cached).toBe(false);
     expect(second.cached).toBe(true);
+  });
+
+  it("caches on identical CONTENT even when the input KO id/timestamp differ (chain caching)", async () => {
+    // Two KOs with identical content but different createdAt => different KO
+    // ids and contentHashes (the KO hash folds in createdAt). A chain's
+    // downstream step sees a freshly-created upstream output KO each run, so
+    // keying the run cache on the KO hash would miss every time. The cache must
+    // key on content instead.
+    const content = { kind: "doc", body: "same content" };
+    const objects = new Map<string, SignedKnowledgeObject>([
+      ["ko_v1", inputKoAt("ko_v1", content, new Date("2026-05-21T00:00:00.000Z"))],
+      ["ko_v2", inputKoAt("ko_v2", content, new Date("2026-05-22T12:34:56.000Z"))],
+    ]);
+    expect(objects.get("ko_v1")!.signedPayload.contentHash).not.toBe(
+      objects.get("ko_v2")!.signedPayload.contentHash,
+    ); // sanity: different KO content hashes (createdAt differs)
+
+    let adapterRuns = 0;
+    const countingAdapter: RunAdapter = {
+      id: "deterministic",
+      deterministic: true,
+      run: async () => {
+        adapterRuns += 1;
+        return { output: { kind: "report" } };
+      },
+    };
+    const store = new Map<string, AdapterRunResult>();
+    const cache: RunCache = {
+      get: async (key) => store.get(key),
+      set: async (key, value) => {
+        store.set(key, value);
+      },
+    };
+    const runWith = (koId: string) =>
+      agentRunCommand(
+        "Summarize",
+        { dbUrl: "postgres://example", use: [koId], adapter: "deterministic", json: true },
+        {
+          adapters: new Map([["deterministic", countingAdapter]]),
+          createDb: () => ({ execute: async () => [] }),
+          readKnowledgeObject: fakeRead(objects),
+          cache,
+          stdout: { log: () => undefined },
+          now: () => new Date("2026-05-22T00:00:00.000Z"),
+        },
+      );
+
+    await runWith("ko_v1");
+    await runWith("ko_v2"); // different KO id, same content => must hit cache
+
+    expect(adapterRuns).toBe(1);
   });
 
   it("skips the cache when noCache is set", async () => {

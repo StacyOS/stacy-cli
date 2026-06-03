@@ -23,11 +23,15 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
   `docs/v0.3-files-and-chains-quickstart.md`.
 
 ### Fixed
-- **Run-result caching now composes across chain steps.** `agent_output` content
-  no longer embeds a wall-clock `generatedAt`, so identical runs hash
-  identically and an identical chain re-run reuses every step (zero adapter
-  calls). The generation time still lives on the KO record and the `run`
-  receipt.
+- **Run-result caching now composes across chain steps** (verified live). Two
+  changes: (1) `agent_output` content no longer embeds a wall-clock
+  `generatedAt`; (2) the run cache keys inputs on their **content**, not on the
+  KO `contentHash` (which folds in `createdAt`, so it changes every time a KO is
+  created even for identical content). Without (2) a chain's downstream step —
+  whose input is the prior step's freshly-created output KO — missed the cache
+  on every run. Now an identical chain re-run makes **zero adapter calls**. KO
+  `contentHash` is still used for provenance; generation time still lives on the
+  KO record and the `run` receipt.
 
 ### Changed
 - Extracted a reusable `runOnce` run executor (single-run verb and run chains
