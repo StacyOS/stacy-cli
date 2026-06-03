@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
+
 import { createDb } from "@arpanstacy/stacy-db";
 
 import { type CanonicalJsonValue } from "../src/crypto/canonical.js";
@@ -6,6 +9,11 @@ import {
   type CreateLocalKnowledgeObjectResult,
 } from "../src/brain/local-brain.js";
 import { type BrainDb } from "../src/brain/brain-store.js";
+import {
+  buildFileDocumentContent,
+  safeSourceLabel,
+  type FileDocumentResult,
+} from "../src/brain/file-document.js";
 import {
   resolveLocalRuntime,
   type LocalRuntimeDependencies,
@@ -16,11 +24,20 @@ import { generatePromptKnowledgeContent } from "./prompt-output.js";
 export interface BrainCreateOptions extends LocalRuntimeOptions {
   readonly contentJson?: string;
   readonly prompt?: string;
+  readonly file?: string;
+  readonly sourceLabel?: string;
+  readonly maxBytes?: number;
   readonly adapterCommand?: string;
   readonly adapterArg?: string[];
   readonly contentType?: string;
   readonly koId?: string;
   readonly json?: boolean;
+}
+
+/** Resolved content plus the content type to sign it under. */
+interface ResolvedContent {
+  readonly content: CanonicalJsonValue;
+  readonly contentType: string;
 }
 
 export interface BrainCreateDependencies extends LocalRuntimeDependencies {
@@ -35,7 +52,7 @@ export async function brainCreateCommand(
 ): Promise<void> {
   const stdout = dependencies.stdout ?? console;
   const runtime = resolveLocalRuntime(options, dependencies);
-  const content = await resolveContent(options);
+  const resolved = await resolveContent(options);
   const ownsDb = dependencies.createDb === undefined;
   const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
   const createdAt = dependencies.now?.() ?? new Date();
@@ -43,8 +60,8 @@ export async function brainCreateCommand(
     const result = await createLocalKnowledgeObject({
       db,
       identityPath: runtime.identityPath,
-      contentType: options.contentType?.trim() || "application/json",
-      content,
+      contentType: resolved.contentType,
+      content: resolved.content,
       createdAt,
       storedAt: createdAt,
       idGenerator: options.koId ? () => options.koId! : undefined,
@@ -63,16 +80,26 @@ export async function brainCreateCommand(
   }
 }
 
-async function resolveContent(options: BrainCreateOptions): Promise<CanonicalJsonValue> {
+async function resolveContent(options: BrainCreateOptions): Promise<ResolvedContent> {
   const hasContentJson = typeof options.contentJson === "string" && options.contentJson.trim().length > 0;
   const hasPrompt = typeof options.prompt === "string" && options.prompt.trim().length > 0;
+  const hasFile = typeof options.file === "string" && options.file.trim().length > 0;
 
-  if (hasContentJson && hasPrompt) {
-    throw new Error("Pass either --content-json or --prompt, not both.");
+  const sources = [hasContentJson, hasPrompt, hasFile].filter(Boolean).length;
+  if (sources > 1) {
+    throw new Error("Pass exactly one of --content-json, --prompt, or --file.");
+  }
+
+  if (hasFile) {
+    const fileResult = await readFileDocument(options);
+    return { content: fileResult.content, contentType: fileResult.contentType };
   }
 
   if (hasContentJson) {
-    return parseContentJson(options.contentJson!);
+    return {
+      content: parseContentJson(options.contentJson!),
+      contentType: options.contentType?.trim() || "application/json",
+    };
   }
 
   if (hasPrompt) {
@@ -81,10 +108,39 @@ async function resolveContent(options: BrainCreateOptions): Promise<CanonicalJso
       adapterCommand: options.adapterCommand,
       adapterArgs: options.adapterArg,
     });
-    return generated.content;
+    return {
+      content: generated.content,
+      contentType: options.contentType?.trim() || "application/json",
+    };
   }
 
-  throw new Error("Pass --content-json or --prompt to create a Knowledge Object.");
+  throw new Error("Pass --content-json, --prompt, or --file to create a Knowledge Object.");
+}
+
+/**
+ * Reads a single local file and wraps it in a signed-KO document envelope.
+ * The source label stored in the KO is a cwd-relative path (or basename if the
+ * file sits outside cwd) so absolute paths never leak into shareable KOs.
+ */
+async function readFileDocument(
+  options: BrainCreateOptions,
+  reader: (path: string) => Promise<Buffer> = (path) => readFile(path),
+): Promise<FileDocumentResult> {
+  const filePath = options.file!.trim();
+  const bytes = await reader(filePath);
+  const sourceLabel = options.sourceLabel?.trim() || relativeSourceLabel(filePath);
+  return buildFileDocumentContent({
+    path: filePath,
+    bytes,
+    sourceLabel,
+    maxBytes: options.maxBytes,
+  });
+}
+
+/** Leak-safe cwd-relative label (basename if the file sits outside cwd). */
+function relativeSourceLabel(filePath: string): string {
+  const absolute = isAbsolute(filePath) ? filePath : resolve(process.cwd(), filePath);
+  return safeSourceLabel(relative(process.cwd(), absolute));
 }
 
 function parseContentJson(raw: string): CanonicalJsonValue {

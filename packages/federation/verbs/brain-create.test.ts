@@ -49,6 +49,67 @@ describe("brainCreateCommand", () => {
     });
   });
 
+  it("creates a document KO from a local markdown file with a leak-safe source label", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-brain-create-file-"));
+    tempRoots.push(root);
+    const configPath = await writeConfig(root, 55446);
+    const docPath = join(root, "notes.md");
+    await writeFile(docPath, "# Release notes\n\nShip it.", "utf8");
+
+    const lines: string[] = [];
+    let storedContent: unknown;
+
+    await brainCreateCommand(
+      {
+        config: configPath,
+        dbUrl: "postgres://example",
+        file: docPath,
+        sourceLabel: "notes.md",
+        koId: "ko_file_doc",
+        json: true,
+      },
+      {
+        createDb: () => ({
+          execute: async (query: unknown) => {
+            const text = JSON.stringify(query);
+            if (text.includes("# Release notes")) storedContent = query;
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-06-02T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_file_doc",
+      contentType: "application/json",
+      contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+    // The stored content is a document envelope with a relative (non-absolute)
+    // source label — no leaked absolute path.
+    const serialized = JSON.stringify(storedContent ?? "");
+    expect(serialized).toContain("document"); // document envelope kind
+    expect(serialized).toContain("notes.md"); // relative source label
+    expect(serialized).not.toContain(root); // absolute path must not leak
+  });
+
+  it("rejects passing more than one content source", async () => {
+    await expect(
+      brainCreateCommand(
+        {
+          dbUrl: "postgres://example",
+          contentJson: "{}",
+          file: "/tmp/x.md",
+        },
+        {
+          createDb: () => ({ execute: async () => [] }),
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow(/exactly one of/);
+  });
+
   it("rejects invalid JSON content before opening the database", async () => {
     const openedConnections: string[] = [];
 
