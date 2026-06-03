@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { createDb } from "@arpanstacy/stacy-db";
 
 import {
@@ -17,6 +19,10 @@ import {
   type AdapterRunInput,
   type RunAdapter,
 } from "../src/runs/adapters.js";
+import {
+  parseChainSpec,
+  resolveStepInputs,
+} from "../src/runs/chain.js";
 import { storeAgentRunOutput } from "../src/runs/run-service.js";
 import {
   FileRunCache,
@@ -38,6 +44,16 @@ export interface AgentRunOptions extends LocalRuntimeOptions {
   readonly ackEgress?: boolean;
   readonly noCache?: boolean;
   readonly koId?: string;
+  readonly json?: boolean;
+}
+
+export interface ChainRunOptions extends LocalRuntimeOptions {
+  /** Path to the chain spec JSON file. */
+  readonly chain: string;
+  readonly model?: string;
+  readonly adapter?: string;
+  readonly ackEgress?: boolean;
+  readonly noCache?: boolean;
   readonly json?: boolean;
 }
 
@@ -70,15 +86,7 @@ export async function agentRunCommand(
   const model = options.model?.trim() || DEFAULT_ANTHROPIC_MODEL;
   const registry = dependencies.adapters ?? buildAdapterRegistry({ env });
   const adapterName = options.adapter?.trim() || resolveDefaultAdapterId(env);
-  const adapter = resolveRunAdapter(adapterName, registry);
-
-  // Egress gate must fire before any Knowledge Object is read or any network
-  // call is made, exactly like the existing demo runner.
-  if (!adapter.deterministic && options.ackEgress !== true) {
-    throw new Error(
-      `The ${adapter.id} adapter may send Knowledge Object content outside this install. Re-run with --ack-egress to confirm, or use --adapter deterministic.`,
-    );
-  }
+  const adapter = resolveAdapterWithEgressGate(adapterName, registry, options.ackEgress === true);
 
   const runtime = resolveLocalRuntime(options, dependencies);
   const ownsDb = dependencies.createDb === undefined;
@@ -111,6 +119,125 @@ export async function agentRunCommand(
   } finally {
     if (ownsDb) await closeDb(db);
   }
+}
+
+/**
+ * Resolves a run adapter and enforces the egress gate. For a non-deterministic
+ * adapter, this throws BEFORE any KO is read or network call is made unless the
+ * caller acknowledged egress. A chain calls this ONCE, up front, so the whole
+ * chain is gated before its first step reads anything.
+ */
+function resolveAdapterWithEgressGate(
+  adapterName: string,
+  registry: ReadonlyMap<string, RunAdapter>,
+  ackEgress: boolean,
+): RunAdapter {
+  const adapter = resolveRunAdapter(adapterName, registry);
+  if (!adapter.deterministic && !ackEgress) {
+    throw new Error(
+      `The ${adapter.id} adapter may send Knowledge Object content outside this install. Re-run with --ack-egress to confirm, or use --adapter deterministic.`,
+    );
+  }
+  return adapter;
+}
+
+/**
+ * Runs a multi-step chain: each step is a {@link runOnce}, and a later step can
+ * consume an earlier step's output KO via an `@<stepId>` reference. The spec is
+ * parsed and fully validated (including `@ref` resolution) before the egress
+ * gate and before any KO is read, so a malformed chain never egresses. A step
+ * failure aborts the chain; already-produced step KOs are durable (no rollback)
+ * and the error names the failed step.
+ */
+export async function runChainCommand(
+  options: ChainRunOptions,
+  dependencies: AgentRunDependencies = {},
+): Promise<void> {
+  const stdout = dependencies.stdout ?? console;
+  const env = dependencies.env ?? process.env;
+
+  const specPath = options.chain?.trim();
+  if (!specPath) {
+    throw new Error("`stacy run --chain` requires a path to a chain spec JSON file.");
+  }
+  const spec = parseChainSpec(await readFile(specPath, "utf8"));
+
+  const model = options.model?.trim() || DEFAULT_ANTHROPIC_MODEL;
+  const registry = dependencies.adapters ?? buildAdapterRegistry({ env });
+  const adapterName = options.adapter?.trim() || resolveDefaultAdapterId(env);
+  // Gate ONCE, up front, before any KO read.
+  const adapter = resolveAdapterWithEgressGate(adapterName, registry, options.ackEgress === true);
+
+  const runtime = resolveLocalRuntime(options, dependencies);
+  const ownsDb = dependencies.createDb === undefined;
+  const db = dependencies.createDb?.(runtime.connectionString) ?? createDb(runtime.connectionString);
+  const read = dependencies.readKnowledgeObject ?? readKnowledgeObject;
+  const now = dependencies.now?.() ?? new Date();
+  const cache = options.noCache === true
+    ? undefined
+    : dependencies.cache ?? new FileRunCache(resolveRunCacheDir(runtime.instanceRoot));
+  const context = { db, read, cache, identityPath: runtime.identityPath, now };
+
+  const outputs = new Map<string, string>();
+  const stepSummaries: {
+    id: string;
+    koId: string;
+    inputKoIds: readonly string[];
+    cached: boolean;
+  }[] = [];
+
+  try {
+    for (const step of spec.steps) {
+      const inputKoIds = resolveStepInputs(step, outputs);
+      let result;
+      try {
+        result = await runOnce(
+          { task: step.task, model: step.model?.trim() || model, adapter, inputKoIds },
+          context,
+        );
+      } catch (error) {
+        throw new Error(`Chain step "${step.id}" failed: ${(error as Error).message}`);
+      }
+      outputs.set(step.id, result.koId);
+      stepSummaries.push({ id: step.id, koId: result.koId, inputKoIds, cached: result.fromCache });
+    }
+  } finally {
+    if (ownsDb) await closeDb(db);
+  }
+
+  const finalStep = stepSummaries[stepSummaries.length - 1];
+  const summary = {
+    steps: stepSummaries,
+    finalKoId: finalStep?.koId,
+    adapter: adapter.id,
+    model,
+  };
+
+  stdout.log(options.json ? JSON.stringify(summary, null, 2) : formatChainText(summary, adapter.deterministic, options.ackEgress === true));
+}
+
+function formatChainText(
+  summary: {
+    readonly steps: readonly { id: string; koId: string; inputKoIds: readonly string[]; cached: boolean }[];
+    readonly finalKoId?: string;
+    readonly adapter: string;
+    readonly model: string;
+  },
+  deterministic: boolean,
+  ackEgress: boolean,
+): string {
+  const lines = [
+    `Egress acknowledgement: ${deterministic ? "not required (deterministic adapter)" : ackEgress ? "✓ (--ack-egress provided)" : "n/a"}`,
+    `Adapter: ${summary.adapter}   Model: ${summary.model}`,
+    `Chain steps: ${summary.steps.length}`,
+  ];
+  for (const step of summary.steps) {
+    lines.push(
+      `  ${step.id}: ${step.koId}${step.cached ? " (cached)" : ""}  ← ${step.inputKoIds.join(", ")}`,
+    );
+  }
+  lines.push("", `Final output KO: ${summary.finalKoId}`, `Inspect it with \`stacy brain show ${summary.finalKoId}\`.`);
+  return lines.join("\n");
 }
 
 /** Inputs to a single run step. The adapter is already resolved and the egress

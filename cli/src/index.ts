@@ -27,7 +27,7 @@ import { registerPluginCommands } from "./commands/client/plugin.js";
 import { registerClientAuthCommands } from "./commands/client/auth.js";
 import { cliVersion } from "./version.js";
 import { applyStacyEnvAliases } from "./config/env-aliases.js";
-import { agentRunCommand, registerFederationCommands, runTaskCommand } from "@arpanstacy/stacy-federation/verbs";
+import { agentRunCommand, registerFederationCommands, runChainCommand, runTaskCommand } from "@arpanstacy/stacy-federation/verbs";
 
 const program = new Command();
 applyStacyEnvAliases();
@@ -148,6 +148,7 @@ program
   .option("--repair", "Attempt automatic repairs during doctor", true)
   .option("--no-repair", "Disable automatic repairs during doctor")
   .option("--use <ko_id>", "Input Knowledge Object for an AI run; repeat for multiple", collectOption, [])
+  .option("--chain <path>", "Run a multi-step chain from a JSON spec file (steps[] with @stepId refs)")
   .option("--model <name>", "Model identifier passed to the run adapter")
   .option("--adapter <name>", "Run adapter to use: anthropic (default) or deterministic")
   .option("--input <path>", "Input file for a public federation demo task")
@@ -164,6 +165,10 @@ program
   .option("--db-url <url>", "Database connection string")
   .option("--json", "Print raw JSON output", false)
   .action(async (task, opts) => {
+    if (typeof opts.chain === "string" && opts.chain.trim()) {
+      await runChainCommand({ ...opts, noCache: opts.cache === false });
+      return;
+    }
     if (typeof task === "string" && task.trim()) {
       if (Array.isArray(opts.use) && opts.use.length > 0) {
         await agentRunCommand(task, { ...opts, noCache: opts.cache === false });

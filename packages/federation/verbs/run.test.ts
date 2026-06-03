@@ -13,7 +13,7 @@ import type { CanonicalJsonValue } from "../src/crypto/canonical.js";
 import type { ReadKnowledgeObjectResult } from "../src/brain/brain-store.js";
 import { deterministicAdapter, type AdapterRunResult, type RunAdapter } from "../src/runs/adapters.js";
 import type { RunCache } from "../src/runs/run-cache.js";
-import { agentRunCommand, runOnce } from "./run.js";
+import { agentRunCommand, runChainCommand, runOnce } from "./run.js";
 import { resolveLocalRuntime } from "./local-runtime.js";
 
 const tempRoots: string[] = [];
@@ -271,6 +271,141 @@ describe("agentRunCommand", () => {
     // #7: deterministic content => identical KO id and hash across runs.
     expect(second.koId).toBe(first.koId);
     expect(second.contentHash).toBe(first.contentHash);
+  });
+
+  it("runs a 2-step chain, threading @ref from step 1's output into step 2", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-chain-"));
+    tempRoots.push(root);
+    const configPath = await writeConfig();
+    const specPath = join(root, "chain.json");
+    await writeFile(
+      specPath,
+      JSON.stringify({
+        steps: [
+          { id: "per_doc", task: "Summarize each", use: ["ko_a", "ko_b"] },
+          { id: "synthesis", task: "Synthesize one report", use: ["@per_doc"] },
+        ],
+      }),
+      "utf8",
+    );
+
+    const seeded = new Map<string, SignedKnowledgeObject>([
+      ["ko_a", inputKo("ko_a", { kind: "doc", n: 1 })],
+      ["ko_b", inputKo("ko_b", { kind: "doc", n: 2 })],
+    ]);
+    // Serve seeded inputs; synthesize a valid signed KO for produced step
+    // outputs so a later step's @ref read resolves and verifies.
+    const read = async ({ koId }: { koId: string }): Promise<ReadKnowledgeObjectResult> => {
+      const ko = seeded.get(koId) ?? inputKo(koId, { kind: "produced", id: koId });
+      return {
+        ok: true,
+        ko,
+        provenance: { source: "local", creatorInstallId: ko.signedPayload.creatorInstallId, storedAt: "2026-05-21T00:00:00.000Z" },
+        verification: { contentHash: ko.signedPayload.contentHash },
+      };
+    };
+
+    const lines: string[] = [];
+    await runChainCommand(
+      { config: configPath, dbUrl: "postgres://example", chain: specPath, adapter: "deterministic", json: true },
+      {
+        createDb: () => ({ execute: async () => [] }),
+        readKnowledgeObject: read,
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    const out = JSON.parse(lines[0] ?? "{}") as {
+      steps: { id: string; koId: string; inputKoIds: string[] }[];
+      finalKoId: string;
+    };
+    expect(out.steps).toHaveLength(2);
+    expect(out.steps[0]?.inputKoIds).toEqual(["ko_a", "ko_b"]);
+    // step 2's @per_doc resolved to step 1's produced KO id.
+    expect(out.steps[1]?.inputKoIds).toEqual([out.steps[0]?.koId]);
+    expect(out.finalKoId).toBe(out.steps[1]?.koId);
+  });
+
+  it("gates egress once before any read for a non-deterministic chain", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-chain-egress-"));
+    tempRoots.push(root);
+    const specPath = join(root, "chain.json");
+    await writeFile(specPath, JSON.stringify({ steps: [{ id: "a", task: "t", use: ["ko_a"] }] }), "utf8");
+
+    let dbCreated = false;
+    const networkAdapter: RunAdapter = { id: "anthropic", deterministic: false, run: async () => ({ output: {} }) };
+
+    await expect(
+      runChainCommand(
+        { dbUrl: "postgres://example", chain: specPath, adapter: "anthropic" },
+        {
+          adapters: new Map([["anthropic", networkAdapter]]),
+          createDb: () => {
+            dbCreated = true;
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("--ack-egress");
+    expect(dbCreated).toBe(false);
+  });
+
+  it("aborts the chain on a step failure and names the failed step", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-chain-fail-"));
+    tempRoots.push(root);
+    const configPath = await writeConfig();
+    const specPath = join(root, "chain.json");
+    await writeFile(specPath, JSON.stringify({ steps: [{ id: "boom", task: "t", use: ["ko_a"] }] }), "utf8");
+
+    const seeded = new Map<string, SignedKnowledgeObject>([["ko_a", inputKo("ko_a", { kind: "doc" })]]);
+    const failingAdapter: RunAdapter = {
+      id: "deterministic",
+      deterministic: true,
+      run: async () => {
+        throw new Error("adapter exploded");
+      },
+    };
+
+    await expect(
+      runChainCommand(
+        { config: configPath, dbUrl: "postgres://example", chain: specPath, adapter: "deterministic" },
+        {
+          adapters: new Map([["deterministic", failingAdapter]]),
+          createDb: () => ({ execute: async () => [] }),
+          readKnowledgeObject: fakeRead(seeded),
+          stdout: { log: () => undefined },
+          now: () => new Date("2026-05-22T00:00:00.000Z"),
+        },
+      ),
+    ).rejects.toThrow(/Chain step "boom" failed: adapter exploded/);
+  });
+
+  it("rejects a chain spec with a forward @ref before any run", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-chain-badref-"));
+    tempRoots.push(root);
+    const specPath = join(root, "chain.json");
+    await writeFile(
+      specPath,
+      JSON.stringify({ steps: [{ id: "a", task: "t", use: ["@later"] }, { id: "later", task: "t2", use: ["ko_a"] }] }),
+      "utf8",
+    );
+
+    let dbCreated = false;
+    await expect(
+      runChainCommand(
+        { dbUrl: "postgres://example", chain: specPath, adapter: "deterministic" },
+        {
+          createDb: () => {
+            dbCreated = true;
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow(/not a prior step/);
+    expect(dbCreated).toBe(false);
   });
 
   it("requires at least one --use input", async () => {
