@@ -22,6 +22,28 @@ to pick up cold.
   not just `cli/src/index.ts`.
 - **Depends on:** a concrete second connector (Linear) to justify the work.
 
+## Bug — Postgres NOTICE lines pollute `--json` stdout
+
+- **What:** Federation commands self-create tables/indexes with
+  `CREATE INDEX IF NOT EXISTS`; on an existing DB Postgres emits a `NOTICE`
+  ("relation ... already exists, skipping") that the `postgres` driver prints to
+  **stdout**, ahead of the JSON. This breaks `--json` for downstream consumers
+  (a strict JSON parser chokes on the NOTICE object).
+- **Found:** v0.3 live smoke (2026-06-03), but it is **pre-existing** and affects
+  all DB-touching federation commands, not just `run --chain`.
+- **Fix direction:** silence client NOTICEs on the `postgres` client
+  (`onnotice: () => {}`), or route them to stderr, in the DB connection factory
+  (`@arpanstacy/stacy-db` `createDb`). Low-risk, high-DX-value.
+
+## Observation — KO content hash folds in `createdAt`
+
+- Not a bug (the v0.3 run cache now keys on content, so chain caching works), but
+  worth recording: `knowledge-object.ts:57,60` includes `createdAt` in the
+  hashed payload, so identical content created at different times yields
+  different KO ids/hashes. If true content-addressing is ever wanted
+  (re-creating identical content → same id), that is a core-model change needing
+  its own review (federation/consent/dedup implications). Deferred.
+
 ## Later — `brain lineage <ko>` graph-walk command
 
 - **What:** A command/visualizer that walks `provenance.inputKoIds` edges to show
