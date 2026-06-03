@@ -22,18 +22,17 @@ to pick up cold.
   not just `cli/src/index.ts`.
 - **Depends on:** a concrete second connector (Linear) to justify the work.
 
-## Bug — Postgres NOTICE lines pollute `--json` stdout
+## ~~Bug — Postgres NOTICE lines pollute `--json` stdout~~ — FIXED 2026-06-03
 
 - **What:** Federation commands self-create tables/indexes with
-  `CREATE INDEX IF NOT EXISTS`; on an existing DB Postgres emits a `NOTICE`
-  ("relation ... already exists, skipping") that the `postgres` driver prints to
-  **stdout**, ahead of the JSON. This breaks `--json` for downstream consumers
-  (a strict JSON parser chokes on the NOTICE object).
-- **Found:** v0.3 live smoke (2026-06-03), but it is **pre-existing** and affects
-  all DB-touching federation commands, not just `run --chain`.
-- **Fix direction:** silence client NOTICEs on the `postgres` client
-  (`onnotice: () => {}`), or route them to stderr, in the DB connection factory
-  (`@arpanstacy/stacy-db` `createDb`). Low-risk, high-DX-value.
+  `CREATE INDEX IF NOT EXISTS`; on an existing DB Postgres emitted a `NOTICE`
+  ("relation ... already exists, skipping") that the `postgres` driver printed to
+  **stdout**, ahead of the JSON, breaking `--json` for strict parsers.
+- **Fix:** `createDb` in `packages/db/src/client.ts` now passes
+  `onnotice: () => {}` (matching the existing `createUtilitySql` factory).
+  Verified live before/after: `brain create --file --json` against an
+  initialized DB now emits only the JSON object on stdout (`python3 -m
+  json.tool` parses it cleanly; before, three NOTICE objects preceded it).
 
 ## Observation — KO content hash folds in `createdAt`
 

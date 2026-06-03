@@ -46,7 +46,12 @@ export type MigrationState =
     };
 
 export function createDb(url: string) {
-  const sql = postgres(url);
+  // Silence server NOTICEs (e.g. "relation ... already exists, skipping" from the
+  // idempotent CREATE TABLE/INDEX IF NOT EXISTS self-bootstrap). The `postgres`
+  // driver otherwise prints them to stdout, which corrupts `--json` output for
+  // any command run against an already-initialized database. Matches the
+  // `createUtilitySql` factory above.
+  const sql = postgres(url, { onnotice: () => {} });
   return drizzlePg(sql, { schema });
 }
 
