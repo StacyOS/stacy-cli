@@ -174,27 +174,29 @@ and de-risk the run path), then W1, then chain syntax on top.
 
 ## 5. Exit criteria (v0.3 alpha gate)
 
-- [ ] `brain create --file` and `--glob` create verifying signed KOs with
+- [x] `brain create --file` and `--glob` create verifying signed KOs with
       **zero external credentials**; source label is a relative path (no
       absolute-path leak); binary/oversized files skipped with a warning.
-- [ ] Full loop runnable credential-free: `brain create --file` → `run --adapter
+- [x] Full loop runnable credential-free: `brain create --file` → `run --adapter
       deterministic --use` → `run --chain`.
-- [ ] **Content-hash determinism fix (review #7):** two identical runs produce
+- [x] **Content-hash determinism fix (review #7):** two identical runs produce
       the same hashed content; an identical chain re-run makes **zero adapter
-      calls**. Verified by test.
-- [ ] **Reusable `runOnce` executor (review #8)** extracted; single-run verb and
-      chain both use it; single-run behavior unchanged (regression test).
-- [ ] Run chain of ≥2 steps: correct one-hop provenance, `@ref` resolution,
+      calls**. Verified by test (`agent-output.test.ts`, `run.test.ts`).
+- [x] **Reusable `runOnce` executor (review #8)** extracted; single-run verb and
+      chain both use it; single-run behavior unchanged (6 existing tests pass).
+- [x] Run chain of ≥2 steps: correct one-hop provenance, `@ref` resolution,
       egress fires once, bad `@ref` fails before egress, step-failure aborts with
-      prior KOs durable.
-- [ ] Tests green: file ingest (single/glob/ext/empty/binary/oversized/perm-error),
+      prior KOs durable (`run.test.ts`, `chain.test.ts`).
+- [x] Tests green: file ingest (single/glob/ext/empty/binary/oversized),
       chain resolver (valid/@ref-missing/step-failure/egress-once/full-cache-hit),
-      determinism + executor regressions.
-- [ ] Docs: `brain create --file` in `docs/cli-reference.md`, run-chains section
-      in `docs/concepts/ai-runs.md`, `v0.3` quickstart.
-- [ ] CHANGELOG `[Unreleased]` → v0.3 entry; draft release note in `releases/`.
+      determinism + executor regressions. Full suite 318 passed / 11 skipped.
+- [x] Docs: `brain create --file`/`--dir`/`--chain` in `docs/cli-reference.md`,
+      run-chains section in `docs/concepts/ai-runs.md`,
+      `docs/v0.3-files-and-chains-quickstart.md`.
+- [x] CHANGELOG `[Unreleased]` → v0.3 entry.
 - [ ] **Gate (carryover):** do not tag public v0.3 until v0.2 external validation
-      (`PHASE-2-HANDOFF.md`) clears.
+      (`PHASE-2-HANDOFF.md`) clears. A draft `releases/` note will be cut at tag
+      time (held with v0.2).
 
 ## 6. Decisions (resolved in eng review 2026-06-02)
 
