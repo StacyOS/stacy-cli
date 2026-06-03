@@ -123,7 +123,6 @@ export async function agentRunCommand(
       task: trimmedTask,
       model,
       adapter: adapter.id,
-      generatedAt: now,
       inputs: inputs.map((input) => input.reference),
       output: adapterResult.output,
       notes: adapterResult.notes,

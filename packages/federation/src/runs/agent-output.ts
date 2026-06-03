@@ -15,7 +15,6 @@ export interface AgentOutputContent {
   readonly task: string;
   readonly model: string;
   readonly adapter: string;
-  readonly generatedAt: string;
   readonly provenance: {
     readonly inputKoIds: readonly string[];
     readonly inputs: readonly AgentRunInputReference[];
@@ -28,7 +27,6 @@ export interface BuildAgentOutputContentOptions {
   readonly task: string;
   readonly model: string;
   readonly adapter: string;
-  readonly generatedAt: Date;
   readonly inputs: readonly AgentRunInputReference[];
   readonly output: CanonicalJsonValue;
   readonly notes?: readonly string[];
@@ -38,6 +36,15 @@ export interface BuildAgentOutputContentOptions {
  * Validates an adapter's raw output and wraps it in the canonical
  * `agent_output` Knowledge Object content envelope. Provenance records every
  * input Knowledge Object id so the run is verifiably reproducible.
+ *
+ * The envelope is intentionally FREE of wall-clock timestamps: a Knowledge
+ * Object is content-addressed, so identical (task, model, adapter, inputs,
+ * output) must hash identically. The generation time lives on the KO record
+ * (`createdAt`/`storedAt`) and the `run` receipt instead. This determinism is
+ * what lets run *chains* reuse a cached step output without the downstream
+ * step's input hash drifting every run. (Matches the existing
+ * `dashboard-content` / `prompt-output` convention of keeping hashed content
+ * timestamp-free.)
  */
 export function buildAgentOutputContent(
   options: BuildAgentOutputContentOptions,
@@ -56,7 +63,6 @@ export function buildAgentOutputContent(
     task: options.task,
     model: options.model,
     adapter: options.adapter,
-    generatedAt: options.generatedAt.toISOString(),
     provenance: {
       inputKoIds: inputs.map((input) => input.koId),
       inputs,

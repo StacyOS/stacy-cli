@@ -41,7 +41,6 @@ describe.skipIf(!adapterCommand)("anthropic adapter (live)", () => {
       task: "Summarize the linked pull request in two sentences.",
       model: DEFAULT_ANTHROPIC_MODEL,
       adapter: adapter.id,
-      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
       inputs: [
         { koId: "ko_live_input", contentHash: "sha256:live", contentType: "application/json" },
       ],
