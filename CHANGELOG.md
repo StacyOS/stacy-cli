@@ -11,6 +11,33 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **v0.3 alpha — local file ingest + run chains.** `stacy brain create --file`
+  and `--dir`/`--glob`/`--ext` turn local text/markdown/json files into signed
+  Knowledge Objects with **no connector and no credentials** (leak-safe
+  cwd-relative source labels; dotfiles/`node_modules`/`.git`/symlinks/binary/
+  oversized files skipped). `stacy run --chain <spec.json>` composes multi-step
+  runs where a later step consumes an earlier step's `agent_output` via an
+  `@<stepId>` reference (validated before egress, gated once, one-hop
+  provenance, abort-on-step-failure). Together they make the whole ingest → run
+  → synthesize loop runnable offline. See
+  `docs/v0.3-files-and-chains-quickstart.md`.
+
+### Fixed
+- **Run-result caching now composes across chain steps** (verified live). Two
+  changes: (1) `agent_output` content no longer embeds a wall-clock
+  `generatedAt`; (2) the run cache keys inputs on their **content**, not on the
+  KO `contentHash` (which folds in `createdAt`, so it changes every time a KO is
+  created even for identical content). Without (2) a chain's downstream step —
+  whose input is the prior step's freshly-created output KO — missed the cache
+  on every run. Now an identical chain re-run makes **zero adapter calls**. KO
+  `contentHash` is still used for provenance; generation time still lives on the
+  KO record and the `run` receipt.
+
+### Changed
+- Extracted a reusable `runOnce` run executor (single-run verb and run chains
+  share it); single-run behavior is unchanged.
+
+### Added (v0.2 alpha)
 - **v0.2 alpha — connectors + AI runs.** GitHub connector (OAuth device-code
   flow, encrypted-at-rest token storage, sliding-window rate limiting), the
   `stacy connect` / `connectors list|status|disconnect` / `ingest` verbs that

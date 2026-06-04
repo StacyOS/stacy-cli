@@ -91,3 +91,47 @@ acknowledgement.
 
 See the [v0.2 quickstart](../v0.2-connectors-and-runs-quickstart.md) for the
 end-to-end flow.
+
+## Run chains (v0.3)
+
+A single run is one task over a flat list of inputs. A **run chain** composes
+several runs, where a later step consumes an earlier step's `agent_output` KO as
+input. This expresses "summarize each source, then synthesize one report" as a
+single command.
+
+A chain is a JSON file with an ordered `steps[]` array. A step references a prior
+step's output with `@<stepId>`:
+
+```jsonc
+{
+  "steps": [
+    { "id": "per_doc",   "task": "Summarize each document", "use": ["ko_a", "ko_b"] },
+    { "id": "synthesis", "task": "Synthesize one report",   "use": ["@per_doc"] }
+  ]
+}
+```
+
+```bash
+stacy run --chain ./chain.json --adapter deterministic
+```
+
+```text
+per_doc   use: [ko_a, ko_b] ──run──► ko_out1
+synthesis use: [@per_doc]   ──run──► ko_final   (@per_doc resolves to ko_out1)
+```
+
+Guarantees:
+
+- **Validated up front.** The spec is parsed and every `@ref` is checked
+  *before* the egress gate and before any KO is read. A forward, unknown, or
+  self reference fails immediately — no partial run, no egress.
+- **Egress gated once.** A non-deterministic adapter still requires
+  `--ack-egress`, checked a single time before the first step.
+- **One-hop provenance.** Each step's `agent_output` lists only its direct
+  inputs (`synthesis → [per_doc output] → [ko_a, ko_b]`). Full lineage is the
+  graph walk across those edges; nothing is flattened or duplicated.
+- **Caching composes.** Each step is cached by `(task, model, adapter, input
+  content hashes)`. Because `agent_output` content is timestamp-free, an
+  identical chain re-run reuses every step and makes zero adapter calls.
+- **Abort on failure.** If a step fails, the chain stops and names the failed
+  step. Already-produced step KOs remain durable (no rollback).

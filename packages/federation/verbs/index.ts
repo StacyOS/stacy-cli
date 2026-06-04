@@ -32,7 +32,7 @@ import {
   type IdentityDependencies,
 } from "./identity.js";
 import { revokeCommand, type RevokeDependencies } from "./revoke.js";
-import { agentRunCommand, type AgentRunDependencies } from "./run.js";
+import { agentRunCommand, runChainCommand, type AgentRunDependencies } from "./run.js";
 import { runTaskCommand, type RunTaskDependencies } from "./run-task.js";
 import { shareCommand, type ShareDependencies } from "./share.js";
 
@@ -90,6 +90,13 @@ export function registerFederationCommands(
     .description("Create and store a local signed Knowledge Object")
     .option("--content-json <json>", "Knowledge Object content as JSON")
     .option("--prompt <text>", "Generate Knowledge Object content from a prompt")
+    .option("--file <path>", "Create a Knowledge Object from a local text/markdown/json file (no credentials)")
+    .option("--dir <path>", "Create one KO per file under a directory (no credentials)")
+    .option("--glob <pattern>", "Glob pattern for --dir ingest, e.g. '**/*.md' (relative to --dir or cwd)")
+    .option("--ext <list>", "Comma-separated extension allowlist for directory ingest, e.g. md,txt,json")
+    .option("--source-label <label>", "Override the provenance source label for --file (default: cwd-relative path)")
+    .option("--max-bytes <n>", "Max file size for --file/--dir in bytes (default 1048576)", (v: string) => Number.parseInt(v, 10))
+    .option("--yes", "Skip the directory-ingest confirmation prompt", false)
     .option("--adapter-command <command>", "Optional adapter-like command that reads the prompt on stdin and writes output")
     .option("--adapter-arg <arg>", "Argument passed to --adapter-command; repeat for multiple args", collectOption, [])
     .option("--content-type <type>", "Knowledge Object content type", "application/json")
@@ -495,6 +502,7 @@ export {
   identityShowCommand,
   identityVerifyChainCommand,
   agentRunCommand,
+  runChainCommand,
   runTaskCommand,
   type BrainExportDependencies,
   type BrainImportDependencies,
