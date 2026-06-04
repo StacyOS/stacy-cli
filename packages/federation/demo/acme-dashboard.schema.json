@@ -1,0 +1,33 @@
+{
+  "title": "Acme Q2 Revenue Dashboard",
+  "widgets": [
+    {
+      "kind": "metric",
+      "label": "Revenue",
+      "column": "revenue",
+      "aggregate": "sum",
+      "format": "currency"
+    },
+    {
+      "kind": "metric",
+      "label": "Pipeline",
+      "column": "pipeline",
+      "aggregate": "sum",
+      "format": "currency"
+    },
+    {
+      "kind": "metric",
+      "label": "Active customers",
+      "column": "active_customers",
+      "aggregate": "last",
+      "format": "number"
+    },
+    {
+      "kind": "risk",
+      "label": "Average churn risk",
+      "column": "churn_risk",
+      "aggregate": "average",
+      "format": "percent"
+    }
+  ]
+}

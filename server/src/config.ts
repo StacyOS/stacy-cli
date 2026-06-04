@@ -65,6 +65,9 @@ export interface Config {
   customBindHost: string | undefined;
   host: string;
   port: number;
+  tlsEnabled: boolean;
+  tlsCertPath: string | undefined;
+  tlsKeyPath: string | undefined;
   allowedHostnames: string[];
   authBaseUrlMode: AuthBaseUrlMode;
   authPublicBaseUrl: string | undefined;
@@ -258,6 +261,12 @@ export function loadConfig(): Config {
     companyDeletionEnvRaw !== undefined
       ? companyDeletionEnvRaw === "true"
       : deploymentMode === "local_trusted";
+  const tlsEnabled =
+    process.env.STACY_SERVER_TLS_ENABLED !== undefined
+      ? process.env.STACY_SERVER_TLS_ENABLED === "true"
+      : (fileConfig?.server.tls?.enabled ?? false);
+  const tlsCertPath = process.env.STACY_SERVER_TLS_CERT_PATH?.trim() || fileConfig?.server.tls?.certPath;
+  const tlsKeyPath = process.env.STACY_SERVER_TLS_KEY_PATH?.trim() || fileConfig?.server.tls?.keyPath;
   const databaseBackupEnabled =
     process.env.STACY_DB_BACKUP_ENABLED !== undefined
       ? process.env.STACY_DB_BACKUP_ENABLED === "true"
@@ -310,6 +319,9 @@ export function loadConfig(): Config {
     customBindHost: resolvedBind.customBindHost,
     host: resolvedBind.host,
     port: Number(process.env.PORT) || fileConfig?.server.port || 3100,
+    tlsEnabled,
+    tlsCertPath: tlsCertPath ? resolveHomeAwarePath(tlsCertPath) : undefined,
+    tlsKeyPath: tlsKeyPath ? resolveHomeAwarePath(tlsKeyPath) : undefined,
     allowedHostnames,
     authBaseUrlMode,
     authPublicBaseUrl,

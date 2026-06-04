@@ -43,6 +43,7 @@ export function choosePrimaryRuntimeApiUrl(input: {
   allowedHostnames: string[];
   bindHost: string;
   port: number;
+  protocol?: "http:" | "https:";
 }): string {
   const explicitPublicBaseUrl = input.authPublicBaseUrl?.trim();
   if (explicitPublicBaseUrl) {
@@ -56,16 +57,17 @@ export function choosePrimaryRuntimeApiUrl(input: {
   const allowedHostname = input.allowedHostnames
     .map((value) => value.trim())
     .find(Boolean);
+  const protocol = input.protocol ?? "http:";
   if (allowedHostname) {
-    return formatOrigin("http:", allowedHostname, input.port);
+    return formatOrigin(protocol, allowedHostname, input.port);
   }
 
   const bindHost = normalizeHost(input.bindHost);
   if (bindHost && !isWildcardHost(bindHost)) {
-    return formatOrigin("http:", bindHost, input.port);
+    return formatOrigin(protocol, bindHost, input.port);
   }
 
-  return formatOrigin("http:", "localhost", input.port);
+  return formatOrigin(protocol, "localhost", input.port);
 }
 
 export function buildRuntimeApiCandidateUrls(input: {
@@ -73,6 +75,7 @@ export function buildRuntimeApiCandidateUrls(input: {
   allowedHostnames: string[];
   bindHost: string;
   port: number;
+  protocol?: "http:" | "https:";
   networkInterfacesMap?: NodeJS.Dict<os.NetworkInterfaceInfo[]>;
 }): string[] {
   const candidates: string[] = [];
@@ -86,7 +89,7 @@ export function buildRuntimeApiCandidateUrls(input: {
       return null;
     }
   })();
-  const protocol = explicitOrigin ? new URL(explicitOrigin).protocol : "http:";
+  const protocol = explicitOrigin ? new URL(explicitOrigin).protocol : input.protocol ?? "http:";
 
   pushCandidate(candidates, seen, explicitOrigin);
 
@@ -127,6 +130,7 @@ export function buildRuntimeApiCandidateUrls(input: {
         allowedHostnames: input.allowedHostnames,
         bindHost: input.bindHost,
         port: input.port,
+        protocol: input.protocol,
       }),
     );
   }

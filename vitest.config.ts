@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     projects: [
       "packages/shared",
+      "packages/federation",
       "packages/db",
       "packages/adapter-utils",
       "packages/adapters/claude-local",

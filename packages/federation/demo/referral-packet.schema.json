@@ -1,0 +1,12 @@
+{
+  "title": "Northstar Clinic Referral Packet",
+  "widgets": [
+    {
+      "kind": "metric",
+      "label": "Referral packets",
+      "column": "patient_ref",
+      "aggregate": "count",
+      "format": "number"
+    }
+  ]
+}

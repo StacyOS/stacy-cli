@@ -1,0 +1,417 @@
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+import { loadInstallIdentity } from "../../src/identity/install-identity.js";
+import { resolveFederationIdentityPath } from "../../src/identity/paths.js";
+import { createTwoInstallHarness, type HarnessCommandResult } from "./two-install-harness.js";
+
+const runPublicDemoSmoke = process.env.STACY_FEDERATION_PUBLIC_DEMO_SMOKE === "1";
+const demoCsvPath = resolve(process.cwd(), "demo/referral-packet.csv");
+const publicDemoAdapterCommand = process.env.STACY_PUBLIC_DEMO_ADAPTER?.trim();
+const publicDemoAdapterArgs = parseAdapterArgs(process.env.STACY_PUBLIC_DEMO_ADAPTER_ARGS);
+
+describe.skipIf(!runPublicDemoSmoke)("public StacyOS federation demo", () => {
+  it("runs task -> KO -> contact share -> read -> revoke -> denied next read with receipts", async () => {
+    const startedAt = performance.now();
+    const harness = await createTwoInstallHarness();
+    try {
+      logStep("1. Start isolated installs", [
+        `install A config: ${harness.installA.configPath}`,
+        `install B config: ${harness.installB.configPath}`,
+      ]);
+      await harness.prepare();
+      await harness.startServer("A", { timeoutMs: 60_000, intervalMs: 500 });
+      await harness.startServer("B", { timeoutMs: 60_000, intervalMs: 500 });
+
+      const seedBCommand = [
+        "brain",
+        "create",
+        "--config",
+        harness.installB.configPath,
+        "--content-json",
+        JSON.stringify({ title: "Meera identity seed" }),
+        "--ko-id",
+        "ko_meera_identity_seed",
+        "--json",
+      ];
+      logStep("2. Create B identity seed", [formatDemoCommand("B", seedBCommand)]);
+      const seedB = await harness.runCli("B", seedBCommand);
+      expectSuccessfulCommand(seedB);
+      const consumerIdentity = await loadInstallIdentity(resolveFederationIdentityPath(harness.installB.instanceRoot));
+
+      const shareLinkCommand = [
+        "contacts",
+        "share-link",
+        "meera",
+        "--config",
+        harness.installB.configPath,
+        "--endpoint",
+        `http://127.0.0.1:${harness.installB.serverPort}/api/federation`,
+        "--revocation-url",
+        `http://127.0.0.1:${harness.installB.serverPort}/api/federation/revocations`,
+        "--label",
+        "Dr. Meera Patel / Eastside Specialty",
+        "--expires",
+        "15m",
+        "--json",
+      ];
+      logStep("3. Create B's short-lived signed contact share link", [
+        formatDemoCommand("B", shareLinkCommand),
+      ]);
+      const shareLink = await harness.runCli("B", shareLinkCommand);
+      expectSuccessfulCommand(shareLink);
+      const shareLinkPayload = parseCommandJson(shareLink) as { readonly link: string };
+
+      const importContactLinkCommand = [
+        "contacts",
+        "import-link",
+        shareLinkPayload.link,
+        "--config",
+        harness.installA.configPath,
+        "--as",
+        "meera",
+        "--json",
+      ];
+      logStep("4. Import B as contact meera from the signed link", [
+        formatDemoCommand("A", importContactLinkCommand),
+      ]);
+      const importContactLink = await harness.runCli("A", importContactLinkCommand);
+      expectSuccessfulCommand(importContactLink);
+      expect(parseCommandJson(importContactLink)).toMatchObject({
+        name: "meera",
+        installId: consumerIdentity.record.installId,
+        federationEndpointUrl: `http://127.0.0.1:${harness.installB.serverPort}/api/federation`,
+      });
+
+      const runTaskCommand = [
+        "run",
+        "Northstar Clinic Referral Packet",
+        "--config",
+        harness.installA.configPath,
+        "--input",
+        demoCsvPath,
+        "--output-kind",
+        "referral_packet",
+        "--ko-id",
+        "ko_referral_packet",
+        ...(publicDemoAdapterCommand
+          ? [
+              "--adapter-command",
+              publicDemoAdapterCommand,
+              "--adapter-output",
+              "json",
+              "--ack-egress",
+              ...publicDemoAdapterArgs.flatMap((arg) => ["--adapter-arg", arg]),
+            ]
+          : []),
+        "--json",
+      ];
+      logStep("5. Create signed KO from real CSV task", [formatDemoCommand("A", runTaskCommand)]);
+      const runTask = await harness.runCli("A", runTaskCommand);
+      expectSuccessfulCommand(runTask);
+      const created = parseCommandJson(runTask) as {
+        readonly id: string;
+        readonly contentHash: string;
+        readonly creatorInstallId: string;
+        readonly generator: string;
+      };
+      expect(created).toMatchObject({
+        id: "ko_referral_packet",
+        contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        generator: publicDemoAdapterCommand ? "adapter_command" : "deterministic_referral_packet",
+      });
+
+      const showACommand = [
+        "brain",
+        "show",
+        created.id,
+        "--config",
+        harness.installA.configPath,
+      ];
+      logStep("6. Show local referral packet KO with provenance", [formatDemoCommand("A", showACommand)]);
+      const showA = await harness.runCli("A", showACommand);
+      expectSuccessfulCommand(showA);
+      expect(showA.stdout).toContain("Referral packet: Northstar Clinic Referral Packet");
+      expect(showA.stdout).toContain("Input: referral-packet.csv");
+      expect(showA.stdout).toContain("Signature: verified");
+      expect(showA.stdout).toContain(
+        publicDemoAdapterCommand ? "Generator: adapter_command" : "Generator: deterministic_referral_packet",
+      );
+      if (publicDemoAdapterCommand) {
+        expect(showA.stdout).toContain("Patient reference: N.P.");
+        expect(showA.stdout).toContain("Adapter notes:");
+        expect(showA.stdout).toContain("validated against the referral_packet JSON contract");
+      }
+
+      const shareCommand = [
+        "share",
+        created.id,
+        "--config",
+        harness.installA.configPath,
+        "--with-contact",
+        "meera",
+        "--revocation-url",
+        `http://127.0.0.1:${harness.installA.serverPort}/api/federation/revocations`,
+        "--expires",
+        "30d",
+        "--revocable",
+        "--json",
+      ];
+      logStep("7. Share by contact name", [formatDemoCommand("A", shareCommand)]);
+      const share = await harness.runCli("A", shareCommand);
+      expectSuccessfulCommand(share);
+      expect(parseCommandJson(share)).toMatchObject({
+        koId: created.id,
+        consumerInstallId: consumerIdentity.record.installId,
+        delivery: {
+          status: 201,
+        },
+      });
+
+      const showBeforeRevokeCommand = [
+        "brain",
+        "show",
+        created.id,
+        "--config",
+        harness.installB.configPath,
+        "--as-consumer",
+        consumerIdentity.record.installId,
+        "--json",
+      ];
+      logStep("8. Read on B before revoke", [formatDemoCommand("B", showBeforeRevokeCommand)]);
+      const showBeforeRevoke = await harness.runCli("B", showBeforeRevokeCommand);
+      expectSuccessfulCommand(showBeforeRevoke);
+      expect(parseCommandJson(showBeforeRevoke)).toMatchObject({
+        id: created.id,
+        content: {
+          kind: "referral_packet",
+          input: {
+            fileName: "referral-packet.csv",
+          },
+        },
+        verified: true,
+      });
+
+      const revokeCommand = [
+        "revoke",
+        created.id,
+        "--config",
+        harness.installA.configPath,
+        "--reason",
+        "Patient withdrew consent",
+        "--json",
+      ];
+      logStep("9. Revoke on A", [formatDemoCommand("A", revokeCommand)]);
+      const revoke = await harness.runCli("A", revokeCommand);
+      expectSuccessfulCommand(revoke);
+
+      const showAfterRevokeCommand = [
+        "brain",
+        "show",
+        created.id,
+        "--config",
+        harness.installB.configPath,
+        "--as-consumer",
+        consumerIdentity.record.installId,
+        "--json",
+      ];
+      logStep("10. Read on B after revoke", [formatDemoCommand("B", showAfterRevokeCommand)]);
+      const showAfterRevoke = await harness.runCli("B", showAfterRevokeCommand);
+      expectFailedCommand(showAfterRevoke, "Consent grant has been revoked");
+
+      const receiptsACommand = [
+        "receipts",
+        "list",
+        "--config",
+        harness.installA.configPath,
+        "--ko",
+        created.id,
+        "--json",
+      ];
+      const receiptsATextCommand = [
+        "receipts",
+        "list",
+        "--config",
+        harness.installA.configPath,
+        "--ko",
+        created.id,
+      ];
+      const receiptsBCommand = [
+        "receipts",
+        "list",
+        "--config",
+        harness.installB.configPath,
+        "--ko",
+        created.id,
+        "--json",
+      ];
+      const receiptsBTextCommand = [
+        "receipts",
+        "list",
+        "--config",
+        harness.installB.configPath,
+        "--ko",
+        created.id,
+      ];
+      const verifyReceiptsACommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installA.configPath,
+        "--ko",
+        created.id,
+      ];
+      const verifyReceiptsBCommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installB.configPath,
+        "--ko",
+        created.id,
+      ];
+      const verifyGlobalReceiptsACommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installA.configPath,
+        "--global",
+      ];
+      const verifyGlobalReceiptsBCommand = [
+        "receipts",
+        "verify",
+        "--config",
+        harness.installB.configPath,
+        "--global",
+      ];
+      logStep("11. Show receipts on both installs", [
+        formatDemoCommand("A", receiptsATextCommand),
+        formatDemoCommand("B", receiptsBTextCommand),
+        formatDemoCommand("A", verifyReceiptsACommand),
+        formatDemoCommand("B", verifyReceiptsBCommand),
+        formatDemoCommand("A", verifyGlobalReceiptsACommand),
+        formatDemoCommand("B", verifyGlobalReceiptsBCommand),
+      ]);
+      const receiptsA = await harness.runCli("A", receiptsACommand);
+      const receiptsB = await harness.runCli("B", receiptsBCommand);
+      const receiptsAText = await harness.runCli("A", receiptsATextCommand);
+      const receiptsBText = await harness.runCli("B", receiptsBTextCommand);
+      const verifyReceiptsA = await harness.runCli("A", verifyReceiptsACommand);
+      const verifyReceiptsB = await harness.runCli("B", verifyReceiptsBCommand);
+      const verifyGlobalReceiptsA = await harness.runCli("A", verifyGlobalReceiptsACommand);
+      const verifyGlobalReceiptsB = await harness.runCli("B", verifyGlobalReceiptsBCommand);
+      expectSuccessfulCommand(receiptsA);
+      expectSuccessfulCommand(receiptsB);
+      expectSuccessfulCommand(receiptsAText);
+      expectSuccessfulCommand(receiptsBText);
+      expectSuccessfulCommand(verifyReceiptsA);
+      expectSuccessfulCommand(verifyReceiptsB);
+      expectSuccessfulCommand(verifyGlobalReceiptsA);
+      expectSuccessfulCommand(verifyGlobalReceiptsB);
+      const eventsA = receiptEvents(receiptsA);
+      const eventsB = receiptEvents(receiptsB);
+      expect(eventsA).toEqual(expect.arrayContaining(["create", "sign", "share", "revoke"]));
+      expect(eventsB).toEqual(expect.arrayContaining(["receive", "store", "read", "deny"]));
+      expect(receiptsAText.stdout).toContain("Federation receipts:");
+      expect(receiptsAText.stdout).toContain("By event:");
+      expect(receiptsAText.stdout).toContain("share:");
+      expect(receiptsBText.stdout).toContain("deny:");
+      expect(verifyReceiptsA.stdout).toContain("Receipt chain valid.");
+      expect(verifyReceiptsB.stdout).toContain("Receipt chain valid.");
+      expect(verifyGlobalReceiptsA.stdout).toContain("Global receipt anchor valid.");
+      expect(verifyGlobalReceiptsB.stdout).toContain("Global receipt anchor valid.");
+
+      const durationMs = Math.round(performance.now() - startedAt);
+      expect(durationMs).toBeLessThan(4 * 60 * 1000);
+      console.log([
+        "",
+        "StacyOS public federation demo complete",
+        `KO: ${created.id}`,
+        `Content hash: ${created.contentHash}`,
+        `Producer: Northstar Clinic (${created.creatorInstallId})`,
+        `Consumer: Dr. Meera Patel / Eastside Specialty (${consumerIdentity.record.installId})`,
+        `Generator: ${created.generator}`,
+        "B read before revoke: allowed",
+        "A revoked access: Patient withdrew consent",
+        "B read after revoke: denied",
+        `Receipts A: ${eventsA.join(", ")}`,
+        `Receipts B: ${eventsB.join(", ")}`,
+        "Receipt chain A: valid",
+        "Receipt chain B: valid",
+        "Global receipt anchor A: valid",
+        "Global receipt anchor B: valid",
+        "",
+        "Receipt summary on A:",
+        receiptsAText.stdout.trim(),
+        "",
+        "Receipt summary on B:",
+        receiptsBText.stdout.trim(),
+        `Total runtime: ${(durationMs / 1000).toFixed(2)}s`,
+      ].join("\n"));
+    } finally {
+      await harness.stop();
+    }
+  }, 240_000);
+});
+
+function expectSuccessfulCommand(result: HarnessCommandResult): void {
+  if (result.exitCode !== 0) {
+    throw new Error(formatCommandError("Expected command to succeed", result));
+  }
+}
+
+function expectFailedCommand(result: HarnessCommandResult, expectedMessage: string): void {
+  if (result.exitCode === 0) {
+    throw new Error(formatCommandError("Expected command to fail", result));
+  }
+  expect(`${result.stdout}\n${result.stderr}`).toContain(expectedMessage);
+}
+
+function parseCommandJson(result: HarnessCommandResult): unknown {
+  const trimmed = result.stdout.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonStart = trimmed.lastIndexOf("\n{");
+    if (jsonStart >= 0) return JSON.parse(trimmed.slice(jsonStart + 1));
+    throw new Error(formatCommandError("Expected command stdout to contain JSON", result));
+  }
+}
+
+function receiptEvents(result: HarnessCommandResult): string[] {
+  const parsed = parseCommandJson(result) as { readonly receipts?: readonly { readonly eventType?: string }[] };
+  return (parsed.receipts ?? []).map((receipt) => receipt.eventType ?? "");
+}
+
+function formatCommandError(message: string, result: HarnessCommandResult): string {
+  return [
+    `${message}: ${result.command.join(" ")}`,
+    `exitCode: ${result.exitCode}`,
+    `stdout:\n${result.stdout.trim() || "(empty)"}`,
+    `stderr:\n${result.stderr.trim() || "(empty)"}`,
+  ].join("\n");
+}
+
+function logStep(title: string, lines: readonly string[]): void {
+  console.log(["", `== ${title} ==`, ...lines].join("\n"));
+}
+
+function formatDemoCommand(install: "A" | "B", args: readonly string[]): string {
+  return `$ stacy (${install}) ${args.map(quoteShellArg).join(" ")}`;
+}
+
+function quoteShellArg(value: string): string {
+  if (value.startsWith("stacy://contacts/import?payload=")) {
+    return "\"stacy://contacts/import?payload=<signed_payload>\"";
+  }
+  if (/^[A-Za-z0-9_./:=@-]+$/.test(value)) return value;
+  return `"${value.replaceAll("\"", "\\\"")}"`;
+}
+
+function parseAdapterArgs(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed) || !parsed.every((entry) => typeof entry === "string")) {
+    throw new Error("STACY_PUBLIC_DEMO_ADAPTER_ARGS must be a JSON array of strings.");
+  }
+  return parsed;
+}

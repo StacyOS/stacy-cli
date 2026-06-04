@@ -52,6 +52,9 @@ function buildTestConfig(overrides: Record<string, unknown> = {}) {
     customBindHost: undefined,
     host: "127.0.0.1",
     port: 3210,
+    tlsEnabled: false,
+    tlsCertPath: undefined,
+    tlsKeyPath: undefined,
     allowedHostnames: [],
     authBaseUrlMode: "auto",
     authPublicBaseUrl: undefined,
@@ -86,6 +89,10 @@ function buildTestConfig(overrides: Record<string, unknown> = {}) {
 }
 
 vi.mock("node:http", () => ({
+  createServer: vi.fn(() => fakeServer),
+}));
+
+vi.mock("node:https", () => ({
   createServer: vi.fn(() => fakeServer),
 }));
 

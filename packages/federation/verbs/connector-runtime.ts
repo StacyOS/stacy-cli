@@ -1,0 +1,103 @@
+import { FileKeychain, type KeychainStore } from "../src/connectors/keychain.js";
+import { ConnectorRegistry } from "../src/connectors/registry.js";
+import { SlidingWindowRateLimiter } from "../src/connectors/rate-limiter.js";
+import { GitHubConnector } from "../src/connectors/github/connector.js";
+import type { Connector, TokenBundle } from "../src/connectors/types.js";
+import {
+  resolveConnectorStateDir,
+  resolveConnectorTokenStorePath,
+} from "../src/identity/paths.js";
+import type { LocalRuntime } from "./local-runtime.js";
+
+/** GitHub allows 5000 req/hour for authenticated calls; stay well under it. */
+export function defaultGitHubRateLimiter(instanceRoot: string): SlidingWindowRateLimiter {
+  return new SlidingWindowRateLimiter({
+    limit: 1000,
+    windowMs: 60 * 60 * 1000,
+    statePath: `${resolveConnectorStateDir(instanceRoot)}/github-ratelimit.json`,
+  });
+}
+
+export function resolveConnectorKeychain(runtime: LocalRuntime): KeychainStore {
+  return new FileKeychain({ storePath: resolveConnectorTokenStorePath(runtime.instanceRoot) });
+}
+
+export interface BuildGitHubConnectorOptions {
+  readonly clientId?: string;
+  readonly rateLimiter?: SlidingWindowRateLimiter;
+}
+
+export function buildGitHubConnector(options: BuildGitHubConnectorOptions = {}): GitHubConnector {
+  return new GitHubConnector({
+    clientId: options.clientId ?? "",
+    rateLimiter: options.rateLimiter,
+  });
+}
+
+/** Registry of descriptors for `stacy connectors list`. */
+export function buildConnectorRegistry(): ConnectorRegistry {
+  const registry = new ConnectorRegistry();
+  registry.register(buildGitHubConnector());
+  return registry;
+}
+
+export interface EnsureFreshTokenOptions {
+  readonly connector: Connector;
+  readonly keychain: KeychainStore;
+  readonly token: TokenBundle;
+  readonly now?: Date;
+  /** Refresh this many ms *before* the recorded expiry to avoid edge races. */
+  readonly skewMs?: number;
+}
+
+/**
+ * Returns a usable token, transparently refreshing it via the connector when it
+ * is at or past its `expiresAt` (minus a small skew). A refreshed token is
+ * persisted back to the keychain. Tokens without an expiry (e.g. GitHub OAuth
+ * app device-flow tokens) are returned untouched.
+ */
+export async function ensureFreshToken(options: EnsureFreshTokenOptions): Promise<TokenBundle> {
+  const now = options.now ?? new Date();
+  const skewMs = options.skewMs ?? 60_000;
+  if (!isTokenExpired(options.token, now, skewMs)) {
+    return options.token;
+  }
+
+  const refreshed = await options.connector.refresh(options.token);
+  if (
+    refreshed.accessToken !== options.token.accessToken ||
+    refreshed.expiresAt !== options.token.expiresAt
+  ) {
+    await options.keychain.set(options.connector.id, refreshed);
+  }
+  return refreshed;
+}
+
+function isTokenExpired(token: TokenBundle, now: Date, skewMs: number): boolean {
+  if (!token.expiresAt) return false;
+  const expiry = Date.parse(token.expiresAt);
+  if (Number.isNaN(expiry)) return false;
+  return expiry - skewMs <= now.getTime();
+}
+
+/**
+ * Resolve a relative time window like `7d`, `24h`, `90m` into an ISO timestamp,
+ * or pass through an explicit ISO date. Returns undefined for empty input.
+ */
+export function resolveSince(value: string | undefined, now: Date = new Date()): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+
+  const match = /^(\d+)\s*([dhm])$/i.exec(trimmed);
+  if (match) {
+    const amount = Number.parseInt(match[1] as string, 10);
+    const unitMs = { d: 86_400_000, h: 3_600_000, m: 60_000 }[match[2]?.toLowerCase() as "d" | "h" | "m"];
+    return new Date(now.getTime() - amount * unitMs).toISOString();
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid --since "${value}". Expected a duration (7d, 24h, 90m) or ISO date.`);
+  }
+  return parsed.toISOString();
+}

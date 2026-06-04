@@ -1,0 +1,859 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import { runTaskCommand } from "./run-task.js";
+
+const tempRoots: string[] = [];
+
+describe("runTaskCommand", () => {
+  afterEach(async () => {
+    await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  it("creates a deterministic dashboard KO from CSV input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+
+    await runTaskCommand(
+      "build a quarterly revenue dashboard from this CSV",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        koId: "ko_run_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({ execute: async () => [] }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_run_task",
+      generator: "deterministic_dashboard",
+      input: {
+        fileName: "input.csv",
+        rows: 2,
+      },
+      contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+  });
+
+  it("can use an adapter command while preserving the signed KO path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+
+    await runTaskCommand(
+      "summarize this CSV",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", "process.stdin.pipe(process.stdout)"],
+        ackEgress: true,
+        koId: "ko_adapter_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({ execute: async () => [] }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_adapter_task",
+      generator: "adapter_command",
+      input: {
+        fileName: "input.csv",
+        rows: 2,
+      },
+      contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    });
+  });
+
+  it("accepts schema-validated adapter dashboard JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "summarize this CSV",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Owned Dashboard',",
+          "summary:'Adapter generated the widget contract.',",
+          "widgets:[{kind:'metric',label:'Adapter Revenue',value:'$250'}],",
+          "notes:['Adapter JSON validated.']",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_json_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) {
+              createdContents.push(signedPayload.content);
+            }
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_adapter_json_task",
+      generator: "adapter_command",
+    });
+    expect(createdContents[0]).toMatchObject({
+      title: "Adapter Owned Dashboard",
+      summary: "Adapter generated the widget contract.",
+      widgets: [{ kind: "metric", label: "Adapter Revenue", value: "$250" }],
+      adapterNotes: ["Adapter JSON validated."],
+    });
+  });
+
+  it("creates a deterministic report KO from CSV input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "write a quarterly revenue report",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "report",
+        koId: "ko_report_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_report_task",
+      outputKind: "report",
+      generator: "deterministic_report",
+    });
+    expect(createdContents[0]).toMatchObject({
+      kind: "report",
+      summary: "Write a quarterly revenue report: analyzed 2 row(s) across 5 column(s).",
+      sections: [
+        { heading: "Input", body: "input.csv contains 2 row(s) and 5 column(s)." },
+        { heading: "Columns", body: "month, revenue, pipeline, active_customers, churn_risk" },
+      ],
+    });
+  });
+
+  it("accepts schema-validated adapter report JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "write a quarterly revenue report",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "report",
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Report',",
+          "summary:'Adapter owns this report.',",
+          "sections:[{heading:'Signal',body:'Pipeline is expanding.'}],",
+          "notes:['Report contract validated.']",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_report_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(createdContents[0]).toMatchObject({
+      kind: "report",
+      title: "Adapter Report",
+      summary: "Adapter owns this report.",
+      sections: [{ heading: "Signal", body: "Pipeline is expanding." }],
+      adapterNotes: ["Report contract validated."],
+      generator: "adapter_command",
+    });
+  });
+
+  it("creates a table KO from CSV input and adapter-owned table JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "prepare a clean revenue table",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "table",
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Table',",
+          "columns:['month','score'],",
+          "rows:[{month:'2026-04',score:1},{month:'2026-05',score:2}],",
+          "summary:'Adapter owns this table.'",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_table_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(createdContents[0]).toMatchObject({
+      kind: "table",
+      title: "Adapter Table",
+      columns: ["month", "score"],
+      rows: [{ month: "2026-04", score: 1 }, { month: "2026-05", score: 2 }],
+      summary: "Adapter owns this table.",
+      generator: "adapter_command",
+    });
+  });
+
+  it("rejects unsupported task output kinds before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          outputKind: "graph",
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("--output-kind must be dashboard, report, table, or referral_packet.");
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("redacts selected columns from adapter stdin while recording KO redaction metadata", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = join(root, "customers.csv");
+    const adapterInputPath = join(root, "adapter-input.json");
+    await writeFile(csvPath, [
+      "customer_email,revenue,notes",
+      "a@example.com,100,keep",
+      "b@example.com,150,also keep",
+    ].join("\n"), "utf8");
+    const lines: string[] = [];
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "summarize customer revenue",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "const fs=require('node:fs');",
+          "let input='';",
+          "process.stdin.on('data',c=>input+=c);",
+          "process.stdin.on('end',()=>{",
+          `fs.writeFileSync(${JSON.stringify(adapterInputPath)},input);`,
+          "process.stdout.write(JSON.stringify({widgets:[{kind:'metric',label:'Revenue',value:250}]}));",
+          "});",
+        ].join("")],
+        adapterOutput: "json",
+        redactColumn: ["customer_email"],
+        ackEgress: true,
+        koId: "ko_redacted_adapter_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) {
+              createdContents.push(signedPayload.content);
+            }
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    const adapterInput = JSON.parse(await readFile(adapterInputPath, "utf8")) as {
+      readonly input: { readonly columns: readonly string[]; readonly records: readonly Record<string, string>[] };
+      readonly redactedColumns: readonly string[];
+    };
+    expect(adapterInput.redactedColumns).toEqual(["customer_email"]);
+    expect(adapterInput.input.columns).toEqual(["revenue", "notes"]);
+    expect(adapterInput.input.records).toEqual([
+      { revenue: "100", notes: "keep" },
+      { revenue: "150", notes: "also keep" },
+    ]);
+    expect(JSON.stringify(adapterInput)).not.toContain("a@example.com");
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_redacted_adapter_task",
+      redactedColumns: ["customer_email"],
+      input: {
+        fileName: "customers.csv",
+        rows: 2,
+      },
+    });
+    expect(createdContents[0]).toMatchObject({
+      redactedColumns: ["customer_email"],
+      input: {
+        fileName: "customers.csv",
+        rows: 2,
+      },
+    });
+  });
+
+  it("creates a deterministic referral packet KO from healthcare CSV input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = join(root, "referral-packet.csv");
+    await writeFile(csvPath, [
+      "patient_ref,referral_reason,clinical_summary,lab_snapshot,medications,imaging_status,consent_expires,revocation_reason",
+      "N.P.,Second opinion after abnormal ECG,\"Intermittent chest tightness, elevated LDL\",\"LDL 162 mg/dL; troponin negative\",\"Atorvastatin 20mg; aspirin 81mg\",\"ECG attached\",2026-06-22T23:59:59Z,Patient withdrew consent",
+    ].join("\n"), "utf8");
+    const lines: string[] = [];
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "Northstar Clinic Referral Packet",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "referral_packet",
+        koId: "ko_referral_packet",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_referral_packet",
+      outputKind: "referral_packet",
+      generator: "deterministic_referral_packet",
+    });
+    expect(createdContents[0]).toMatchObject({
+      kind: "referral_packet",
+      patientReference: "N.P.",
+      referralReason: "Second opinion after abnormal ECG",
+      labSnapshot: "LDL 162 mg/dL; troponin negative",
+      medications: ["Atorvastatin 20mg", "aspirin 81mg"],
+      consent: {
+        expiresAt: "2026-06-22T23:59:59Z",
+        revocationReason: "Patient withdrew consent",
+      },
+    });
+  });
+
+  it("accepts schema-validated adapter referral packet JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const createdContents: unknown[] = [];
+
+    await runTaskCommand(
+      "Northstar Clinic Referral Packet",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        outputKind: "referral_packet",
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "process.stdout.write(JSON.stringify({",
+          "title:'Adapter Referral Packet',",
+          "patientReference:'N.P.',",
+          "referralReason:'Second opinion after abnormal ECG',",
+          "clinicalSummary:'Patient has intermittent chest tightness.',",
+          "labSnapshot:'LDL 162 mg/dL; troponin negative',",
+          "medications:['Atorvastatin 20mg','aspirin 81mg'],",
+          "imagingStatus:'ECG attached',",
+          "consent:{expiresAt:'2026-06-22T23:59:59Z',revocationReason:'Patient withdrew consent'},",
+          "attachments:[{label:'ECG',status:'attached'}],",
+          "notes:['Referral packet contract validated.']",
+          "}))",
+        ].join("")],
+        adapterOutput: "json",
+        ackEgress: true,
+        koId: "ko_adapter_referral_packet",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({
+          execute: async (query) => {
+            const signedPayload = extractSignedPayloadJson(query);
+            if (signedPayload?.content) createdContents.push(signedPayload.content);
+            return [];
+          },
+        }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(createdContents[0]).toMatchObject({
+      kind: "referral_packet",
+      title: "Adapter Referral Packet",
+      patientReference: "N.P.",
+      referralReason: "Second opinion after abnormal ECG",
+      generator: "adapter_command",
+      adapterNotes: ["Referral packet contract validated."],
+    });
+  });
+
+  it("supports STACY_PUBLIC_DEMO_REDACT_COLUMNS for adapter redaction", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = join(root, "customers.csv");
+    const adapterInputPath = join(root, "adapter-input-env.json");
+    await writeFile(csvPath, [
+      "customer_email,revenue",
+      "a@example.com,100",
+    ].join("\n"), "utf8");
+
+    await runTaskCommand(
+      "summarize customer revenue",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", [
+          "const fs=require('node:fs');let input='';",
+          "process.stdin.on('data',c=>input+=c);",
+          "process.stdin.on('end',()=>{",
+          `fs.writeFileSync(${JSON.stringify(adapterInputPath)},input);`,
+          "process.stdout.write('ok');",
+          "});",
+        ].join("")],
+        ackEgress: true,
+        koId: "ko_env_redacted_adapter_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        env: { STACY_PUBLIC_DEMO_REDACT_COLUMNS: "customer_email" },
+        createDb: () => ({ execute: async () => [] }),
+        stdout: { log: () => undefined },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    const adapterInput = JSON.parse(await readFile(adapterInputPath, "utf8")) as {
+      readonly input: { readonly records: readonly Record<string, string>[] };
+      readonly redactedColumns: readonly string[];
+    };
+    expect(adapterInput.redactedColumns).toEqual(["customer_email"]);
+    expect(adapterInput.input.records).toEqual([{ revenue: "100" }]);
+  });
+
+  it("rejects invalid adapter dashboard JSON before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "process.stdout.write(JSON.stringify({widgets:[{kind:'metric',label:'Revenue'}]}))"],
+          adapterOutput: "json",
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("must include a string or number value");
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("rejects unsupported adapter output modes before spawning the adapter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "process.exit(0)"],
+          adapterOutput: "yaml",
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: () => ({ execute: async () => [] }),
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("--adapter-output must be either text or json.");
+  });
+
+  it("allows adapter commands listed in STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const lines: string[] = [];
+
+    await runTaskCommand(
+      "summarize this CSV",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        adapterCommand: process.execPath,
+        adapterArg: ["-e", "console.log('allowed adapter')"],
+        ackEgress: true,
+        koId: "ko_allowed_adapter_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        env: { STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS: "node" },
+        createDb: () => ({ execute: async () => [] }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_allowed_adapter_task",
+      generator: "adapter_command",
+    });
+  });
+
+  it("rejects adapter commands outside STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "console.log('should not run')"],
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          env: { STACY_PUBLIC_DEMO_ALLOWED_ADAPTERS: "claude,codex" },
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow('Adapter command "node" is not allowed.');
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("requires explicit egress acknowledgement before sending input to an adapter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "console.log('should not run')"],
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("Adapter execution may send input records outside this install. Re-run with --ack-egress to confirm.");
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("times out a slow adapter before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "summarize slowly",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "setTimeout(() => console.log('too late'), 5000)"],
+          adapterTimeoutMs: 25,
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("Adapter command timed out after 25ms");
+
+    expect(openedConnections).toEqual([]);
+  });
+
+  it("rejects invalid adapter timeout values before spawning the adapter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+
+    await expect(
+      runTaskCommand(
+        "summarize this CSV",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          adapterCommand: process.execPath,
+          adapterArg: ["-e", "process.exit(0)"],
+          adapterTimeoutMs: "0",
+          ackEgress: true,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: () => ({ execute: async () => [] }),
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("--adapter-timeout-ms must be a positive integer.");
+  });
+
+  it("accepts a dashboard schema for non-Acme CSV columns", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = join(root, "usage.csv");
+    const schemaPath = join(root, "usage.schema.json");
+    await writeFile(csvPath, [
+      "week,signups,activation_rate",
+      "2026-W20,12,0.4",
+      "2026-W21,18,0.5",
+    ].join("\n"), "utf8");
+    await writeFile(schemaPath, JSON.stringify({
+      title: "Usage Dashboard",
+      widgets: [
+        { kind: "metric", label: "Signups", column: "signups", aggregate: "sum", format: "number" },
+        { kind: "metric", label: "Activation", column: "activation_rate", aggregate: "average", format: "percent" },
+      ],
+    }), "utf8");
+    const lines: string[] = [];
+
+    await runTaskCommand(
+      "build usage dashboard",
+      {
+        dbUrl: "postgres://example",
+        input: csvPath,
+        schema: schemaPath,
+        koId: "ko_schema_task",
+        json: true,
+      },
+      {
+        cwd: root,
+        createDb: () => ({ execute: async () => [] }),
+        stdout: { log: (line) => lines.push(line) },
+        now: () => new Date("2026-05-22T00:00:00.000Z"),
+      },
+    );
+
+    expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+      id: "ko_schema_task",
+      input: {
+        fileName: "usage.csv",
+        rows: 2,
+      },
+      generator: "deterministic_dashboard",
+    });
+  });
+
+  it("rejects an invalid dashboard schema before creating the KO", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stacy-federation-run-task-"));
+    tempRoots.push(root);
+    const csvPath = await writeCsv(root);
+    const schemaPath = join(root, "bad.schema.json");
+    await writeFile(schemaPath, JSON.stringify({ widgets: [] }), "utf8");
+    const openedConnections: string[] = [];
+
+    await expect(
+      runTaskCommand(
+        "build dashboard",
+        {
+          dbUrl: "postgres://example",
+          input: csvPath,
+          schema: schemaPath,
+          json: true,
+        },
+        {
+          cwd: root,
+          createDb: (connectionString) => {
+            openedConnections.push(connectionString);
+            return { execute: async () => [] };
+          },
+          stdout: { log: () => undefined },
+        },
+      ),
+    ).rejects.toThrow("Dashboard schema must include a non-empty widgets array.");
+
+    expect(openedConnections).toEqual([]);
+  });
+});
+
+function extractSignedPayloadJson(query: unknown): { readonly content?: unknown } | null {
+  const chunks = (query as { readonly queryChunks?: readonly unknown[] }).queryChunks ?? [];
+  for (const chunk of chunks) {
+    if (typeof chunk === "string") {
+      try {
+        return JSON.parse(chunk) as { readonly content?: unknown };
+      } catch {
+        // keep scanning parameter chunks
+      }
+    }
+  }
+  return null;
+}
+
+async function writeCsv(root: string): Promise<string> {
+  const csvPath = join(root, "input.csv");
+  await writeFile(
+    csvPath,
+    [
+      "month,revenue,pipeline,active_customers,churn_risk",
+      "2026-04,100,200,10,0.1",
+      "2026-05,150,250,12,0.2",
+    ].join("\n"),
+    "utf8",
+  );
+  return csvPath;
+}

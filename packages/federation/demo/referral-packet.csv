@@ -1,0 +1,2 @@
+patient_ref,referral_reason,clinical_summary,lab_snapshot,medications,imaging_status,consent_expires,revocation_reason
+N.P.,Second opinion after abnormal ECG,"Intermittent chest tightness, elevated LDL, family history of coronary artery disease","LDL 162 mg/dL; hs-CRP 4.8 mg/L; troponin negative","Atorvastatin 20mg; aspirin 81mg pending specialist review","ECG attached; echocardiogram scheduled",2026-06-22T23:59:59Z,Patient withdrew consent

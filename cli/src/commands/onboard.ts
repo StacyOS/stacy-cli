@@ -2,6 +2,13 @@ import * as p from "@clack/prompts";
 import path from "node:path";
 import pc from "picocolors";
 import {
+  contactsImportLinkCommand,
+} from "@arpanstacy/stacy-federation/verbs";
+import {
+  ensureInstallIdentity,
+  resolveFederationIdentityPath,
+} from "@arpanstacy/stacy-federation";
+import {
   AUTH_BASE_URL_MODES,
   BIND_MODES,
   DEPLOYMENT_EXPOSURES,
@@ -52,6 +59,8 @@ type OnboardOptions = {
   yes?: boolean;
   invokedByRun?: boolean;
   bind?: BindMode;
+  federationDemo?: boolean;
+  federationPeerLink?: string;
 };
 
 type OnboardDefaults = Pick<StacyConfig, "database" | "logging" | "server" | "auth" | "storage" | "secrets">;
@@ -322,6 +331,35 @@ function canCreateBootstrapInviteImmediately(config: Pick<StacyConfig, "database
   return config.server.deploymentMode === "authenticated" && config.database.mode !== "embedded-postgres";
 }
 
+function federationIdentityPathForConfig(configPath: string): string {
+  return resolveFederationIdentityPath(path.dirname(configPath));
+}
+
+async function prepareFederationOnboarding(options: {
+  readonly configPath: string;
+  readonly peerLink?: string;
+}): Promise<{ readonly installId: string; readonly importedPeer?: string }> {
+  const identity = await ensureInstallIdentity({
+    path: federationIdentityPathForConfig(options.configPath),
+  });
+  const peerLink = options.peerLink?.trim();
+  if (!peerLink) {
+    return { installId: identity.record.installId };
+  }
+
+  const lines: string[] = [];
+  await contactsImportLinkCommand(
+    peerLink,
+    { config: options.configPath, as: "peer", json: true },
+    { stdout: { log: (line: string) => lines.push(line) } },
+  );
+  const imported = JSON.parse(lines.at(-1) ?? "{}") as { readonly name?: string };
+  return {
+    installId: identity.record.installId,
+    importedPeer: imported.name ?? "peer",
+  };
+}
+
 export async function onboard(opts: OnboardOptions): Promise<void> {
   if (opts.bind && !["loopback", "lan", "tailnet"].includes(opts.bind)) {
     throw new Error(`Unsupported bind preset for onboard: ${opts.bind}. Use loopback, lan, or tailnet.`);
@@ -375,6 +413,11 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
       p.log.message(pc.dim(`Using existing local secrets key file at ${keyResult.path}`));
     }
 
+    const federation = await prepareFederationOnboarding({
+      configPath,
+      peerLink: opts.federationPeerLink,
+    });
+
     p.note(
       [
         "Existing config preserved",
@@ -387,6 +430,8 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
         `Storage: ${existingConfig.storage.provider}`,
         `Secrets: ${existingConfig.secrets.provider} (strict mode ${existingConfig.secrets.strictMode ? "on" : "off"})`,
         "Agent auth: STACY_AGENT_JWT_SECRET configured",
+        `Federation install: ${federation.installId}`,
+        federation.importedPeer ? `Federation peer: imported as ${federation.importedPeer}` : "Federation peer: not connected",
       ].join("\n"),
       "Configuration ready",
     );
@@ -394,6 +439,8 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     p.note(
       [
         `Run: ${pc.cyan("pnpm stacy run")}`,
+        `Local federation demo: ${pc.cyan("pnpm --filter @arpanstacy/stacy-federation demo:public")}`,
+        `Connect a peer: ${pc.cyan("stacy contacts import-link \"<signed_share_link>\" --as peer")}`,
         `Reconfigure later: ${pc.cyan("pnpm stacy configure")}`,
         `Diagnose setup: ${pc.cyan("pnpm stacy doctor")}`,
       ].join("\n"),
@@ -590,6 +637,49 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
     }
   }
 
+  let federationMode: "skip" | "local-demo" | "remote-peer" =
+    opts.federationDemo ? "local-demo" : opts.federationPeerLink ? "remote-peer" : "skip";
+  let federationPeerLink = opts.federationPeerLink?.trim();
+  if (!opts.yes && !opts.invokedByRun && process.stdin.isTTY && process.stdout.isTTY) {
+    const choice = await p.select({
+      message: "Federation setup",
+      options: [
+        {
+          value: "local-demo" as const,
+          label: "Create local two-install demo",
+          hint: "Use the bundled referral demo after setup",
+        },
+        {
+          value: "remote-peer" as const,
+          label: "Connect remote peer",
+          hint: "Paste a signed contact share link",
+        },
+        {
+          value: "skip" as const,
+          label: "Skip for now",
+          hint: "You can run contacts import-link later",
+        },
+      ],
+      initialValue: "local-demo",
+    });
+    if (p.isCancel(choice)) {
+      p.cancel("Setup cancelled.");
+      return;
+    }
+    federationMode = choice as typeof federationMode;
+    if (federationMode === "remote-peer") {
+      const linkAnswer = await p.text({
+        message: "Paste the signed contact share link",
+        placeholder: "stacy://contacts/import?payload=...",
+      });
+      if (p.isCancel(linkAnswer)) {
+        p.cancel("Setup cancelled.");
+        return;
+      }
+      federationPeerLink = String(linkAnswer).trim();
+    }
+  }
+
   const jwtSecret = ensureAgentJwtSecret(configPath);
   const envFilePath = resolveAgentJwtEnvFile(configPath);
   if (jwtSecret.created) {
@@ -627,6 +717,11 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
 
   writeConfig(config, opts.config);
 
+  const federation = await prepareFederationOnboarding({
+    configPath,
+    peerLink: federationPeerLink,
+  });
+
   if (tc) trackInstallCompleted(tc, {
     adapterType: server.deploymentMode,
   });
@@ -642,6 +737,8 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
       `Storage: ${storage.provider}`,
       `Secrets: ${secrets.provider} (strict mode ${secrets.strictMode ? "on" : "off"})`,
       "Agent auth: STACY_AGENT_JWT_SECRET configured",
+      `Federation install: ${federation.installId}`,
+      federation.importedPeer ? `Federation peer: imported as ${federation.importedPeer}` : "Federation peer: not connected",
     ].join("\n"),
     "Configuration saved",
   );
@@ -649,6 +746,11 @@ export async function onboard(opts: OnboardOptions): Promise<void> {
   p.note(
     [
       `Run: ${pc.cyan("pnpm stacy run")}`,
+      `Local federation demo: ${pc.cyan("pnpm --filter @arpanstacy/stacy-federation demo:public")}`,
+      federationMode === "remote-peer"
+        ? `Share with peer: ${pc.cyan("stacy share <ko_id> --with-contact peer --revocable")}`
+        : `Connect remote peer: ${pc.cyan("stacy contacts import-link \"<signed_share_link>\" --as peer")}`,
+      `Create referral KO: ${pc.cyan("stacy run \"Northstar Clinic Referral Packet\" --input packages/federation/demo/referral-packet.csv --output-kind report")}`,
       `Reconfigure later: ${pc.cyan("pnpm stacy configure")}`,
       `Diagnose setup: ${pc.cyan("pnpm stacy doctor")}`,
     ].join("\n"),
